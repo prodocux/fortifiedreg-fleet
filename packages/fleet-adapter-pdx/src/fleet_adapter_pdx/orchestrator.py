@@ -421,9 +421,6 @@ class LivePDXCoreOrchestrator(ExecutionOrchestratorPort):
                 "reason": dec_dict.get("reason", ""),
             }
 
-        if dec_dict.get("reason") == "SIMULATE_RESUME_FAILURE":
-            raise RuntimeError("Simulated resume downstream failure during artifact synthesis.")
-
         # 5. Build resumed plan via PDX Core primitive
         resumed_plan = build_resumed_plan(orig_plan, chk_dict, dec_dict)
 
@@ -505,8 +502,13 @@ class LivePDXCoreOrchestrator(ExecutionOrchestratorPort):
 class FakePDXOrchestrator(ExecutionOrchestratorPort):
     """Deterministic orchestrator for local mock testing."""
 
-    def __init__(self, verifier_bridge: Optional[PDXVerifierBridge] = None):
+    def __init__(
+        self,
+        verifier_bridge: Optional[PDXVerifierBridge] = None,
+        artifact_store: Optional[ArtifactStorePort] = None,
+    ):
         self._verifier_bridge = verifier_bridge or PDXVerifierBridge()
+        self._artifact_store = artifact_store
 
     def compile_execution_plan(self, case_payload: Dict[str, Any]) -> Dict[str, Any]:
         case = DossierCase.model_validate(case_payload)
@@ -596,9 +598,6 @@ class FakePDXOrchestrator(ExecutionOrchestratorPort):
                 "reason": decision.reason,
             }
 
-        if getattr(decision, "reason", None) == "SIMULATE_RESUME_FAILURE":
-            raise RuntimeError("Simulated resume downstream failure during artifact synthesis.")
-
         manifest_payload = {
             "pif_version": "1.0",
             "status": "FINALIZED_COMPLIANT",
@@ -619,6 +618,15 @@ class FakePDXOrchestrator(ExecutionOrchestratorPort):
             "media_type": "application/json",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        if self._artifact_store is not None:
+            ident_model = ArtifactStorageIdentity(
+                uri=storage_identity["uri"],
+                sha256=storage_identity["sha256"],
+                size_bytes=storage_identity["size_bytes"],
+                media_type=storage_identity["media_type"],
+            )
+            self._artifact_store.put_if_absent(ident_model, manifest_bytes, manifest_digest)
 
         return {
             "status": "completed",

@@ -12,7 +12,7 @@ It automates European Union Regulation (EC) No 1223/2009 cosmetics Product Infor
 ## Architecture Layers
 - `packages/fleet-governance-core`: Pure domain models, abstract ports, 3-way cryptographic digest verification, lease fencing, and opaque tenant storage key derivation.
 - `packages/fleet-domain-cosmetics`: Pure toxicology calculators (SED, MoS), INCI restriction verifiers (Annex II/V), and supplier document audits.
-- `packages/fleet-adapter-pdx`: Live PDX Core adapter integrating with `pdx-artifact-core 0.2.0a2` (pin `93ec351...`), persistent `ApprovalLedger`, and allowlisted host transform dispatcher.
+- `packages/fleet-adapter-pdx`: Live PDX Core adapter integrating with `pdx-artifact-core 0.2.0a2` (pin `55a9293...`), persistent `ApprovalLedger`, and allowlisted host transform dispatcher.
 - `packages/fleet-adapter-prodocux`: Production ProDocuX HTTP Intake Adapter supporting 5 document formats (PDF, DOCX, CSV, XLSX, PPTX) with exact format boundaries, retry backoff, and sanitized error mapping.
 - `packages/fleet-adapter-local`: Local file-backed and SQLite ACID persistence adapters, crash-safe atomic artifact publishing, and 4-stage verified artifact content resolver.
 - `packages/fleet-adapter-gcp`: Thread-safe in-memory stores and cloud persistence ports.

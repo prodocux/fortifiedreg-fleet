@@ -84,7 +84,10 @@ if PDX_MODE == "live":
         artifact_store=artifact_store,
     )
 else:
-    orchestrator = FakePDXOrchestrator(verifier_bridge=verifier_bridge)
+    orchestrator = FakePDXOrchestrator(
+        verifier_bridge=verifier_bridge,
+        artifact_store=artifact_store,
+    )
 
 model_armor = RegexPromptScanner()
 

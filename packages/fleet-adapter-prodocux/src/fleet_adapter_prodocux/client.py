@@ -14,7 +14,7 @@ import requests
 from fleet_adapter_prodocux.sanitizer import sanitize_document_filename
 from fleet_governance_core.ports.intake_port import IntakePort
 
-# Exact upstream format limits from ProDocuX (pin 7a1d820...)
+# Exact upstream format limits from ProDocuX (pin c8acd2b...)
 MAX_PDF_BYTES = 10 * 1024 * 1024           # 10 MiB (10,485,760 bytes)
 MAX_DOCX_BYTES = 16 * 1024 * 1024         # 16 MiB (16,777,216 bytes)
 MAX_TABLE_BYTES = 8 * 1024 * 1024         # 8 MiB (8,388,608 bytes)

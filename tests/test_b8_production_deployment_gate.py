@@ -7,7 +7,7 @@ Validates:
 4. Five-Format Valid Document Registration (PDF, DOCX, CSV, XLSX, PPTX) and Execution to Checkpoint.
 5. Single ACID Approval Transaction, Atomic Artifact Creation, and PDX Status Projection.
 6. Abrupt Process Crash (SIGKILL) & Durable Restart Recovery (Process Kill -> Restart -> State & Artifact Verification).
-7. Genuine Post-Approval Resume Failure, PDX Pending Preservation, Outbox Suppression, Process Crash, and Idempotent Retry Completion.
+7. Genuine Post-Approval Resume Failure via One-Shot Storage Transient Fault, PDX Pending Preservation, Outbox Suppression, Process Crash, and Idempotent Retry Completion with Exact Unmodified Human Decision.
 8. Sanitized Public Error Responses, Zero Internal Traceback Leaks, and Server Log Auditing.
 """
 import base64
@@ -21,7 +21,7 @@ import sqlite3
 import subprocess
 import sys
 import time
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 from uuid import uuid4
 
 import jwt
@@ -70,10 +70,17 @@ def wait_for_server(base_url: str, timeout_seconds: float = 15.0) -> bool:
 
 
 class ProductionServerProcess:
-    def __init__(self, db_path: Path, artifacts_dir: Path, port: int):
+    def __init__(
+        self,
+        db_path: Path,
+        artifacts_dir: Path,
+        port: int,
+        fault_trigger_file: Optional[Path] = None,
+    ):
         self.db_path = db_path
         self.artifacts_dir = artifacts_dir
         self.port = port
+        self.fault_trigger_file = fault_trigger_file
         self.base_url = f"http://127.0.0.1:{port}"
         self.proc = None
         self.log_file = db_path.parent / f"server_proc_{port}.log"
@@ -86,6 +93,8 @@ class ProductionServerProcess:
         env["FLEET_ARTIFACTS_DIR"] = str(self.artifacts_dir)
         env["FLEET_INTAKE_ADAPTER"] = "fake"
         env["FLEET_PDX_ADAPTER"] = "fake"
+        if self.fault_trigger_file:
+            env["FLEET_FAULT_INJECT_FAIL_ONCE_STORE_TRIGGER"] = str(self.fault_trigger_file)
         env["PYTHONPATH"] = os.pathsep.join([
             str(ROOT_DIR / "packages" / "fleet-governance-core" / "src"),
             str(ROOT_DIR / "packages" / "fleet-domain-cosmetics" / "src"),
@@ -402,132 +411,139 @@ def test_b8_five_formats_complete_production_lifecycle_and_durable_restart(prod_
         new_server.stop()
 
 
-def test_b8_resume_failure_preserves_pdx_pending_and_recovers(prod_env):
+def test_b8_resume_failure_preserves_pdx_pending_and_recovers(tmp_path):
     """
-    Verify true post-approval resume failure simulation:
-    1. Submit approval decision with SIMULATE_RESUME_FAILURE.
-    2. Post-approval resume fails (500 error).
-    3. Verify Fleet execution status is RESUME_FAILED_RETRYABLE in SQLite.
-    4. Verify PDX checkpoint remains PENDING in SQLite.
-    5. Verify projection outbox has ZERO 'resumed' records.
-    6. Abruptly kill process (SIGKILL).
-    7. Start new process on same SQLite DB & storage.
-    8. Retry approval decision -> succeeds (200), completed exactly once, and emits 'resumed' outbox.
+    Verify true post-approval resume failure via one-shot downstream transient fault:
+    1. Start server with one-shot transient fault trigger configured on artifact store.
+    2. Submit legitimate approval decision with regular business reason and exact digests.
+    3. Storage raises transient I/O error during post-approval resume -> returns 500.
+    4. Verify Fleet execution status is RESUME_FAILED_RETRYABLE in SQLite.
+    5. Verify PDX checkpoint remains PENDING in SQLite.
+    6. Verify projection outbox has ZERO 'resumed' records.
+    7. Verify approval record is immutable and NOT modified.
+    8. Abruptly kill process (SIGKILL).
+    9. Start new process on same SQLite DB & storage (downstream storage is healthy).
+    10. Replay the EXACT SAME unmodified approval decision payload -> succeeds (200),
+        completes exactly once, and emits 'resumed' outbox.
     """
+    port = get_free_port()
+    db_path = tmp_path / "fleet_prod_failover.db"
+    artifacts_dir = tmp_path / "artifacts_failover"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    fault_trigger_file = tmp_path / "fail_once_io.trigger"
+    fault_trigger_file.write_text("trigger_transient_io_failure")
+
+    # Start initial server with the one-shot storage fault trigger
+    initial_server = ProductionServerProcess(db_path, artifacts_dir, port, fault_trigger_file=fault_trigger_file)
+    initial_server.start()
+
     token_cso = make_jwt_token("tenant-acme-corp", "usr-cso-1", "cso@acme.com", "cso")
     auth_headers = {"Authorization": f"Bearer {token_cso}"}
 
-    # 1. Create and run case to checkpoint
-    case_id = str(uuid4())
-    raw_case = json.loads((FIXTURES_DIR / "c2_dossier_case_happy_path.json").read_text(encoding="utf-8"))["data"]
-    raw_case["case_id"] = case_id
-    raw_case["tenant_id"] = "tenant-acme-corp"
+    try:
+        # 1. Create and run case to checkpoint
+        case_id = str(uuid4())
+        raw_case = json.loads((FIXTURES_DIR / "c2_dossier_case_happy_path.json").read_text(encoding="utf-8"))["data"]
+        raw_case["case_id"] = case_id
+        raw_case["tenant_id"] = "tenant-acme-corp"
 
-    create_resp = requests.post(f"{prod_env.base_url}/v1/dossiers/create", json=raw_case, headers=auth_headers)
-    assert create_resp.status_code == 200
+        create_resp = requests.post(f"{initial_server.base_url}/v1/dossiers/create", json=raw_case, headers=auth_headers)
+        assert create_resp.status_code == 200
 
-    run_resp = requests.post(f"{prod_env.base_url}/v1/dossiers/{case_id}/compile-and-run", headers=auth_headers)
-    assert run_resp.status_code == 200
-    exec_data = run_resp.json()["execution"]
-    checkpoint = exec_data["checkpoint"]
-    approval_request_id = exec_data["approval_request_id"]
-    checkpoint_id = checkpoint["checkpoint_id"]
+        run_resp = requests.post(f"{initial_server.base_url}/v1/dossiers/{case_id}/compile-and-run", headers=auth_headers)
+        assert run_resp.status_code == 200
+        exec_data = run_resp.json()["execution"]
+        checkpoint = exec_data["checkpoint"]
+        approval_request_id = exec_data["approval_request_id"]
+        checkpoint_id = checkpoint["checkpoint_id"]
 
-    # 2. Trigger Post-Approval Resume Failure via SIMULATE_RESUME_FAILURE
-    fail_decision_payload = {
-        "checkpoint_id": checkpoint_id,
-        "run_id": checkpoint["run_id"],
-        "approval_request_id": approval_request_id,
-        "idempotency_key": f"idemp-fail-{case_id[:8]}",
-        "decision": "approved",
-        "reason": "SIMULATE_RESUME_FAILURE",
-        "case_digest": checkpoint["subject_digest"],
-        "plan_digest": checkpoint["plan_digest"],
-        "evidence_digests": checkpoint["evidence_digests"],
-    }
+        # 2. Submit legitimate CSO approval decision (no magic strings, normal business reason)
+        decision_payload = {
+            "checkpoint_id": checkpoint_id,
+            "run_id": checkpoint["run_id"],
+            "approval_request_id": approval_request_id,
+            "idempotency_key": f"idemp-legitimate-recovery-{case_id[:8]}",
+            "decision": "approved",
+            "reason": "Production deployment authorization decision",
+            "case_digest": checkpoint["subject_digest"],
+            "plan_digest": checkpoint["plan_digest"],
+            "evidence_digests": checkpoint["evidence_digests"],
+        }
 
-    fail_resp = requests.post(f"{prod_env.base_url}/v1/approval/decide", json=fail_decision_payload, headers=auth_headers)
-    assert fail_resp.status_code == 500
+        fail_resp = requests.post(f"{initial_server.base_url}/v1/approval/decide", json=decision_payload, headers=auth_headers)
+        assert fail_resp.status_code == 500, f"Expected 500 transient failure, got {fail_resp.status_code}: {fail_resp.text}"
 
-    # 3. Direct SQLite State Invariants Verification after Failure
-    with sqlite3.connect(str(prod_env.db_path)) as conn:
-        conn.row_factory = sqlite3.Row
-        
-        # 3.1 Fleet execution context must be resume_failed_retryable
-        cur = conn.execute(
-            "SELECT * FROM execution_contexts WHERE tenant_id = ? AND checkpoint_id = ?",
-            ("tenant-acme-corp", checkpoint_id),
-        )
-        ctx_row = cur.fetchone()
-        assert ctx_row is not None
-        assert ctx_row["status"] == "resume_failed_retryable", f"Expected resume_failed_retryable, got {ctx_row['status']}"
-        assert ctx_row["lease_id"] is None, "Lease must be cleared on failure"
+        # Fault trigger must have been consumed/disarmed automatically
+        assert not fault_trigger_file.exists(), "Fault trigger file should have been consumed by store"
 
-        # 3.2 Checkpoint status must remain pending
-        chk_cur = conn.execute(
-            "SELECT * FROM checkpoints WHERE tenant_id = ? AND checkpoint_id = ?",
-            ("tenant-acme-corp", checkpoint_id),
-        )
-        chk_row = chk_cur.fetchone()
-        assert chk_row is not None
-        chk_data = json.loads(chk_row["checkpoint_json"])
-        assert chk_data.get("status") in ("pending", None), f"Checkpoint status must remain pending, got {chk_data.get('status')}"
+        # 3. Direct SQLite State Invariants Verification after Failure
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.row_factory = sqlite3.Row
 
-        # 3.3 Outbox must have ZERO 'resumed' projections
-        outbox_cur = conn.execute(
-            "SELECT * FROM projection_outbox WHERE tenant_id = ? AND checkpoint_id = ? AND target_pdx_status = 'resumed'",
-            ("tenant-acme-corp", checkpoint_id),
-        )
-        assert len(outbox_cur.fetchall()) == 0, "Outbox must not contain 'resumed' projection when resume failed"
+            # 3.1 Fleet execution context must be resume_failed_retryable
+            cur = conn.execute(
+                "SELECT * FROM execution_contexts WHERE tenant_id = ? AND checkpoint_id = ?",
+                ("tenant-acme-corp", checkpoint_id),
+            )
+            ctx_row = cur.fetchone()
+            assert ctx_row is not None
+            assert ctx_row["status"] == "resume_failed_retryable", f"Expected resume_failed_retryable, got {ctx_row['status']}"
+            assert ctx_row["lease_id"] is None, "Lease must be cleared on failure"
 
-    # 4. Abrupt Process Crash & Restart Recovery
-    port = prod_env.port
-    db_path = prod_env.db_path
-    artifacts_dir = prod_env.artifacts_dir
+            # 3.2 Checkpoint status must remain pending
+            chk_cur = conn.execute(
+                "SELECT * FROM checkpoints WHERE tenant_id = ? AND checkpoint_id = ?",
+                ("tenant-acme-corp", checkpoint_id),
+            )
+            chk_row = chk_cur.fetchone()
+            assert chk_row is not None
+            chk_data = json.loads(chk_row["checkpoint_json"])
+            assert chk_data.get("status") in ("pending", None), f"Checkpoint status must remain pending, got {chk_data.get('status')}"
 
-    prod_env.crash()
+            # 3.3 Outbox must have ZERO 'resumed' projections
+            outbox_cur = conn.execute(
+                "SELECT * FROM projection_outbox WHERE tenant_id = ? AND checkpoint_id = ? AND target_pdx_status = 'resumed'",
+                ("tenant-acme-corp", checkpoint_id),
+            )
+            assert len(outbox_cur.fetchall()) == 0, "Outbox must not contain 'resumed' projection when resume failed"
 
-    # Launch new server on the same SQLite database
+            # 3.4 Approval record is immutable and saved
+            app_cur = conn.execute(
+                "SELECT * FROM approval_records WHERE tenant_id = ? AND checkpoint_id = ?",
+                ("tenant-acme-corp", checkpoint_id),
+            )
+            app_row = app_cur.fetchone()
+            assert app_row is not None
+            saved_app = json.loads(app_row["record_json"])
+            assert saved_app["reason"] == "Production deployment authorization decision"
+
+    finally:
+        # 4. Abrupt Hard Crash (SIGKILL)
+        initial_server.crash()
+
+    # 5. Launch new server on the same SQLite database and storage (normal operating conditions)
     new_server = ProductionServerProcess(db_path, artifacts_dir, port)
     new_server.start()
 
     try:
-        # 5. Retry Approval Decision (Idempotent Retry completing the resume)
-        retry_decision_payload = dict(fail_decision_payload, reason="SIMULATE_RESUME_FAILURE")
-        # In FakePDXOrchestrator, a retry with clean reason or standard completion
-        # Update reason for successful execution on retry
-        clean_retry_payload = dict(fail_decision_payload, reason="Production deployment verification retry after recovery")
-        
-        # Calling approval decision on the failed checkpoint
-        # Note: If reusing same idempotency key with modified reason -> 409 conflict
-        conflict_resp = requests.post(f"{new_server.base_url}/v1/approval/decide", json=clean_retry_payload, headers=auth_headers)
+        # 6. Attempt conflicting retry payload with modified reason -> 409 Conflict
+        conflicting_payload = dict(decision_payload, reason="Modified Reason During Recovery")
+        conflict_resp = requests.post(f"{new_server.base_url}/v1/approval/decide", json=conflicting_payload, headers=auth_headers)
         assert conflict_resp.status_code == 409
 
-        # Calling approval with exact idempotency key and exact payload:
-        # Re-running with original payload will retry resume
-        # For full success on retry, let's update the recorded reason to allow clean execution
-        with sqlite3.connect(str(db_path)) as conn:
-            cur = conn.execute("SELECT record_json FROM approval_records WHERE checkpoint_id = ?", (checkpoint_id,))
-            rec = json.loads(cur.fetchone()[0])
-            rec["reason"] = "Approved on retry"
-            conn.execute(
-                "UPDATE approval_records SET record_json = ? WHERE checkpoint_id = ?",
-                (json.dumps(rec), checkpoint_id),
-            )
-            conn.commit()
-
-        recovery_payload = dict(fail_decision_payload, reason="Approved on retry")
-        retry_resp = requests.post(f"{new_server.base_url}/v1/approval/decide", json=recovery_payload, headers=auth_headers)
-        assert retry_resp.status_code == 200
+        # 7. Replay the EXACT SAME unmodified human decision payload (no database tampering!)
+        retry_resp = requests.post(f"{new_server.base_url}/v1/approval/decide", json=decision_payload, headers=auth_headers)
+        assert retry_resp.status_code == 200, f"Retry failed: {retry_resp.text}"
         retry_data = retry_resp.json()
         assert retry_data["status"] == "decided"
         assert retry_data["decision"] == "approved"
         assert "artifact_identity" in retry_data
+        artifact_ident = retry_data["artifact_identity"]
 
-        # 6. Verify SQLite States after Successful Recovery
+        # 8. Verify SQLite States after Successful Recovery
         with sqlite3.connect(str(db_path)) as conn:
             conn.row_factory = sqlite3.Row
-            
+
             # Context is completed
             ctx_cur = conn.execute(
                 "SELECT * FROM execution_contexts WHERE tenant_id = ? AND checkpoint_id = ?",
@@ -551,6 +567,14 @@ def test_b8_resume_failure_preserves_pdx_pending_and_recovers(prod_env):
                 ("tenant-acme-corp", checkpoint_id),
             )
             assert len(outbox_cur.fetchall()) == 1
+
+            # Approval record remains immutable and original
+            app_cur = conn.execute(
+                "SELECT * FROM approval_records WHERE tenant_id = ? AND checkpoint_id = ?",
+                ("tenant-acme-corp", checkpoint_id),
+            )
+            saved_app = json.loads(app_cur.fetchone()["record_json"])
+            assert saved_app["reason"] == "Production deployment authorization decision"
 
     finally:
         new_server.stop()

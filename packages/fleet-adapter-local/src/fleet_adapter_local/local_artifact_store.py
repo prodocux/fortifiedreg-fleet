@@ -9,6 +9,7 @@ from pathlib import Path
 import threading
 from urllib.parse import urlparse
 from uuid import uuid4
+from typing import Optional
 from fleet_governance_core.models.storage import (
     ArtifactStorageIdentity,
     PutArtifactResult,
@@ -17,10 +18,15 @@ from fleet_governance_core.models.storage import (
 from fleet_governance_core.ports.artifact_store_port import ArtifactStorePort
 
 class LocalArtifactStore(ArtifactStorePort):
-    def __init__(self, root_dir: str | Path = "./.artifact_store"):
+    def __init__(
+        self,
+        root_dir: str | Path = "./.artifact_store",
+        fail_once_file: Optional[Path | str] = None,
+    ):
         self.root_dir = Path(root_dir).resolve()
         self.root_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self.fail_once_file = Path(fail_once_file).resolve() if fail_once_file else None
 
     def _uri_to_path(self, uri: str) -> Path:
         parsed = urlparse(uri)
@@ -52,6 +58,19 @@ class LocalArtifactStore(ArtifactStorePort):
         target_dir.mkdir(parents=True, exist_ok=True)
 
         with self._lock:
+            # Check one-shot transient fault trigger if configured
+            trigger = self.fail_once_file
+            if not trigger:
+                env_val = os.getenv("FLEET_FAULT_INJECT_FAIL_ONCE_STORE_TRIGGER")
+                if env_val:
+                    trigger = Path(env_val).resolve()
+            if trigger and trigger.exists():
+                try:
+                    trigger.unlink()
+                except OSError:
+                    pass
+                raise IOError("Injected one-shot transient storage I/O failure during artifact publishing.")
+
             # 1. Check if final file already exists
             if target_path.exists():
                 existing_bytes = target_path.read_bytes()
