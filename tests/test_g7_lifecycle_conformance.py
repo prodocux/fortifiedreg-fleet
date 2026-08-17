@@ -568,3 +568,50 @@ def test_five_formats_complete_g7_lifecycle(ext: str, doc_filename: str):
     final_ctx = store.get_context(tenant_id, chk_id)
     assert final_ctx.status == FleetExecutionStatus.COMPLETED
     assert final_ctx.result_identity is not None
+
+
+def _worker_put_artifact(root_dir_str: str, uri: str, content: bytes, sha: str) -> str:
+    store = LocalArtifactStore(root_dir_str)
+    ident = ArtifactStorageIdentity(
+        uri=uri,
+        sha256=sha,
+        size_bytes=len(content),
+        media_type="application/json",
+    )
+    res = store.put_if_absent(ident, content, sha)
+    return res.status.value
+
+
+def test_local_artifact_store_cross_process_atomic_put_if_absent_race():
+    """Verify that multiple independent OS processes racing on put_if_absent produce exactly one CREATED result."""
+    import concurrent.futures
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        uri = "artifact://opaque-tenant/checkpoints/chk-race/final.json"
+        content = b'{"race_test": "atomic_link_verification"}'
+        sha = hashlib.sha256(content).hexdigest()
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
+            futures = [
+                executor.submit(_worker_put_artifact, tmpdir, uri, content, sha)
+                for _ in range(5)
+            ]
+            results = [f.result() for f in futures]
+
+        assert results.count(PutArtifactStatus.CREATED.value) == 1
+        assert results.count(PutArtifactStatus.ALREADY_EXISTS_SAME_DIGEST.value) == 4
+
+
+def test_local_artifact_store_path_containment_and_sibling_prefix_rejection():
+    """Verify strict is_relative_to containment and rejection of sibling-prefix directory traversal."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = LocalArtifactStore(tmpdir)
+
+        # 1. Traversal with ../ must fail
+        with pytest.raises(ValueError, match="Path traversal detected"):
+            store._uri_to_path("artifact://tenant/../../etc/passwd")
+
+        # 2. Sibling directory prefix attack must fail
+        sibling_evil_uri = f"artifact://tenant/../../{Path(tmpdir).name}-evil/evil.json"
+        with pytest.raises(ValueError, match="Path traversal detected"):
+            store._uri_to_path(sibling_evil_uri)

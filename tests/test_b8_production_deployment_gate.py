@@ -93,9 +93,14 @@ class ProductionServerProcess:
         env["FLEET_ARTIFACTS_DIR"] = str(self.artifacts_dir)
         env["FLEET_INTAKE_ADAPTER"] = "fake"
         env["FLEET_PDX_ADAPTER"] = "fake"
+        app_entry = "fleet_api.main:app"
         if self.fault_trigger_file:
-            env["FLEET_FAULT_INJECT_FAIL_ONCE_STORE_TRIGGER"] = str(self.fault_trigger_file)
+            env["TEST_FAIL_ONCE_TRIGGER_FILE"] = str(self.fault_trigger_file)
+            app_entry = "tests.support.test_server_app:app"
+
         env["PYTHONPATH"] = os.pathsep.join([
+            str(ROOT_DIR),
+            str(ROOT_DIR / "tests"),
             str(ROOT_DIR / "packages" / "fleet-governance-core" / "src"),
             str(ROOT_DIR / "packages" / "fleet-domain-cosmetics" / "src"),
             str(ROOT_DIR / "packages" / "fleet-adapter-pdx" / "src"),
@@ -112,7 +117,7 @@ class ProductionServerProcess:
                 sys.executable,
                 "-m",
                 "uvicorn",
-                "fleet_api.main:app",
+                app_entry,
                 "--host",
                 "127.0.0.1",
                 "--port",
@@ -368,7 +373,7 @@ def test_b8_five_formats_complete_production_lifecycle_and_durable_restart(prod_
     }
 
     dec_resp = requests.post(f"{prod_env.base_url}/v1/approval/decide", json=decision_payload, headers=auth_headers)
-    assert dec_resp.status_code == 200
+    assert dec_resp.status_code == 200, f"Approval failed: {dec_resp.status_code} {dec_resp.text}"
     dec_data = dec_resp.json()
     assert dec_data["status"] == "decided"
     assert dec_data["decision"] == "approved"
@@ -441,17 +446,38 @@ def test_b8_resume_failure_preserves_pdx_pending_and_recovers(tmp_path):
     auth_headers = {"Authorization": f"Bearer {token_cso}"}
 
     try:
-        # 1. Create and run case to checkpoint
+        # 1. Register supplier document and create case to run to checkpoint
+        pdf_bytes = b"%PDF-1.4 Safety Data Sheet"
+        reg_resp = requests.post(
+            f"{initial_server.base_url}/v1/dossiers/documents/register",
+            json={
+                "doc_id": "doc-sds-001",
+                "content_b64": base64.b64encode(pdf_bytes).decode(),
+                "filename": "safety_sheet.pdf",
+            },
+            headers=auth_headers,
+        )
+        assert reg_resp.status_code == 200
+
         case_id = str(uuid4())
         raw_case = json.loads((FIXTURES_DIR / "c2_dossier_case_happy_path.json").read_text(encoding="utf-8"))["data"]
         raw_case["case_id"] = case_id
         raw_case["tenant_id"] = "tenant-acme-corp"
+        raw_case["supplier_documents"] = [{
+            "doc_id": "doc-sds-001",
+            "filename": "safety_sheet.pdf",
+            "doc_type": "SDS",
+            "sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+            "supplier_name": "BioSynthetics Ltd",
+            "issue_date": "2025-01-10",
+            "expiry_date": "2028-01-10",
+        }]
 
         create_resp = requests.post(f"{initial_server.base_url}/v1/dossiers/create", json=raw_case, headers=auth_headers)
         assert create_resp.status_code == 200
 
         run_resp = requests.post(f"{initial_server.base_url}/v1/dossiers/{case_id}/compile-and-run", headers=auth_headers)
-        assert run_resp.status_code == 200
+        assert run_resp.status_code == 200, f"Run failed: {run_resp.status_code} {run_resp.text}"
         exec_data = run_resp.json()["execution"]
         checkpoint = exec_data["checkpoint"]
         approval_request_id = exec_data["approval_request_id"]
