@@ -1,0 +1,29 @@
+services:
+  fleet-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: prodocux/fortifiedreg-fleet:0.3.0
+    container_name: fortifiedreg-fleet-api
+    ports:
+      - "8000:8000"
+    environment:
+      - FLEET_ENV=production
+      - FLEET_JWT_SECRET=prod-secret-key-fortified-enterprise-fleet-2026-secure-token-512
+      - FLEET_DB_PATH=/app/data/fleet.db
+      - FLEET_ARTIFACTS_DIR=/app/artifacts
+      - FLEET_PDX_ADAPTER=live
+      - FLEET_INTAKE_ADAPTER=live
+    volumes:
+      - fleet-data:/app/data
+      - fleet-artifacts:/app/artifacts
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  fleet-data:
+  fleet-artifacts:

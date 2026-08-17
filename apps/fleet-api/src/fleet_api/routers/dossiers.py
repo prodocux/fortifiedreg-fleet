@@ -14,12 +14,14 @@ from fleet_api.deps import (
     get_checkpoint_store,
     get_document_resolver,
     get_orchestrator,
+    get_resume_context_store,
     get_tenant_and_actor,
 )
 from fleet_governance_core.ports.audit_log_port import AuditLogPort
 from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
 from fleet_governance_core.ports.document_resolver_port import DocumentResolverPort
 from fleet_governance_core.ports.orchestrator_port import ExecutionOrchestratorPort
+from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 from fleet_governance_core.models.approval import (
     AuthenticatedActor,
     PDXApprovalRequest,
@@ -118,6 +120,7 @@ def create_dossier(
     case: DossierCase,
     identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
     audit_log: AuditLogPort = Depends(get_audit_log),
+    resume_context_store: ResumeContextStorePort = Depends(get_resume_context_store),
 ) -> Dict[str, Any]:
     """Create a new product regulatory dossier case and compute canonical digest."""
     tenant_id, actor = identity
@@ -131,6 +134,8 @@ def create_dossier(
 
     case_id_str = str(case.case_id)
     CASES_DB.setdefault(tenant_id, {})[case_id_str] = case
+    if hasattr(resume_context_store, "save_case"):
+        resume_context_store.save_case(tenant_id, case)
     case_digest = compute_data_sha256(case)
 
     # Emit audit event
@@ -162,11 +167,14 @@ def compile_and_run_dossier(
     orch: ExecutionOrchestratorPort = Depends(get_orchestrator),
     checkpoint_store: CheckpointStorePort = Depends(get_checkpoint_store),
     audit_log: AuditLogPort = Depends(get_audit_log),
+    resume_context_store: ResumeContextStorePort = Depends(get_resume_context_store),
 ) -> Dict[str, Any]:
     """Compile dossier case into PDX plan and run through deterministic verifiers."""
     tenant_id, actor = identity
     case_id_str = str(case_id)
     case = CASES_DB.get(tenant_id, {}).get(case_id_str)
+    if not case and hasattr(resume_context_store, "get_case"):
+        case = resume_context_store.get_case(tenant_id, case_id_str)
     if not case:
         raise HTTPException(status_code=404, detail=f"Dossier case '{case_id_str}' not found.")
 
@@ -224,11 +232,14 @@ def compile_and_run_dossier(
 def get_dossier(
     case_id: UUID,
     identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    resume_context_store: ResumeContextStorePort = Depends(get_resume_context_store),
 ) -> Dict[str, Any]:
     """Retrieve dossier case details and canonical digest."""
     tenant_id, _ = identity
     case_id_str = str(case_id)
     case = CASES_DB.get(tenant_id, {}).get(case_id_str)
+    if not case and hasattr(resume_context_store, "get_case"):
+        case = resume_context_store.get_case(tenant_id, case_id_str)
     if not case:
         raise HTTPException(status_code=404, detail=f"Dossier case '{case_id_str}' not found.")
 

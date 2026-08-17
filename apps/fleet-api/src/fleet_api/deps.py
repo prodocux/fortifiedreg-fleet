@@ -47,15 +47,18 @@ DEFAULT_ADAPTER_MODE = "fake" if FLEET_ENV in ("test", "local", "dev") else "liv
 INTAKE_MODE = os.getenv("FLEET_INTAKE_ADAPTER", DEFAULT_ADAPTER_MODE).lower()
 PDX_MODE = os.getenv("FLEET_PDX_ADAPTER", DEFAULT_ADAPTER_MODE).lower()
 
-# 1. Stores & Persistence (Local In-Memory / SQLite Persistence for v0.3.0)
-approval_store = InMemoryApprovalStore()
+# 1. Stores & Persistence (Configurable SQLite Persistence & Local Artifact Store)
+FLEET_DB_PATH = os.getenv("FLEET_DB_PATH", ":memory:")
+FLEET_ARTIFACTS_DIR = os.getenv("FLEET_ARTIFACTS_DIR", "./.local_artifacts")
+
+resume_context_store = SQLiteResumeContextStore(FLEET_DB_PATH)
+approval_store = resume_context_store
+checkpoint_store = resume_context_store
 audit_log = InMemoryAuditLog()
-checkpoint_store = InMemoryCheckpointStore()
-memory_store = InMemoryMemoryStore()
 storage_adapter = InMemoryArtifactStorageAdapter()
 document_resolver = ThreadSafeDocumentResolver()
-resume_context_store = SQLiteResumeContextStore(":memory:")
-artifact_store = LocalArtifactStore("./.local_artifacts")
+memory_store = InMemoryMemoryStore()
+artifact_store = LocalArtifactStore(FLEET_ARTIFACTS_DIR)
 artifact_resolver = LocalVerifiedArtifactResolver(artifact_store)
 
 # 2. Shared Long-Lived Approval Ledger & Verifier Bridge

@@ -11,20 +11,26 @@ import threading
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 from fleet_governance_core.models.approval import (
+    CheckpointStatusEnum,
     FleetApprovalRecord,
     FleetExecutionStatus,
+    PDXApprovalRequest,
+    PDXWorkflowCheckpoint,
 )
+from fleet_governance_core.models.case import DossierCase
 from fleet_governance_core.models.execution_context import (
     ExecutionContextRecord,
     PlanSummary,
     ProjectionOutboxRecord,
 )
 from fleet_governance_core.models.storage import ArtifactStorageIdentity
+from fleet_governance_core.ports.approval_store_port import ApprovalStorePort
+from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
 from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 
 from contextlib import contextmanager
 
-class SQLiteResumeContextStore(ResumeContextStorePort):
+class SQLiteResumeContextStore(ResumeContextStorePort, CheckpointStorePort, ApprovalStorePort):
     def __init__(self, db_path: str | Path = ":memory:"):
         self.db_path = str(db_path)
         self._lock = threading.RLock()
@@ -55,6 +61,34 @@ class SQLiteResumeContextStore(ResumeContextStorePort):
     def _init_db(self) -> None:
         with self._lock, self._connection() as conn:
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS cases (
+                    tenant_id TEXT NOT NULL,
+                    case_id TEXT NOT NULL,
+                    case_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (tenant_id, case_id)
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS checkpoints (
+                    tenant_id TEXT NOT NULL,
+                    checkpoint_id TEXT NOT NULL,
+                    checkpoint_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (tenant_id, checkpoint_id)
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    tenant_id TEXT NOT NULL,
+                    approval_request_id TEXT NOT NULL,
+                    checkpoint_id TEXT NOT NULL,
+                    request_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (tenant_id, approval_request_id)
+                );
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS execution_contexts (
                     tenant_id TEXT NOT NULL,
                     checkpoint_id TEXT NOT NULL,
@@ -84,11 +118,13 @@ class SQLiteResumeContextStore(ResumeContextStorePort):
                 CREATE TABLE IF NOT EXISTS approval_records (
                     tenant_id TEXT NOT NULL,
                     checkpoint_id TEXT NOT NULL,
+                    canonical_idempotency_key TEXT,
                     record_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (tenant_id, checkpoint_id)
                 );
             """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_approval_records_idemp ON approval_records (canonical_idempotency_key);")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS projection_outbox (
                     outbox_id TEXT PRIMARY KEY,
@@ -101,6 +137,116 @@ class SQLiteResumeContextStore(ResumeContextStorePort):
                 );
             """)
             conn.commit()
+
+    def save_case(self, tenant_id: str, case: DossierCase) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connection() as conn:
+            conn.execute("""
+                INSERT INTO cases (tenant_id, case_id, case_json, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(tenant_id, case_id) DO UPDATE SET
+                    case_json=excluded.case_json
+            """, (tenant_id, str(case.case_id), json.dumps(case.model_dump(mode="json")), now_iso))
+            conn.commit()
+
+    def get_case(self, tenant_id: str, case_id: str) -> Optional[DossierCase]:
+        with self._lock, self._connection() as conn:
+            cur = conn.execute("SELECT case_json FROM cases WHERE tenant_id = ? AND case_id = ?", (tenant_id, case_id))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return DossierCase.model_validate(json.loads(row["case_json"]))
+
+    def save_checkpoint(self, tenant_id: str, checkpoint: PDXWorkflowCheckpoint) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connection() as conn:
+            conn.execute("""
+                INSERT INTO checkpoints (tenant_id, checkpoint_id, checkpoint_json, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(tenant_id, checkpoint_id) DO UPDATE SET
+                    checkpoint_json=excluded.checkpoint_json
+            """, (tenant_id, checkpoint.checkpoint_id, json.dumps(checkpoint.model_dump(mode="json")), now_iso))
+            conn.commit()
+
+    def get_checkpoint(self, tenant_id: str, checkpoint_id: str) -> Optional[PDXWorkflowCheckpoint]:
+        with self._lock, self._connection() as conn:
+            cur = conn.execute("SELECT checkpoint_json FROM checkpoints WHERE tenant_id = ? AND checkpoint_id = ?", (tenant_id, checkpoint_id))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return PDXWorkflowCheckpoint.model_validate(json.loads(row["checkpoint_json"]))
+
+    def update_checkpoint_status(self, tenant_id: str, checkpoint_id: str, status: CheckpointStatusEnum) -> None:
+        with self._lock, self._connection() as conn:
+            cur = conn.execute("SELECT checkpoint_json FROM checkpoints WHERE tenant_id = ? AND checkpoint_id = ?", (tenant_id, checkpoint_id))
+            row = cur.fetchone()
+            if row:
+                chk_data = json.loads(row["checkpoint_json"])
+                chk_data["status"] = status.value
+                conn.execute(
+                    "UPDATE checkpoints SET checkpoint_json = ? WHERE tenant_id = ? AND checkpoint_id = ?",
+                    (json.dumps(chk_data), tenant_id, checkpoint_id),
+                )
+                conn.commit()
+
+    def save_approval_request(self, tenant_id: str, request: PDXApprovalRequest) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connection() as conn:
+            conn.execute("""
+                INSERT INTO approval_requests (tenant_id, approval_request_id, checkpoint_id, request_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, approval_request_id) DO UPDATE SET
+                    request_json=excluded.request_json
+            """, (tenant_id, str(request.approval_request_id), request.checkpoint_id, json.dumps(request.model_dump(mode="json")), now_iso))
+            conn.commit()
+
+    def get_approval_request(self, tenant_id: str, checkpoint_id: str) -> Optional[PDXApprovalRequest]:
+        with self._lock, self._connection() as conn:
+            cur = conn.execute("SELECT request_json FROM approval_requests WHERE tenant_id = ? AND checkpoint_id = ?", (tenant_id, checkpoint_id))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return PDXApprovalRequest.model_validate(json.loads(row["request_json"]))
+
+    def save_approval_record(self, record: FleetApprovalRecord) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connection() as conn:
+            conn.execute("""
+                INSERT INTO approval_records (tenant_id, checkpoint_id, canonical_idempotency_key, record_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, checkpoint_id) DO UPDATE SET
+                    canonical_idempotency_key=excluded.canonical_idempotency_key,
+                    record_json=excluded.record_json
+            """, (
+                record.tenant_id,
+                record.checkpoint_id,
+                record.canonical_idempotency_key,
+                json.dumps(record.model_dump(mode="json")),
+                now_iso,
+            ))
+            conn.commit()
+
+    def get_by_idempotency_key(self, canonical_idempotency_key: str) -> Optional[FleetApprovalRecord]:
+        with self._lock, self._connection() as conn:
+            cur = conn.execute(
+                "SELECT record_json FROM approval_records WHERE canonical_idempotency_key = ?",
+                (canonical_idempotency_key,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return FleetApprovalRecord.model_validate(json.loads(row["record_json"]))
+
+    def get_by_checkpoint_id(self, tenant_id: str, checkpoint_id: str) -> Optional[FleetApprovalRecord]:
+        with self._lock, self._connection() as conn:
+            cur = conn.execute(
+                "SELECT record_json FROM approval_records WHERE tenant_id = ? AND checkpoint_id = ?",
+                (tenant_id, checkpoint_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return FleetApprovalRecord.model_validate(json.loads(row["record_json"]))
 
     def save_context(self, record: ExecutionContextRecord) -> None:
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -216,11 +362,15 @@ class SQLiteResumeContextStore(ResumeContextStorePort):
 
             # 1. Insert immutable approval record
             conn.execute("""
-                INSERT INTO approval_records (tenant_id, checkpoint_id, record_json, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO approval_records (tenant_id, checkpoint_id, canonical_idempotency_key, record_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, checkpoint_id) DO UPDATE SET
+                    canonical_idempotency_key=excluded.canonical_idempotency_key,
+                    record_json=excluded.record_json
             """, (
                 tenant_id,
                 checkpoint_id,
+                approval_record.canonical_idempotency_key,
                 json.dumps(approval_record.model_dump(mode="json")),
                 now_iso,
             ))
