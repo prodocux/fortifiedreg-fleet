@@ -353,6 +353,44 @@ def test_docker_production_mode_fails_closed_on_fake_adapters_or_bad_modes(docke
     assert res_bad_mode.returncode != 0
     assert "Invalid FLEET_PDX_ADAPTER" in res_bad_mode.stdout + res_bad_mode.stderr
 
+    # 4. Unknown FLEET_ENV typo (e.g. 'prodution') must exit with error
+    cmd_bad_env = [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        f"FLEET_JWT_SECRET={JWT_SECRET}",
+        "-e",
+        "FLEET_ENV=prodution",
+        "-e",
+        "FLEET_PDX_ADAPTER=fake",
+        "-e",
+        "FLEET_INTAKE_ADAPTER=fake",
+        image_tag,
+    ]
+    res_bad_env = subprocess.run(cmd_bad_env, capture_output=True, text=True)
+    assert res_bad_env.returncode != 0
+    assert "Invalid FLEET_ENV" in res_bad_env.stdout + res_bad_env.stderr
+
+    # 5. Empty FLEET_ENV must exit with error
+    cmd_empty_env = [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        f"FLEET_JWT_SECRET={JWT_SECRET}",
+        "-e",
+        "FLEET_ENV=",
+        "-e",
+        "FLEET_PDX_ADAPTER=fake",
+        "-e",
+        "FLEET_INTAKE_ADAPTER=fake",
+        image_tag,
+    ]
+    res_empty_env = subprocess.run(cmd_empty_env, capture_output=True, text=True)
+    assert res_empty_env.returncode != 0
+    assert "FLEET_ENV cannot be empty" in res_empty_env.stdout + res_empty_env.stderr
+
 
 def test_docker_non_root_execution_security(docker_test_image):
     """Verify that container executes as unprivileged non-root user (fleetuser, uid=10001)."""

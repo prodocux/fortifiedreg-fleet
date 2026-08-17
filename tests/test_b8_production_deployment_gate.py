@@ -1,7 +1,7 @@
 """
-Gate B8: Host Subprocess Production-Configuration Gate & Standalone Process Lifecycle Conformance Suite.
+Gate B8-Host: Host Integration & Subprocess Conformance Suite (FLEET_ENV=test).
 Validates:
-1. Production Subprocess Startup & Configuration (FLEET_ENV=production, fail-closed JWT auth, SQLite ACID persistence).
+1. Subprocess Startup & Configuration (fail-closed JWT auth, SQLite ACID persistence, FLEET_ENV allowlist enforcement).
 2. Health (/v1/health) and Readiness (/v1/ready) probe separation.
 3. Multi-Tenant Cryptographic Isolation (Tenant A vs Tenant B, cross-tenant 404/403 sanitized isolation).
 4. Five-Format Valid Document Registration (PDF, DOCX, CSV, XLSX, PPTX) and Execution to Checkpoint.
@@ -9,6 +9,7 @@ Validates:
 6. Abrupt Process Crash (SIGKILL) & Durable Restart Recovery (Process Kill -> Restart -> State & Artifact Verification).
 7. Genuine Post-Approval Resume Failure via One-Shot Storage Transient Fault, PDX Pending Preservation, Outbox Suppression, Process Crash, and Idempotent Retry Completion with Exact Unmodified Human Decision.
 8. Sanitized Public Error Responses, Zero Internal Traceback Leaks, and Server Log Auditing.
+9. Production / Staging Fail-Closed Enforcement (Strict prohibition of fake adapters, unknown FLEET_ENV rejection).
 """
 import base64
 import hashlib
@@ -693,3 +694,27 @@ def test_b8_production_mode_fails_closed_on_fake_adapters_and_invalid_modes(tmp_
     )
     assert res_bad_mode.returncode != 0
     assert "Invalid FLEET_PDX_ADAPTER" in res_bad_mode.stderr + res_bad_mode.stdout
+
+    # 4. Unknown FLEET_ENV typo (e.g. 'prodution') must raise ValueError
+    env_bad_env = dict(base_env, FLEET_ENV="prodution", FLEET_PDX_ADAPTER="fake", FLEET_INTAKE_ADAPTER="fake")
+    res_bad_env = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "fleet_api.main:app", "--port", str(port)],
+        cwd=str(ROOT_DIR),
+        env=env_bad_env,
+        capture_output=True,
+        text=True,
+    )
+    assert res_bad_env.returncode != 0
+    assert "Invalid FLEET_ENV" in res_bad_env.stderr + res_bad_env.stdout
+
+    # 5. Empty FLEET_ENV must raise ValueError
+    env_empty_env = dict(base_env, FLEET_ENV="", FLEET_PDX_ADAPTER="fake", FLEET_INTAKE_ADAPTER="fake")
+    res_empty_env = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "fleet_api.main:app", "--port", str(port)],
+        cwd=str(ROOT_DIR),
+        env=env_empty_env,
+        capture_output=True,
+        text=True,
+    )
+    assert res_empty_env.returncode != 0
+    assert "FLEET_ENV cannot be empty" in res_empty_env.stderr + res_empty_env.stdout

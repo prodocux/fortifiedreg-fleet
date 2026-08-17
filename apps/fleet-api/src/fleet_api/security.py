@@ -11,7 +11,14 @@ import jwt
 from fleet_governance_core.models.approval import AuthenticatedActor
 
 # Fail-closed default: must be explicitly set to 'test', 'local', or 'dev' to allow dev tokens/defaults
-FLEET_ENV = os.getenv("FLEET_ENV", "production").lower()
+ALLOWED_ENVS = {"production", "staging", "test", "local", "dev"}
+raw_env = os.getenv("FLEET_ENV", "production")
+if not raw_env or not raw_env.strip():
+    raise ValueError("FLEET_ENV cannot be empty.")
+FLEET_ENV = raw_env.strip().lower()
+if FLEET_ENV not in ALLOWED_ENVS:
+    raise ValueError(f"Invalid FLEET_ENV: '{FLEET_ENV}'. Must be one of {sorted(ALLOWED_ENVS)}.")
+
 _env_secret = os.getenv("FLEET_JWT_SECRET")
 
 if not _env_secret:

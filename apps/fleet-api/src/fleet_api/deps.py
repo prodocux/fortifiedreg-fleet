@@ -40,7 +40,13 @@ from fleet_governance_core.ports.orchestrator_port import ExecutionOrchestratorP
 from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 from fleet_governance_core.services.approval_workflow import ApprovalWorkflowService
 
-FLEET_ENV = os.getenv("FLEET_ENV", "production").lower()
+ALLOWED_ENVS = {"production", "staging", "test", "local", "dev"}
+raw_env = os.getenv("FLEET_ENV", "production")
+if not raw_env or not raw_env.strip():
+    raise ValueError("FLEET_ENV cannot be empty.")
+FLEET_ENV = raw_env.strip().lower()
+if FLEET_ENV not in ALLOWED_ENVS:
+    raise ValueError(f"Invalid FLEET_ENV: '{FLEET_ENV}'. Must be one of {sorted(ALLOWED_ENVS)}.")
 
 # In production/staging, defaults to live; in test/local/dev, defaults to fake
 DEFAULT_ADAPTER_MODE = "fake" if FLEET_ENV in ("test", "local", "dev") else "live"
