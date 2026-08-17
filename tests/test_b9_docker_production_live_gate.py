@@ -1,9 +1,9 @@
 """
-Gate B9-Docker-Live: Docker Production Live-Adapter Deployment Gate & Full End-to-End Lifecycle Conformance Suite.
+Gate B9-Docker-Live: Docker Production-Configuration Live-Adapter Integration Gate.
 Validates:
 1. Pinned Git HEAD Docker Image execution in strict FLEET_ENV=production runtime.
 2. Containerized Live ProDocuX HTTP Server deployment on isolated Docker bridge network.
-3. G6A Live HTTP Endpoint Conformance (version, capabilities, and 5-format document extraction over HTTP wire).
+3. Containerized G6A Live HTTP Endpoint Conformance (version, capabilities, and 5-format document extraction over HTTP wire).
 4. Live Intake Adapter (ProDocuXHttpIntakeAdapter) + Live PDX Core Orchestrator (LivePDXCoreOrchestrator).
 5. Production Liveness (/v1/health) and Readiness (/v1/ready) Probes under live adapters.
 6. Cryptographic Multi-Tenant Isolation in production environment.
@@ -22,6 +22,7 @@ import subprocess
 import sys
 import time
 from typing import Dict, Optional, Tuple
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import jwt
@@ -192,6 +193,8 @@ class FleetProductionContainerProcess:
             "FLEET_PDX_ADAPTER=live",
             "-e",
             f"PRODOCUX_BASE_URL={self.prodocux_url}",
+            "-e",
+            f"PRODOCUX_TRUSTED_HTTP_HOSTS={urlparse(self.prodocux_url).hostname}",
             "-v",
             f"{self.data_dir.resolve()}:/app/data",
             "-v",

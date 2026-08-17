@@ -54,8 +54,17 @@ class IntakeConnectionError(IntakeServiceUnavailableError):
 class IntakeConfigurationError(RuntimeError):
     """Configuration error: invalid or missing upstream URL."""
 
-def validate_prodocux_url(url: str, is_production: bool = False) -> str:
-    """Validate and sanitize upstream ProDocuX Base URL."""
+def validate_prodocux_url(
+    url: str,
+    is_production: bool = False,
+    trusted_http_hosts: Optional[set] = None,
+) -> str:
+    """
+    Validate and sanitize upstream ProDocuX Base URL.
+    In production/staging, HTTPS is required by default. Cleartext HTTP is strictly restricted
+    to exact hostnames explicitly declared in PRODOCUX_TRUSTED_HTTP_HOSTS (e.g. for internal service mesh).
+    No wildcards, suffix matching, or IP range guessing are permitted.
+    """
     if not url or not isinstance(url, str):
         raise IntakeConfigurationError("ProDocuX Base URL is required and cannot be empty.")
 
@@ -68,18 +77,20 @@ def validate_prodocux_url(url: str, is_production: bool = False) -> str:
         )
 
     if is_production and parsed.scheme != "https":
+        raw_trusted = os.getenv("PRODOCUX_TRUSTED_HTTP_HOSTS", "")
+        allowed_hosts: set = set()
+        if raw_trusted.strip():
+            allowed_hosts = {h.strip().lower() for h in raw_trusted.split(",") if h.strip()}
+        if trusted_http_hosts:
+            allowed_hosts.update({h.strip().lower() for h in trusted_http_hosts if h.strip()})
+
         hostname = (parsed.hostname or "").lower()
-        is_internal = (
-            hostname in ("localhost", "127.0.0.1")
-            or hostname.startswith("10.")
-            or hostname.startswith("172.")
-            or hostname.startswith("192.168.")
-            or "." not in hostname
-            or hostname.endswith(".internal")
-            or hostname.endswith(".local")
-        )
-        if not is_internal:
-            raise IntakeConfigurationError("HTTPS is strictly required for external ProDocuX Base URL in production.")
+        if not hostname or hostname not in allowed_hosts:
+            raise IntakeConfigurationError(
+                f"HTTPS is strictly required for ProDocuX Base URL in production. "
+                f"Cleartext HTTP is prohibited unless the exact hostname is explicitly listed "
+                f"in PRODOCUX_TRUSTED_HTTP_HOSTS (got hostname '{hostname}', trusted: {sorted(allowed_hosts)})."
+            )
 
     if parsed.username or parsed.password:
         raise IntakeConfigurationError("Credentials/userinfo are forbidden in ProDocuX Base URL.")

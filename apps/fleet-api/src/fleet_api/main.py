@@ -66,7 +66,7 @@ async def intake_unavailable_handler(request: Request, exc: IntakeServiceUnavail
 async def intake_payload_error_handler(request: Request, exc: IntakePayloadError):
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": f"Bad Request: {str(exc)}"},
+        content={"detail": "Bad Request: Invalid document intake payload or unsupported format."},
     )
 
 # ---------------------------------------------------------------------------
