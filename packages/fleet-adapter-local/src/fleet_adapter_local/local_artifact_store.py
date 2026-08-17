@@ -1,7 +1,8 @@
 """
-Local Atomic Crash-Safe Artifact Store (v0.3.0).
-Implements ArtifactStorePort with atomic temporary staging, fsync,
-cross-process exclusive link publishing, and non-overwrite collision detection.
+Local Atomic Non-Overwriting Artifact Store (v0.3.0).
+Implements ArtifactStorePort with atomic, non-overwriting, process-crash-recoverable
+local artifact publication via staging, fsync, cross-process exclusive link publishing,
+and non-overwrite collision detection.
 """
 import hashlib
 import os

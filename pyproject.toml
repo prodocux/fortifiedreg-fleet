@@ -24,6 +24,7 @@ members = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "-p no:cacheprovider"
 testpaths = ["tests", "packages", "apps"]
 pythonpath = [
     "packages/fleet-governance-core/src",

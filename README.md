@@ -14,7 +14,7 @@ It automates European Union Regulation (EC) No 1223/2009 cosmetics Product Infor
 - `packages/fleet-domain-cosmetics`: Pure toxicology calculators (SED, MoS), INCI restriction verifiers (Annex II/V), and supplier document audits.
 - `packages/fleet-adapter-pdx`: Live PDX Core adapter integrating with `pdx-artifact-core 0.2.0a2` (pin `55a9293...`), persistent `ApprovalLedger`, and allowlisted host transform dispatcher.
 - `packages/fleet-adapter-prodocux`: Production ProDocuX HTTP Intake Adapter supporting 5 document formats (PDF, DOCX, CSV, XLSX, PPTX) with exact format boundaries, retry backoff, and sanitized error mapping.
-- `packages/fleet-adapter-local`: Local file-backed and SQLite ACID persistence adapters, crash-safe atomic artifact publishing, and 4-stage verified artifact content resolver.
+- `packages/fleet-adapter-local`: Local file-backed and SQLite ACID persistence adapters, atomic non-overwriting process-crash-recoverable artifact publishing, and 4-stage verified artifact content resolver.
 - `packages/fleet-adapter-gcp`: Thread-safe in-memory stores and cloud persistence ports.
 - `packages/fleet-adapter-google-adk`: Google Model Armor security scanner and structured toxicology agent.
 - `apps/fleet-api`: FastAPI REST backend with fail-closed JWT auth, RBAC, separated `/v1/health` (liveness) and `/v1/ready` (readiness) probes, single-transaction atomic approval decisions, and immutable audit logging.
