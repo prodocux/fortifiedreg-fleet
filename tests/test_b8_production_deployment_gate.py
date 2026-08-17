@@ -307,9 +307,9 @@ def test_b8_multi_tenant_cryptographic_isolation(prod_env):
     assert reg_a.json()["sha256"] != reg_b.json()["sha256"]
 
 
-def test_b8_five_formats_complete_production_lifecycle_and_durable_restart(prod_env):
+def test_b8_five_formats_complete_subprocess_lifecycle_and_durable_restart(prod_env):
     """
-    Execute complete B8 Gate sequence across 5 document formats:
+    Execute complete B8 Host Subprocess Gate sequence across 5 document formats:
     create -> register 5 formats -> compile & run -> checkpoint -> approve & resume -> SIGKILL -> restart -> verify.
     """
     token_cso = make_jwt_token("tenant-acme-corp", "usr-cso-1", "cso@acme.com", "cso")

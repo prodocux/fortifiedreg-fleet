@@ -10,29 +10,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from fleet_governance_core.models.approval import AuthenticatedActor
 
-# Fail-closed default: must be explicitly set to 'test', 'local', or 'dev' to allow dev tokens/defaults
-ALLOWED_ENVS = {"production", "staging", "test", "local", "dev"}
-raw_env = os.getenv("FLEET_ENV", "production")
-if not raw_env or not raw_env.strip():
-    raise ValueError("FLEET_ENV cannot be empty.")
-FLEET_ENV = raw_env.strip().lower()
-if FLEET_ENV not in ALLOWED_ENVS:
-    raise ValueError(f"Invalid FLEET_ENV: '{FLEET_ENV}'. Must be one of {sorted(ALLOWED_ENVS)}.")
-
-_env_secret = os.getenv("FLEET_JWT_SECRET")
-
-if not _env_secret:
-    if FLEET_ENV in ("test", "local", "dev"):
-        FLEET_JWT_SECRET = "dev-secret-key-fortified-enterprise-fleet-2026-secure-token-512"
-    else:
-        raise RuntimeError(
-            "CRITICAL SECURITY: FLEET_JWT_SECRET environment variable is mandatory and cannot be empty in production/staging environments."
-        )
-else:
-    FLEET_JWT_SECRET = _env_secret
-
-FLEET_JWT_ALGORITHM = "HS256"
-FLEET_JWT_ISSUER = "fortified-enterprise-fleet-auth"
+from fleet_api.config import (
+    FLEET_ENV,
+    FLEET_JWT_SECRET,
+    FLEET_JWT_ALGORITHM,
+    FLEET_JWT_ISSUER,
+)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

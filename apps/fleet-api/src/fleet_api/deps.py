@@ -40,42 +40,13 @@ from fleet_governance_core.ports.orchestrator_port import ExecutionOrchestratorP
 from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 from fleet_governance_core.services.approval_workflow import ApprovalWorkflowService
 
-ALLOWED_ENVS = {"production", "staging", "test", "local", "dev"}
-raw_env = os.getenv("FLEET_ENV", "production")
-if not raw_env or not raw_env.strip():
-    raise ValueError("FLEET_ENV cannot be empty.")
-FLEET_ENV = raw_env.strip().lower()
-if FLEET_ENV not in ALLOWED_ENVS:
-    raise ValueError(f"Invalid FLEET_ENV: '{FLEET_ENV}'. Must be one of {sorted(ALLOWED_ENVS)}.")
-
-# In production/staging, defaults to live; in test/local/dev, defaults to fake
-DEFAULT_ADAPTER_MODE = "fake" if FLEET_ENV in ("test", "local", "dev") else "live"
-INTAKE_MODE = os.getenv("FLEET_INTAKE_ADAPTER", DEFAULT_ADAPTER_MODE).lower()
-PDX_MODE = os.getenv("FLEET_PDX_ADAPTER", DEFAULT_ADAPTER_MODE).lower()
-
-# 1. Validate mode allowlists (prevent silent typos from falling back)
-if INTAKE_MODE not in ("live", "fake"):
-    raise ValueError(f"Invalid FLEET_INTAKE_ADAPTER: '{INTAKE_MODE}'. Must be 'live' or 'fake'.")
-
-if PDX_MODE not in ("live", "fake"):
-    raise ValueError(f"Invalid FLEET_PDX_ADAPTER: '{PDX_MODE}'. Must be 'live' or 'fake'.")
-
-# 2. Fail-closed in production / staging
-if FLEET_ENV in ("production", "staging"):
-    if INTAKE_MODE == "fake":
-        raise RuntimeError(
-            "Fail-closed: Fake intake adapter is prohibited in production/staging environment. "
-            "Set FLEET_INTAKE_ADAPTER=live or use FLEET_ENV=test/local/dev."
-        )
-    if PDX_MODE == "fake":
-        raise RuntimeError(
-            "Fail-closed: Fake PDX orchestrator is prohibited in production/staging environment. "
-            "Set FLEET_PDX_ADAPTER=live or use FLEET_ENV=test/local/dev."
-        )
-
-# 1. Stores & Persistence (Configurable SQLite Persistence & Local Artifact Store)
-FLEET_DB_PATH = os.getenv("FLEET_DB_PATH", ":memory:")
-FLEET_ARTIFACTS_DIR = os.getenv("FLEET_ARTIFACTS_DIR", "./.local_artifacts")
+from fleet_api.config import (
+    FLEET_ENV,
+    INTAKE_MODE,
+    PDX_MODE,
+    FLEET_DB_PATH,
+    FLEET_ARTIFACTS_DIR,
+)
 
 resume_context_store = SQLiteResumeContextStore(FLEET_DB_PATH)
 approval_store = resume_context_store
