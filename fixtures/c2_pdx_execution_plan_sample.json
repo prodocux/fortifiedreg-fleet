@@ -6,7 +6,7 @@
     "upstream_repo": "prodocux/pdx-artifact-engine",
     "source_commit": "93ec3514261bf89e9cb88b79f524e3fbc5ef4402",
     "source_path": "packages/pdx_artifact_core/src/pdx_artifact_core/schemas/execution_plan.v1.schema.json",
-    "source_blob_sha256": "fff3e94c92a69e64987e29db7a9e18d215895c05a882caf3691c7987c0a4b37d",
+    "source_blob_sha256": "8993c6e640573fee74d1b01fc6d70db9db5053cfafaf0edc254ac936814dec5b",
     "snapshot_mode": "byte_exact",
     "data_sha256": "0bd72fe4404cfb4f8de89f396d6465d0e55007d1ed4c866e7a6a1bfce1da80af",
     "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."

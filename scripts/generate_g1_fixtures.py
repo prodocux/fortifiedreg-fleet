@@ -237,7 +237,7 @@ def main():
             PDX_REPO,
             PDX_COMMIT,
             "packages/pdx_artifact_core/src/pdx_artifact_core/schemas/execution_plan.v1.schema.json",
-            "fff3e94c92a69e64987e29db7a9e18d215895c05a882caf3691c7987c0a4b37d",
+            "8993c6e640573fee74d1b01fc6d70db9db5053cfafaf0edc254ac936814dec5b",
             "byte_exact"
         ), indent=2, ensure_ascii=False),
         encoding="utf-8"

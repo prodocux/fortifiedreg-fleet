@@ -1,8 +1,8 @@
 """
-Gate 6: Exact-Pin Schema Conformance & Contract Envelope Compatibility Tests.
+Gate 6: Exact-Pin Schema Conformance, Package Provenance, and Contract Compatibility.
 Directly verifies bidirectional schema & payload compatibility against:
-- ProDocuX at exact commit: 7a1d820639910c1d92b31de6eaf0a371f7386182
-- PDX Artifact Engine at exact commit: 93ec3514261bf89e9cb88b79f524e3fbc5ef4402
+- ProDocuX at exact commit: 7a1d820639910c1d92b31de6eaf0a371f7386182 (version 0.2.0)
+- PDX Artifact Engine at exact commit: 93ec3514261bf89e9cb88b79f524e3fbc5ef4402 (version 0.2.0a2)
 """
 import importlib.metadata
 from importlib.resources import files
@@ -26,7 +26,6 @@ from fleet_governance_core.models.storage import ArtifactStorageIdentity
 from fleet_governance_core.models.verifier import VerifierResult, VerifierStatusEnum
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
-SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas"
 
 PIN_PRODOCUX = "7a1d820639910c1d92b31de6eaf0a371f7386182"
 PIN_PDX = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
@@ -36,46 +35,64 @@ PRODOCUX_REPO = Path(os.getenv("PRODOCUX_REPO_DIR")) if os.getenv("PRODOCUX_REPO
 
 
 def get_pdx_schema(schema_filename: str) -> dict:
-    """Load PDX schema from installed package resources, or fallback to local snapshot."""
-    try:
-        content = files("pdx_artifact_core.schemas").joinpath(schema_filename).read_text(encoding="utf-8")
-        return json.loads(content)
-    except Exception:
-        snapshot = SCHEMAS_DIR / "upstream_snapshots" / "pdx" / schema_filename
-        if snapshot.exists():
-            return json.loads(snapshot.read_text(encoding="utf-8"))
-        raise
+    """Load PDX schema directly from installed pdx_artifact_core package resources (fail-closed)."""
+    schema_resource = files("pdx_artifact_core.schemas").joinpath(schema_filename)
+    if not schema_resource.is_file():
+        raise FileNotFoundError(f"Installed pdx_artifact_core package is missing schema resource: {schema_filename}")
+    return json.loads(schema_resource.read_text(encoding="utf-8"))
 
 
 def get_prodocux_schema(schema_filename: str) -> dict:
-    """Load ProDocuX schema from installed package resources, or fallback to local proposed snapshot."""
-    try:
-        content = files("prodocux_kernel.schemas").joinpath(schema_filename).read_text(encoding="utf-8")
-        return json.loads(content)
-    except Exception:
-        snapshot = SCHEMAS_DIR / "proposed_part_a_contracts" / "prodocux" / schema_filename
-        if snapshot.exists():
-            return json.loads(snapshot.read_text(encoding="utf-8"))
-        raise
+    """Load ProDocuX schema directly from installed prodocux_kernel package resources (fail-closed)."""
+    schema_resource = files("prodocux_kernel.schemas").joinpath(schema_filename)
+    if not schema_resource.is_file():
+        raise FileNotFoundError(f"Installed prodocux package is missing schema resource: {schema_filename}")
+    return json.loads(schema_resource.read_text(encoding="utf-8"))
 
+
+def assert_vcs_commit_provenance(pkg_name: str, expected_commit: str) -> None:
+    """Verify that an installed distribution has direct_url.json VCS provenance matching the exact commit."""
+    dist = importlib.metadata.distribution(pkg_name)
+    direct_url_raw = dist.read_text("direct_url.json")
+    if direct_url_raw is None:
+        pytest.fail(f"direct_url.json must exist in installed {pkg_name} distribution metadata")
+    direct_url = json.loads(direct_url_raw)
+    if "vcs_info" in direct_url:
+        assert direct_url["vcs_info"]["vcs"] == "git", f"{pkg_name} direct_url is not Git VCS"
+        actual_commit = direct_url["vcs_info"].get("commit_id")
+        assert actual_commit == expected_commit, (
+            f"VCS commit mismatch for {pkg_name}: expected {expected_commit}, got {actual_commit}"
+        )
+    elif direct_url.get("dir_info", {}).get("editable"):
+        pytest.skip(
+            f"{pkg_name} is installed as local editable distribution; "
+            "Release VCS direct_url provenance check skipped in dev mode (requires clean venv git install)."
+        )
+    else:
+        pytest.fail(f"Invalid distribution direct_url metadata for {pkg_name}: {direct_url}")
+
+
+# ---------------------------------------------------------------------------
+# 1. Package Version & Git Commit Provenance Verification
+# ---------------------------------------------------------------------------
 
 def test_package_distribution_versions():
-    """Verify that installed packages match expected versions from exact pins."""
-    try:
-        dist_pdx = importlib.metadata.distribution("pdx-artifact-core")
-        assert dist_pdx.version == "0.2.0a2"
-    except importlib.metadata.PackageNotFoundError:
-        pass
+    """Verify that required upstream packages are installed with exact release versions."""
+    dist_pdx = importlib.metadata.distribution("pdx-artifact-core")
+    assert dist_pdx.version == "0.2.0a2", f"pdx-artifact-core version mismatch: expected 0.2.0a2, got {dist_pdx.version}"
 
-    try:
-        dist_pdx2 = importlib.metadata.distribution("prodocux")
-        assert dist_pdx2.version == "0.2.0"
-    except importlib.metadata.PackageNotFoundError:
-        pass
+    dist_prodocux = importlib.metadata.distribution("prodocux")
+    assert dist_prodocux.version == "0.2.0", f"prodocux version mismatch: expected 0.2.0, got {dist_prodocux.version}"
+
+
+def test_package_vcs_git_commit_provenance():
+    """Verify that both pdx-artifact-core and prodocux match exact release Git commit pins."""
+    assert_vcs_commit_provenance("pdx-artifact-core", PIN_PDX)
+    assert_vcs_commit_provenance("prodocux", PIN_PRODOCUX)
 
 
 def test_exact_upstream_pins_exist_in_git():
-    """Verify that upstream repos can resolve the exact commit pins (if repo paths provided)."""
+    """Verify that upstream repos can resolve the exact commit pins (if sibling repo paths provided)."""
     if not PDX_REPO or not PDX_REPO.exists():
         pytest.skip("PDX_REPO_DIR not provided or directory does not exist (skipping git sibling test)")
     if not PRODOCUX_REPO or not PRODOCUX_REPO.exists():
@@ -96,8 +113,12 @@ def test_exact_upstream_pins_exist_in_git():
     assert res_pdx2.returncode == 0, f"ProDocuX commit {PIN_PRODOCUX} missing: {res_pdx2.stderr}"
 
 
+# ---------------------------------------------------------------------------
+# 2. Installed Package Schema Conformance Verification
+# ---------------------------------------------------------------------------
+
 def test_pdx_execution_plan_conformance_against_upstream_schema():
-    """Verify that our plan compiler outputs plans conforming to execution_plan.v1.schema.json."""
+    """Verify that our plan compiler outputs plans conforming to installed execution_plan.v1.schema.json."""
     schema = get_pdx_schema("execution_plan.v1.schema.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -109,7 +130,7 @@ def test_pdx_execution_plan_conformance_against_upstream_schema():
 
 
 def test_pdx_approval_request_conformance_against_upstream_schema():
-    """Verify that PDXApprovalRequest model conforms to approval_request.v1.schema.json."""
+    """Verify that PDXApprovalRequest model conforms to installed approval_request.v1.schema.json."""
     schema = get_pdx_schema("approval_request.v1.schema.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -124,7 +145,7 @@ def test_pdx_approval_request_conformance_against_upstream_schema():
 
 
 def test_pdx_approval_decision_conformance_against_upstream_schema():
-    """Verify that PDXApprovalDecision model conforms to approval_decision.v1.schema.json."""
+    """Verify that PDXApprovalDecision model conforms to installed approval_decision.v1.schema.json."""
     schema = get_pdx_schema("approval_decision.v1.schema.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -143,7 +164,7 @@ def test_pdx_approval_decision_conformance_against_upstream_schema():
 
 
 def test_pdx_workflow_checkpoint_conformance_against_upstream_schema():
-    """Verify that PDXWorkflowCheckpoint model conforms to workflow_checkpoint.v1.schema.json."""
+    """Verify that PDXWorkflowCheckpoint model conforms to installed workflow_checkpoint.v1.schema.json."""
     schema = get_pdx_schema("workflow_checkpoint.v1.schema.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -160,7 +181,7 @@ def test_pdx_workflow_checkpoint_conformance_against_upstream_schema():
 
 
 def test_pdx_verifier_result_conformance_against_upstream_schema():
-    """Verify that VerifierResult model conforms to verifier_result.v1.schema.json."""
+    """Verify that VerifierResult model conforms to installed verifier_result.v1.schema.json."""
     schema = get_pdx_schema("verifier_result.v1.schema.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -178,7 +199,7 @@ def test_pdx_verifier_result_conformance_against_upstream_schema():
 
 
 def test_pdx_artifact_storage_identity_conformance_against_upstream_schema():
-    """Verify that ArtifactStorageIdentity conforms to artifact_storage_identity.v1.schema.json."""
+    """Verify that ArtifactStorageIdentity conforms to installed artifact_storage_identity.v1.schema.json."""
     schema = get_pdx_schema("artifact_storage_identity.v1.schema.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -193,7 +214,7 @@ def test_pdx_artifact_storage_identity_conformance_against_upstream_schema():
 
 
 def test_prodocux_intake_request_conformance_against_upstream_schema():
-    """Verify that C1 intake request fixture conforms to intake_request_v1.json."""
+    """Verify that C1 intake request fixture conforms to installed intake_request_v1.json."""
     schema = get_prodocux_schema("intake_request_v1.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -202,7 +223,7 @@ def test_prodocux_intake_request_conformance_against_upstream_schema():
 
 
 def test_prodocux_intake_response_conformance_against_upstream_schema():
-    """Verify that C1 intake response fixture conforms to intake_response_v1.json."""
+    """Verify that C1 intake response fixture conforms to installed intake_response_v1.json."""
     schema = get_prodocux_schema("intake_response_v1.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -211,7 +232,7 @@ def test_prodocux_intake_response_conformance_against_upstream_schema():
 
 
 def test_prodocux_capabilities_conformance_against_upstream_schema():
-    """Verify that prodocux_intake_capabilities_v1 matches upstream capabilities schema."""
+    """Verify that prodocux_intake_capabilities_v1 matches installed capabilities schema."""
     schema = get_prodocux_schema("prodocux_intake_capabilities_v1.json")
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
 

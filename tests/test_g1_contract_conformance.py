@@ -151,14 +151,13 @@ def test_fixture_hash_integrity_and_provenance(fixture_name: str):
             git_hash_res = subprocess.run(["git", "hash-object", str(snapshot_file)], capture_output=True, text=True, check=True)
             assert git_hash_res.stdout.strip() == "d1f97632194ea55658a7e136f0a1c3df0ce30e09"
             
-        # Verify against installed package resources when present
-        try:
-            from importlib.resources import files
-            pkg_schema = files("pdx_artifact_core.schemas").joinpath(Path(source_rel_path).name)
-            if pkg_schema.is_file():
-                assert hashlib.sha256(pkg_schema.read_bytes()).hexdigest() == expected_blob_sha
-        except Exception:
-            pass
+        # Verify against installed package resources (fail-closed)
+        from importlib.resources import files
+        pkg_schema = files("pdx_artifact_core.schemas").joinpath(Path(source_rel_path).name)
+        assert pkg_schema.is_file(), f"Installed pdx_artifact_core package resource missing: {source_rel_path}"
+        assert hashlib.sha256(pkg_schema.read_bytes()).hexdigest() == expected_blob_sha, (
+            f"Installed package schema hash mismatch for {source_rel_path}!"
+        )
             
     elif status == "proposed_g1":
         assert meta["source_commit"] is None, "Proposed contracts must have source_commit=None"
