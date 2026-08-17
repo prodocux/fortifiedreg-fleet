@@ -373,8 +373,10 @@ def test_b9_docker_production_probes_and_live_adapters(fleet_production_env):
     assert resp_ready.status_code == 200
     data_ready = resp_ready.json()
     assert data_ready["status"] == "ready"
-    assert data_ready["adapters"]["intake_mode"] == "live"
-    assert data_ready["adapters"]["pdx_mode"] == "live"
+    assert data_ready["adapters"]["intake"]["mode"] == "live"
+    assert data_ready["adapters"]["intake"]["status"] == "ready"
+    assert data_ready["adapters"]["orchestrator"]["mode"] == "live"
+    assert data_ready["adapters"]["orchestrator"]["status"] == "ready"
 
 
 def test_b9_docker_production_multi_tenant_isolation(fleet_production_env):
