@@ -11,12 +11,22 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-# Ensure upstream ProDocuX repository is accessible for in-process TestClient binding
-PRODOCUX_REPO = Path("D:/ProDocuX/prodocux")
-if str(PRODOCUX_REPO) not in sys.path:
-    sys.path.insert(0, str(PRODOCUX_REPO))
+import os
 
-from api.main import app as prodocux_app
+try:
+    from api.main import app as prodocux_app
+except ImportError:
+    prodocux_repo_env = os.getenv("PRODOCUX_REPO_DIR")
+    if prodocux_repo_env and Path(prodocux_repo_env).exists():
+        if prodocux_repo_env not in sys.path:
+            sys.path.insert(0, prodocux_repo_env)
+        try:
+            from api.main import app as prodocux_app
+        except ImportError:
+            prodocux_app = None
+    else:
+        prodocux_app = None
+
 from fleet_adapter_prodocux import (
     FORMAT_LIMITS,
     MAX_DOCX_BYTES,
@@ -152,6 +162,8 @@ def test_url_validation_production_https_requirement():
 
 @pytest.fixture
 def inprocess_adapter():
+    if prodocux_app is None:
+        pytest.skip("ProDocuX package or PRODOCUX_REPO_DIR not installed/available (NOT RUN)")
     client = TestClient(prodocux_app)
     return ProDocuXHttpIntakeAdapter(base_url="http://testserver", http_client=client, is_production=False)
 

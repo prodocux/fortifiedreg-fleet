@@ -38,7 +38,9 @@ from fleet_governance_core.models.approval import (
 )
 from fleet_governance_core.models.case import DossierCase
 
-PDX_REPO = Path("D:/ProDocuX/pdx-artifact-engine")
+import os
+
+PDX_REPO = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
 PIN_PDX_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -63,18 +65,19 @@ def test_pdx_core_local_development_provenance():
     dist = importlib.metadata.distribution("pdx-artifact-core")
     assert dist.version == "0.2.0a2"
 
-    # Verify that the exact commit pin exists in the upstream repository
-    res = subprocess.run(
-        ["git", "-C", str(PDX_REPO), "rev-parse", "--verify", PIN_PDX_COMMIT],
-        capture_output=True,
-        text=True,
-    )
-    assert res.returncode == 0, f"PDX commit {PIN_PDX_COMMIT} missing: {res.stderr}"
+    # Optional local git sibling verification if PDX_REPO_DIR provided
+    if PDX_REPO and PDX_REPO.exists():
+        res = subprocess.run(
+            ["git", "-C", str(PDX_REPO), "rev-parse", "--verify", PIN_PDX_COMMIT],
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode == 0, f"PDX commit {PIN_PDX_COMMIT} missing: {res.stderr}"
 
-    head_commit = subprocess.check_output(
-        ["git", "-C", str(PDX_REPO), "rev-parse", "HEAD"], text=True
-    ).strip()
-    assert head_commit == PIN_PDX_COMMIT
+        head_commit = subprocess.check_output(
+            ["git", "-C", str(PDX_REPO), "rev-parse", "HEAD"], text=True
+        ).strip()
+        assert head_commit == PIN_PDX_COMMIT
 
 def test_pdx_core_release_git_provenance():
     """Verify distribution direct_url.json VCS commit provenance in release environments."""

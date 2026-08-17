@@ -542,10 +542,23 @@ def test_five_formats_api_compile_and_run_lifecycle(client, auth_headers, fmt_ex
     from fleet_api import deps
     from fleet_api.main import app
 
-    PRODOCUX_REPO = Path("D:/ProDocuX/prodocux")
-    if str(PRODOCUX_REPO) not in sys.path:
-        sys.path.insert(0, str(PRODOCUX_REPO))
-    from api.main import app as prodocux_app
+    import os
+    try:
+        from api.main import app as prodocux_app
+    except ImportError:
+        prodocux_repo_env = os.getenv("PRODOCUX_REPO_DIR")
+        if prodocux_repo_env and Path(prodocux_repo_env).exists():
+            if prodocux_repo_env not in sys.path:
+                sys.path.insert(0, prodocux_repo_env)
+            try:
+                from api.main import app as prodocux_app
+            except ImportError:
+                prodocux_app = None
+        else:
+            prodocux_app = None
+
+    if prodocux_app is None:
+        pytest.skip("ProDocuX package or PRODOCUX_REPO_DIR not installed/available (NOT RUN)")
 
     # Wire LivePDXCoreOrchestrator with recording spy wrapping real in-process ProDocuX TestClient kernel
     real_inprocess_intake = ProDocuXHttpIntakeAdapter(

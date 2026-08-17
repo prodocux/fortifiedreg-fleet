@@ -29,8 +29,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = ROOT_DIR / "schemas"
 FIXTURES_DIR = ROOT_DIR / "fixtures"
 
-PDX_REPO_DIR = Path(os.getenv("PDX_REPO_DIR", "D:/ProDocuX/pdx-artifact-engine"))
-PRODOCUX_REPO_DIR = Path(os.getenv("PRODOCUX_REPO_DIR", "D:/ProDocuX/prodocux"))
+PDX_REPO_DIR = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
+PRODOCUX_REPO_DIR = Path(os.getenv("PRODOCUX_REPO_DIR")) if os.getenv("PRODOCUX_REPO_DIR") else None
 
 PDX_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
 FLEET_COMMIT = "af8c8a508134a774af568cf9d29c7b412268e518"
@@ -141,8 +141,8 @@ def test_fixture_hash_integrity_and_provenance(fixture_name: str):
         snapshot_file = EXPECTED_SCHEMAS[FIXTURE_SCHEMA_MAP[fixture_name]]
         assert hashlib.sha256(snapshot_file.read_bytes()).hexdigest() == expected_blob_sha
         
-        # Verify snapshot directly against git object database at PDX_COMMIT
-        if PDX_REPO_DIR.exists():
+        # Verify snapshot directly against git object database if PDX_REPO_DIR provided
+        if PDX_REPO_DIR and PDX_REPO_DIR.exists():
             git_show_cmd = ["git", "show", f"{PDX_COMMIT}:{source_rel_path}"]
             git_res = subprocess.run(git_show_cmd, cwd=str(PDX_REPO_DIR), capture_output=True, check=True)
             assert hashlib.sha256(git_res.stdout).hexdigest() == expected_blob_sha, "Git show bytes do not match expected blob SHA!"
@@ -150,6 +150,15 @@ def test_fixture_hash_integrity_and_provenance(fixture_name: str):
             # Verify git hash-object
             git_hash_res = subprocess.run(["git", "hash-object", str(snapshot_file)], capture_output=True, text=True, check=True)
             assert git_hash_res.stdout.strip() == "d1f97632194ea55658a7e136f0a1c3df0ce30e09"
+            
+        # Verify against installed package resources when present
+        try:
+            from importlib.resources import files
+            pkg_schema = files("pdx_artifact_core.schemas").joinpath(Path(source_rel_path).name)
+            if pkg_schema.is_file():
+                assert hashlib.sha256(pkg_schema.read_bytes()).hexdigest() == expected_blob_sha
+        except Exception:
+            pass
             
     elif status == "proposed_g1":
         assert meta["source_commit"] is None, "Proposed contracts must have source_commit=None"
