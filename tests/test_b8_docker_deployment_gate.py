@@ -1,13 +1,17 @@
 """
-Gate B8-Docker: Docker Container Deployment Gate & Container Lifecycle Conformance Suite.
+Gate B8-Docker: Docker Container Integration & Packaging Conformance Suite.
 Validates:
-1. Docker Image Provenance & Compatibility Manifest Verification (pdx==55a9293..., prodocux==c8acd2b...).
-2. Fail-Closed Authentication & Injected Secret Runtime.
-3. Separated Health (/v1/health) and Readiness (/v1/ready) Probes.
-4. Multi-Tenant Cryptographic Isolation within Isolated Container Network.
-5. Five-Format Intake Registration, Checkpoint Execution, Single-Transaction Approval, and Artifact Generation.
-6. Container Hard Kill (docker kill) & Persistent Volume Restart Recovery (SQLite + Artifacts volume recovery).
-7. Non-Root Execution Security (fleetuser uid 10001) & Image Hygiene.
+1. Dynamic OCI Revision-Pinned Docker Image Build (org.opencontainers.image.revision = Fleet HEAD SHA).
+2. Inside-Image Package Provenance & Compatibility Manifest Verification (pdx==55a9293..., prodocux==c8acd2b...).
+3. Fail-Closed Production Runtime Enforcement:
+   - FLEET_ENV=production with fake PDX adapter -> fails-closed.
+   - FLEET_ENV=production with fake intake adapter -> fails-closed.
+   - Invalid mode values (e.g. 'liv') -> fails-closed with ValueError.
+4. Non-Root Execution Security (fleetuser uid 10001).
+5. Separated Health (/v1/health) and Readiness (/v1/ready) Probes.
+6. Multi-Tenant Cryptographic Isolation within Container Network.
+7. Five-Format Intake Registration, Checkpoint Execution, Single-Transaction Approval, and Artifact Generation (Container Integration).
+8. Container Hard Kill (docker kill) & Persistent Volume Restart Recovery (SQLite + Artifacts volume recovery).
 """
 import base64
 import hashlib
@@ -31,12 +35,16 @@ import requests
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = ROOT_DIR / "fixtures"
 
-DOCKER_IMAGE = "fortifiedreg-fleet:v0.3.0"
 JWT_SECRET = "b8-docker-prod-deployment-secret-key-2026-fortified-998877665544332211"
 
 EXPECTED_PDX_COMMIT = "55a9293c8d5c0091e04e457dc43f662058e50068"
 EXPECTED_PRODOCUX_COMMIT = "c8acd2ba69c23458cb2589d8450246fe9b16424f"
 EXPECTED_MANIFEST_SHA = "a5eff2cc21aeff8eb0f6cad1e6e7dd3f50daff3ea3faedb4989c03b1af87161c"
+
+
+def get_current_git_commit() -> str:
+    res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(ROOT_DIR), capture_output=True, text=True, check=True)
+    return res.stdout.strip()
 
 
 def get_free_port() -> int:
@@ -72,14 +80,39 @@ def wait_for_server(base_url: str, timeout_seconds: float = 20.0) -> bool:
     return False
 
 
+@pytest.fixture(scope="session")
+def docker_test_image():
+    """Build a uniquely tagged test Docker image pinned to the current git HEAD commit."""
+    head_commit = get_current_git_commit()
+    image_tag = f"fortifiedreg-fleet:test-{head_commit[:8]}"
+
+    build_cmd = [
+        "docker",
+        "build",
+        "--build-arg",
+        f"GIT_COMMIT={head_commit}",
+        "-t",
+        image_tag,
+        str(ROOT_DIR),
+    ]
+    subprocess.run(build_cmd, check=True, capture_output=True, text=True)
+
+    yield image_tag, head_commit
+
+    # Cleanup test image
+    subprocess.run(["docker", "rmi", "-f", image_tag], capture_output=True, text=True)
+
+
 class DockerContainerProcess:
     def __init__(
         self,
+        image_tag: str,
         data_dir: Path,
         artifacts_dir: Path,
         port: int,
         extra_env: Optional[Dict[str, str]] = None,
     ):
+        self.image_tag = image_tag
         self.data_dir = data_dir
         self.artifacts_dir = artifacts_dir
         self.port = port
@@ -100,7 +133,7 @@ class DockerContainerProcess:
             "-e",
             f"FLEET_JWT_SECRET={JWT_SECRET}",
             "-e",
-            "FLEET_ENV=production",
+            "FLEET_ENV=test",
             "-e",
             "FLEET_INTAKE_ADAPTER=fake",
             "-e",
@@ -112,7 +145,7 @@ class DockerContainerProcess:
         ]
         for k, v in self.extra_env.items():
             cmd.extend(["-e", f"{k}={v}"])
-        cmd.append(DOCKER_IMAGE)
+        cmd.append(self.image_tag)
 
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
         self.container_id = res.stdout.strip()
@@ -143,14 +176,15 @@ class DockerContainerProcess:
 
 
 @pytest.fixture
-def docker_env(tmp_path):
+def docker_env(docker_test_image, tmp_path):
+    image_tag, _ = docker_test_image
     port = get_free_port()
     data_dir = tmp_path / "docker_data"
     data_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir = tmp_path / "docker_artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    container = DockerContainerProcess(data_dir, artifacts_dir, port)
+    container = DockerContainerProcess(image_tag, data_dir, artifacts_dir, port)
     container.start()
     try:
         yield container
@@ -213,22 +247,28 @@ def generate_valid_document_bytes() -> Dict[str, Tuple[str, str, bytes]]:
 # B8-Docker Deployment Conformance Tests
 # ---------------------------------------------------------------------------
 
-def test_docker_image_provenance_and_version_integrity():
-    """Verify that packages installed in the Docker image match exact upstream GitHub RC pins and compatibility manifest."""
-    # 1. Inspect direct_url.json inside container
+def test_docker_image_provenance_and_revision_integrity(docker_test_image):
+    """Verify that packages installed in the Docker image match exact upstream GitHub RC pins, compatibility manifest, and Fleet HEAD commit."""
+    image_tag, head_commit = docker_test_image
+
+    # 1. Verify OCI Image Revision Label
+    inspect_cmd = ["docker", "inspect", image_tag, "--format", '{{index .Config.Labels "org.opencontainers.image.revision"}}']
+    inspect_res = subprocess.run(inspect_cmd, capture_output=True, text=True, check=True)
+    assert inspect_res.stdout.strip() == head_commit, f"Expected OCI revision {head_commit}, got {inspect_res.stdout.strip()}"
+
+    # 2. Inspect direct_url.json inside container
     cmd = [
         "docker",
         "run",
         "--rm",
         "--entrypoint",
         "python3",
-        DOCKER_IMAGE,
+        image_tag,
         "-c",
         """
 import json, glob, sys
 pdx_files = glob.glob('/usr/local/lib/python3.12/site-packages/pdx_artifact_core-*.dist-info/direct_url.json')
 pdx_info = json.load(open(pdx_files[0])) if pdx_files else {}
-
 pdx_commit = pdx_info.get("vcs_info", {}).get("commit_id", "")
 
 prodocux_files = glob.glob('/usr/local/lib/python3.12/site-packages/prodocux-*.dist-info/direct_url.json')
@@ -254,15 +294,76 @@ print(json.dumps({
     assert provenance["manifest_sha"] == EXPECTED_MANIFEST_SHA, f"Expected Manifest SHA {EXPECTED_MANIFEST_SHA}, got {provenance['manifest_sha']}"
 
 
-def test_docker_non_root_execution_security():
+def test_docker_production_mode_fails_closed_on_fake_adapters_or_bad_modes(docker_test_image):
+    """Verify that container configured with FLEET_ENV=production rejects fake adapters and invalid modes."""
+    image_tag, _ = docker_test_image
+
+    # 1. FLEET_ENV=production with FLEET_PDX_ADAPTER=fake must exit with error
+    cmd_fake_pdx = [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        f"FLEET_JWT_SECRET={JWT_SECRET}",
+        "-e",
+        "FLEET_ENV=production",
+        "-e",
+        "FLEET_PDX_ADAPTER=fake",
+        "-e",
+        "FLEET_INTAKE_ADAPTER=live",
+        image_tag,
+    ]
+    res_fake_pdx = subprocess.run(cmd_fake_pdx, capture_output=True, text=True)
+    assert res_fake_pdx.returncode != 0
+    assert "Fail-closed: Fake PDX orchestrator is prohibited in production" in res_fake_pdx.stdout + res_fake_pdx.stderr
+
+    # 2. FLEET_ENV=production with FLEET_INTAKE_ADAPTER=fake must exit with error
+    cmd_fake_intake = [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        f"FLEET_JWT_SECRET={JWT_SECRET}",
+        "-e",
+        "FLEET_ENV=production",
+        "-e",
+        "FLEET_PDX_ADAPTER=live",
+        "-e",
+        "FLEET_INTAKE_ADAPTER=fake",
+        image_tag,
+    ]
+    res_fake_intake = subprocess.run(cmd_fake_intake, capture_output=True, text=True)
+    assert res_fake_intake.returncode != 0
+    assert "Fail-closed: Fake intake adapter is prohibited in production" in res_fake_intake.stdout + res_fake_intake.stderr
+
+    # 3. Invalid adapter typo (e.g. 'liv') must exit with error
+    cmd_bad_mode = [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        f"FLEET_JWT_SECRET={JWT_SECRET}",
+        "-e",
+        "FLEET_ENV=test",
+        "-e",
+        "FLEET_PDX_ADAPTER=liv",
+        image_tag,
+    ]
+    res_bad_mode = subprocess.run(cmd_bad_mode, capture_output=True, text=True)
+    assert res_bad_mode.returncode != 0
+    assert "Invalid FLEET_PDX_ADAPTER" in res_bad_mode.stdout + res_bad_mode.stderr
+
+
+def test_docker_non_root_execution_security(docker_test_image):
     """Verify that container executes as unprivileged non-root user (fleetuser, uid=10001)."""
+    image_tag, _ = docker_test_image
     cmd = [
         "docker",
         "run",
         "--rm",
         "--entrypoint",
         "id",
-        DOCKER_IMAGE,
+        image_tag,
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, check=True)
     output = res.stdout.strip()
@@ -276,7 +377,7 @@ def test_docker_health_and_ready_probes(docker_env):
     assert resp_health.status_code == 200
     data_health = resp_health.json()
     assert data_health["status"] == "healthy"
-    assert data_health["environment"] == "production"
+    assert data_health["environment"] == "test"
 
     # 2. Ready Probe
     resp_ready = requests.get(f"{docker_env.base_url}/v1/ready")
@@ -312,9 +413,9 @@ def test_docker_multi_tenant_isolation(docker_env):
     assert bad_create.status_code == 403
 
 
-def test_docker_five_formats_complete_lifecycle_and_volume_restart(docker_env, tmp_path):
+def test_docker_five_formats_integration_and_volume_restart(docker_env, docker_test_image, tmp_path):
     """
-    Execute full production lifecycle inside Docker container:
+    Execute container integration lifecycle:
     1. Register 5 document formats (PDF, DOCX, CSV, XLSX, PPTX).
     2. Create dossier case and run to checkpoint.
     3. Submit CSO approval decision -> creates final artifact.
@@ -322,6 +423,7 @@ def test_docker_five_formats_complete_lifecycle_and_volume_restart(docker_env, t
     5. Start new container on same data and artifacts volumes.
     6. Verify state recovery, idempotent replay, conflict rejection, and artifact integrity.
     """
+    image_tag, _ = docker_test_image
     token_cso = make_jwt_token("tenant-acme-corp", "usr-cso-1", "cso@acme.com", "cso")
     auth_headers = {"Authorization": f"Bearer {token_cso}"}
 
@@ -378,7 +480,7 @@ def test_docker_five_formats_complete_lifecycle_and_volume_restart(docker_env, t
         "approval_request_id": approval_request_id,
         "idempotency_key": idempotency_key,
         "decision": "approved",
-        "reason": "Docker production deployment verification approval",
+        "reason": "Docker container integration verification approval",
         "case_digest": checkpoint["subject_digest"],
         "plan_digest": checkpoint["plan_digest"],
         "evidence_digests": checkpoint["evidence_digests"],
@@ -399,7 +501,7 @@ def test_docker_five_formats_complete_lifecycle_and_volume_restart(docker_env, t
     docker_env.kill()
 
     # 6. Start new container on the same persistent volumes
-    new_container = DockerContainerProcess(data_dir, artifacts_dir, port)
+    new_container = DockerContainerProcess(image_tag, data_dir, artifacts_dir, port)
     new_container.start()
 
     try:

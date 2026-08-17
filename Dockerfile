@@ -31,6 +31,13 @@ RUN pip install --no-cache-dir \
 # Final Runtime Image
 FROM python:3.12-slim AS runner
 
+ARG GIT_COMMIT=unknown
+LABEL org.opencontainers.image.title="fortifiedreg-fleet"
+LABEL org.opencontainers.image.version="0.3.0"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
+LABEL org.opencontainers.image.vendor="ProDocuX FortifiedReg"
+LABEL org.opencontainers.image.description="FortifiedReg Fleet - Governed dossier production for regulated products"
+
 WORKDIR /app
 
 # Copy installed site-packages from builder

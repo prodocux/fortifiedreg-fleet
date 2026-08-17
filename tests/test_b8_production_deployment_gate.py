@@ -87,7 +87,7 @@ class ProductionServerProcess:
 
     def start(self):
         env = os.environ.copy()
-        env["FLEET_ENV"] = "production"
+        env["FLEET_ENV"] = "test"
         env["FLEET_JWT_SECRET"] = JWT_SECRET
         env["FLEET_DB_PATH"] = str(self.db_path)
         env["FLEET_ARTIFACTS_DIR"] = str(self.artifacts_dir)
@@ -236,7 +236,7 @@ def test_b8_health_and_ready_probe_separation(prod_env):
     assert resp_health.status_code == 200
     data_health = resp_health.json()
     assert data_health["status"] == "healthy"
-    assert data_health["environment"] == "production"
+    assert data_health["environment"] == "test"
 
     # 2. Ready Readiness
     resp_ready = requests.get(f"{prod_env.base_url}/v1/ready")
@@ -634,3 +634,62 @@ def test_b8_sanitized_errors_and_zero_log_leakage(prod_env):
     logs = prod_env.read_logs()
     assert JWT_SECRET not in logs, "JWT secret leaked into server logs!"
     assert "Traceback" not in logs
+
+
+def test_b8_production_mode_fails_closed_on_fake_adapters_and_invalid_modes(tmp_path):
+    """Verify that FLEET_ENV=production strictly forbids fake adapters and invalid mode values fail immediately."""
+    port = get_free_port()
+    db_path = tmp_path / "fail_closed.db"
+    artifacts_dir = tmp_path / "fail_closed_artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    base_env = os.environ.copy()
+    base_env["FLEET_JWT_SECRET"] = JWT_SECRET
+    base_env["FLEET_DB_PATH"] = str(db_path)
+    base_env["FLEET_ARTIFACTS_DIR"] = str(artifacts_dir)
+    base_env["PYTHONPATH"] = os.pathsep.join([
+        str(ROOT_DIR / "packages" / "fleet-governance-core" / "src"),
+        str(ROOT_DIR / "packages" / "fleet-domain-cosmetics" / "src"),
+        str(ROOT_DIR / "packages" / "fleet-adapter-pdx" / "src"),
+        str(ROOT_DIR / "packages" / "fleet-adapter-prodocux" / "src"),
+        str(ROOT_DIR / "packages" / "fleet-adapter-google-adk" / "src"),
+        str(ROOT_DIR / "packages" / "fleet-adapter-gcp" / "src"),
+        str(ROOT_DIR / "packages" / "fleet-adapter-local" / "src"),
+        str(ROOT_DIR / "apps" / "fleet-api" / "src"),
+    ])
+
+    # 1. FLEET_ENV=production with FLEET_PDX_ADAPTER=fake must raise RuntimeError
+    env_fake_pdx = dict(base_env, FLEET_ENV="production", FLEET_PDX_ADAPTER="fake", FLEET_INTAKE_ADAPTER="live")
+    res_fake_pdx = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "fleet_api.main:app", "--port", str(port)],
+        cwd=str(ROOT_DIR),
+        env=env_fake_pdx,
+        capture_output=True,
+        text=True,
+    )
+    assert res_fake_pdx.returncode != 0
+    assert "Fail-closed: Fake PDX orchestrator is prohibited in production" in res_fake_pdx.stderr + res_fake_pdx.stdout
+
+    # 2. FLEET_ENV=production with FLEET_INTAKE_ADAPTER=fake must raise RuntimeError
+    env_fake_intake = dict(base_env, FLEET_ENV="production", FLEET_PDX_ADAPTER="live", FLEET_INTAKE_ADAPTER="fake")
+    res_fake_intake = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "fleet_api.main:app", "--port", str(port)],
+        cwd=str(ROOT_DIR),
+        env=env_fake_intake,
+        capture_output=True,
+        text=True,
+    )
+    assert res_fake_intake.returncode != 0
+    assert "Fail-closed: Fake intake adapter is prohibited in production" in res_fake_intake.stderr + res_fake_intake.stdout
+
+    # 3. Invalid adapter mode typo (e.g. 'liv') must raise ValueError
+    env_bad_mode = dict(base_env, FLEET_ENV="test", FLEET_PDX_ADAPTER="liv", FLEET_INTAKE_ADAPTER="fake")
+    res_bad_mode = subprocess.run(
+        [sys.executable, "-m", "uvicorn", "fleet_api.main:app", "--port", str(port)],
+        cwd=str(ROOT_DIR),
+        env=env_bad_mode,
+        capture_output=True,
+        text=True,
+    )
+    assert res_bad_mode.returncode != 0
+    assert "Invalid FLEET_PDX_ADAPTER" in res_bad_mode.stderr + res_bad_mode.stdout
