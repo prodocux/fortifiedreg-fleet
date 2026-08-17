@@ -33,7 +33,7 @@ PDX_REPO_DIR = Path(os.getenv("PDX_REPO_DIR", "D:/ProDocuX/pdx-artifact-engine")
 PRODOCUX_REPO_DIR = Path(os.getenv("PRODOCUX_REPO_DIR", "D:/ProDocuX/prodocux"))
 
 PDX_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
-FLEET_COMMIT = "UNCOMMITTED_G1_DRAFT"
+FLEET_COMMIT = "af8c8a508134a774af568cf9d29c7b412268e518"
 FLEET_REPO = "prodocux/fortifiedreg-fleet"
 
 

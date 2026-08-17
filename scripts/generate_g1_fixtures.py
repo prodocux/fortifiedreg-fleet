@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 
 PDX_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
-FLEET_COMMIT = "UNCOMMITTED_G1_DRAFT"
+FLEET_COMMIT = "af8c8a508134a774af568cf9d29c7b412268e518"
 
 
 PRODOCUX_REPO = "prodocux/prodocux"

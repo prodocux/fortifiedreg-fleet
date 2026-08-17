@@ -4,7 +4,7 @@
     "schema_id": "dossier_case_v1",
     "schema_version": "1.1.0",
     "upstream_repo": "prodocux/fortifiedreg-fleet",
-    "source_commit": "UNCOMMITTED_G1_DRAFT",
+    "source_commit": "af8c8a508134a774af568cf9d29c7b412268e518",
     "data_sha256": "56cc26118dd71aec4c0ffe1863709799b05f1386580675b7ba107c01ae75212e",
     "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
   },
