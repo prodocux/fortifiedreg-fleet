@@ -61,7 +61,7 @@ def scan_target(target_root: Path) -> List[Tuple[str, Path, str]]:
                 violations.append(("SYMLINK", file_path, "File is a symbolic link."))
 
             # 2. Name and extension checks
-            if file in FORBIDDEN_FILE_NAMES or file.startswith(".env"):
+            if file in FORBIDDEN_FILE_NAMES or (file.startswith(".env") and not file.endswith((".example", ".template"))):
                 violations.append(("FORBIDDEN_FILE", file_path, f"Prohibited filename '{file}'."))
 
             if file_path.suffix.lower() in FORBIDDEN_EXTENSIONS:

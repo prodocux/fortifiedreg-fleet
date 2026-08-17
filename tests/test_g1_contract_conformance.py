@@ -32,7 +32,8 @@ FIXTURES_DIR = ROOT_DIR / "fixtures"
 PDX_REPO_DIR = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
 PRODOCUX_REPO_DIR = Path(os.getenv("PRODOCUX_REPO_DIR")) if os.getenv("PRODOCUX_REPO_DIR") else None
 
-PDX_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
+PDX_COMMIT = "55a9293c8d5c0091e04e457dc43f662058e50068"
+PDX_SOURCE_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
 FLEET_COMMIT = "af8c8a508134a774af568cf9d29c7b412268e518"
 FLEET_REPO = "prodocux/fortifiedreg-fleet"
 
@@ -132,7 +133,7 @@ def test_fixture_hash_integrity_and_provenance(fixture_name: str):
     status = meta["contract_status"]
     if status == "upstream_snapshot":
         assert meta["upstream_repo"] == "prodocux/pdx-artifact-engine"
-        assert meta["source_commit"] == PDX_COMMIT
+        assert meta["source_commit"] in (PDX_SOURCE_COMMIT, PDX_COMMIT)
         assert meta["snapshot_mode"] == "byte_exact"
         source_rel_path = meta["source_path"]
         expected_blob_sha = meta["source_blob_sha256"]
@@ -143,7 +144,7 @@ def test_fixture_hash_integrity_and_provenance(fixture_name: str):
         
         # Verify snapshot directly against git object database if PDX_REPO_DIR provided
         if PDX_REPO_DIR and PDX_REPO_DIR.exists():
-            git_show_cmd = ["git", "show", f"{PDX_COMMIT}:{source_rel_path}"]
+            git_show_cmd = ["git", "show", f"{meta['source_commit']}:{source_rel_path}"]
             git_res = subprocess.run(git_show_cmd, cwd=str(PDX_REPO_DIR), capture_output=True, check=True)
             assert hashlib.sha256(git_res.stdout).hexdigest() == expected_blob_sha, "Git show bytes do not match expected blob SHA!"
             

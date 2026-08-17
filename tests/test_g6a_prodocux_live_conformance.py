@@ -12,7 +12,7 @@ import requests
 from fleet_adapter_prodocux import ProDocuXHttpIntakeAdapter, validate_prodocux_url
 
 PRODOCUX_LIVE_URL = os.getenv("PRODOCUX_LIVE_URL") or os.getenv("PRODOCUX_BASE_URL")
-PIN_PRODOCUX_COMMIT = "7a1d820639910c1d92b31de6eaf0a371f7386182"
+PIN_PRODOCUX_COMMIT = "c8acd2ba69c23458cb2589d8450246fe9b16424f"
 
 @pytest.fixture
 def live_adapter():

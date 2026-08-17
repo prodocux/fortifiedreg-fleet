@@ -1,0 +1,33 @@
+{
+  "schema_version": "pdx_prodocux_compatibility_v1",
+  "status": "release_candidate",
+  "prodocux": {
+    "distribution": "prodocux",
+    "version": "0.2.0",
+    "api_version": "v1",
+    "schemas": {
+      "intake_request_v1.json": "f3870a7b2dd9418303cfec8c3fc3fa053edd4591861bbd80807eedd49e50b341",
+      "intake_response_v1.json": "2993ac05e31157b0566f18b28a218a8628837eb1f4f703dde9955f00c8d6355f",
+      "prodocux_intake_capabilities_v1.json": "a2ea1f98e9bf21a39feebd11d70d8c992fb36c4ac35e26f2e24d0108833e23f3"
+    }
+  },
+  "pdx_artifact_core": {
+    "distribution": "pdx-artifact-core",
+    "version": "0.2.0a2",
+    "schemas": {
+      "approval_decision.v1.schema.json": "3d3f04861e178442ddc05da112e14153629cb55934e39fb2c337725c3274eec3",
+      "approval_request.v1.schema.json": "ac78ca29be02439d7914606c21a668e134fff5af61b30b89cfde9ef8b5b13c70",
+      "artifact_storage_identity.v1.schema.json": "157a2038824d7daa747069d829348719665d40eb2d6900d11f9fdadf8962371e",
+      "execution_plan.v1.schema.json": "8993c6e640573fee74d1b01fc6d70db9db5053cfafaf0edc254ac936814dec5b",
+      "tool_request.v1.schema.json": "fde6564573d2452548600d6b30478a4aee248f8cd8c69fd392cbbf32d932ad29",
+      "tool_result.v1.schema.json": "83ae90137c4c5c55e5387b1e7317a961a5dbfa4faa54e8858681681a05a8b2ee",
+      "verifier_result.v1.schema.json": "6bab93bef4c3f1ee604e99bc3b3abe3037c25db8252f090dd3394439ea42e2cd",
+      "workflow_checkpoint.v1.schema.json": "9a4a90f459fd2f5dfb48eb6f8aec4a03a41c3e77952938dc087f7ed367b2cccc"
+    }
+  },
+  "integration": {
+    "transport": "ProDocuX HTTP API v1",
+    "capability_discovery": "GET /v1/intake/capabilities",
+    "compatibility_policy": "Schema digests and API versions are frozen for this release candidate. Breaking changes require a new schema or API version."
+  }
+}

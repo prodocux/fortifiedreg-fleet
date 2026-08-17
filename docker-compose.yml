@@ -9,7 +9,7 @@ services:
       - "8000:8000"
     environment:
       - FLEET_ENV=production
-      - FLEET_JWT_SECRET=prod-secret-key-fortified-enterprise-fleet-2026-secure-token-512
+      - FLEET_JWT_SECRET=${FLEET_JWT_SECRET:?FLEET_JWT_SECRET environment variable is required}
       - FLEET_DB_PATH=/app/data/fleet.db
       - FLEET_ARTIFACTS_DIR=/app/artifacts
       - FLEET_PDX_ADAPTER=live

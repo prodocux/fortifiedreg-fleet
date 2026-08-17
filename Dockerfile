@@ -11,18 +11,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pinned upstream dependencies from GitHub
+# Install pinned upstream dependencies from GitHub RC sealing pins with exact pinned dependencies
 RUN pip install --no-cache-dir \
-    "git+https://github.com/prodocux/pdx-artifact-engine.git@93ec3514261bf89e9cb88b79f524e3fbc5ef4402#subdirectory=packages/pdx_artifact_core" \
-    "git+https://github.com/prodocux/prodocux.git@7a1d820639910c1d92b31de6eaf0a371f7386182" \
-    uvicorn \
-    fastapi \
-    pydantic \
-    jsonschema \
-    pyjwt \
-    passlib \
-    requests \
-    httpx
+    "git+https://github.com/prodocux/pdx-artifact-engine.git@55a9293c8d5c0091e04e457dc43f662058e50068#subdirectory=packages/pdx_artifact_core" \
+    "git+https://github.com/prodocux/prodocux.git@c8acd2ba69c23458cb2589d8450246fe9b16424f" \
+    uvicorn==0.34.0 \
+    fastapi==0.115.6 \
+    pydantic==2.10.4 \
+    jsonschema==4.26.0 \
+    pyjwt==2.13.0 \
+    passlib==1.7.4 \
+    requests==2.34.2 \
+    httpx==0.28.1 \
+    pypdf==5.1.0 \
+    python-docx==1.1.2 \
+    openpyxl==3.1.5 \
+    python-pptx==1.0.2
 
 # Final Runtime Image
 FROM python:3.12-slim AS runner
@@ -35,7 +39,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Create unprivileged runtime user and data directories
 RUN useradd -m -u 10001 fleetuser && \
-    mkdir -p /app/data /app/artifacts /app/schemas && \
+    mkdir -p /app/data /app/artifacts /app/schemas /app/compatibility && \
     chown -R fleetuser:fleetuser /app
 
 # Copy Fleet source codebase
@@ -43,6 +47,7 @@ COPY --chown=fleetuser:fleetuser apps /app/apps
 COPY --chown=fleetuser:fleetuser packages /app/packages
 COPY --chown=fleetuser:fleetuser schemas /app/schemas
 COPY --chown=fleetuser:fleetuser fixtures /app/fixtures
+COPY --chown=fleetuser:fleetuser compatibility /app/compatibility
 COPY --chown=fleetuser:fleetuser pyproject.toml /app/pyproject.toml
 COPY --chown=fleetuser:fleetuser README.md /app/README.md
 

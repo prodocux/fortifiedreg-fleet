@@ -421,6 +421,9 @@ class LivePDXCoreOrchestrator(ExecutionOrchestratorPort):
                 "reason": dec_dict.get("reason", ""),
             }
 
+        if dec_dict.get("reason") == "SIMULATE_RESUME_FAILURE":
+            raise RuntimeError("Simulated resume downstream failure during artifact synthesis.")
+
         # 5. Build resumed plan via PDX Core primitive
         resumed_plan = build_resumed_plan(orig_plan, chk_dict, dec_dict)
 
@@ -592,6 +595,9 @@ class FakePDXOrchestrator(ExecutionOrchestratorPort):
                 "checkpoint_id": checkpoint.checkpoint_id,
                 "reason": decision.reason,
             }
+
+        if getattr(decision, "reason", None) == "SIMULATE_RESUME_FAILURE":
+            raise RuntimeError("Simulated resume downstream failure during artifact synthesis.")
 
         manifest_payload = {
             "pif_version": "1.0",

@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7.0",
     "jsonschema>=4.21.0",
-    "pdx-artifact-core @ git+https://github.com/prodocux/pdx-artifact-engine.git@93ec3514261bf89e9cb88b79f524e3fbc5ef4402#subdirectory=packages/pdx_artifact_core",
+    "pdx-artifact-core @ git+https://github.com/prodocux/pdx-artifact-engine.git@55a9293c8d5c0091e04e457dc43f662058e50068#subdirectory=packages/pdx_artifact_core",
     "fleet-governance-core",
     "fleet-domain-cosmetics",
 ]
