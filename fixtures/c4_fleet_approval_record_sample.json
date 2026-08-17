@@ -1,0 +1,35 @@
+{
+  "_metadata": {
+    "contract_status": "fleet_owned",
+    "schema_id": "fleet_approval_record_v1",
+    "schema_version": "1.0.0",
+    "upstream_repo": "prodocux/fortifiedreg-fleet",
+    "source_commit": "UNCOMMITTED_G1_DRAFT",
+    "data_sha256": "2e84267fabf7b37270b305d0ed72e1b28b000f80545db51b4099d11fe39c5a34",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "approval_record_id": "77777777-7777-4777-8777-777777777777",
+    "tenant_id": "tenant-acme-corp",
+    "run_id": "run-pif-20260813-001",
+    "checkpoint_id": "chk-step-verify-final-001",
+    "canonical_idempotency_key": "tenant-acme-corp:chk-step-verify-final-001:usr-chief-safety-officer:idemp-key-999",
+    "authenticated_actor": {
+      "sub": "usr-chief-safety-officer",
+      "email": "cso@acme-corp.com",
+      "roles": [
+        "regulatory_officer",
+        "approver"
+      ]
+    },
+    "decision": "approved",
+    "reason": "All toxicology parameters verified against EU SCCS Notes of Guidance 12th revision.",
+    "subject_case_digest": "c57d0fa2db4b54cc249d7a5c2071bed46197ff5f8f81e431a20bf4eee18b8802",
+    "plan_digest": "0bd72fe4404cfb4f8de89f396d6465d0e55007d1ed4c866e7a6a1bfce1da80af",
+    "evidence_digests": {
+      "dossier_summary.json": "e1e2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "safety_assessment_report.pdf": "f1f2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    },
+    "decided_at": "2026-08-13T09:10:00Z"
+  }
+}

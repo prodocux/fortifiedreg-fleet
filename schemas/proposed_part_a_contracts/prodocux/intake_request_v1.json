@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/proposed/prodocux/intake_request_v1.json",
+  "title": "ProDocuX Intake Request v1 (Proposed G1 Contract)",
+  "type": "object",
+  "required": ["document_filename", "document_b64"],
+  "properties": {
+    "document_filename": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255,
+      "pattern": "^(?![.]{1,2}$)[a-zA-Z0-9_.-]+[.][a-zA-Z0-9]+$"
+    },
+    "document_b64": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 14000000
+    },
+    "max_pages": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 50
+    }
+  },
+  "additionalProperties": false
+}

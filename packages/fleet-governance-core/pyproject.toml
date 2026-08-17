@@ -1,0 +1,15 @@
+[project]
+name = "fleet-governance-core"
+version = "0.3.0"
+description = "Pure domain core and ports for Fortified Enterprise Fleet"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fleet_governance_core"]

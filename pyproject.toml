@@ -1,0 +1,37 @@
+[project]
+name = "fortifiedreg-fleet-workspace"
+version = "0.3.0"
+description = "FortifiedReg Fleet - Governed dossier production for regulated products"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7.0",
+    "jsonschema>=4.21.0",
+    "pytest>=8.0.0",
+    "pyjwt>=2.8.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "packages/fleet-governance-core",
+    "packages/fleet-domain-cosmetics",
+    "packages/fleet-adapter-pdx",
+    "packages/fleet-adapter-prodocux",
+    "packages/fleet-adapter-google-adk",
+    "packages/fleet-adapter-gcp",
+    "packages/fleet-adapter-local",
+    "apps/fleet-api",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages", "apps"]
+pythonpath = [
+    "packages/fleet-governance-core/src",
+    "packages/fleet-domain-cosmetics/src",
+    "packages/fleet-adapter-pdx/src",
+    "packages/fleet-adapter-prodocux/src",
+    "packages/fleet-adapter-google-adk/src",
+    "packages/fleet-adapter-gcp/src",
+    "packages/fleet-adapter-local/src",
+    "apps/fleet-api/src",
+]

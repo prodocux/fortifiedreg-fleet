@@ -1,0 +1,64 @@
+{
+  "_metadata": {
+    "contract_status": "fleet_owned",
+    "schema_id": "dossier_case_v1",
+    "schema_version": "1.1.0",
+    "upstream_repo": "prodocux/fortifiedreg-fleet",
+    "source_commit": "UNCOMMITTED_G1_DRAFT",
+    "data_sha256": "c57d0fa2db4b54cc249d7a5c2071bed46197ff5f8f81e431a20bf4eee18b8802",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "case_id": "11111111-1111-4111-8111-111111111111",
+    "tenant_id": "tenant-acme-corp",
+    "product_name": "Synthetic Radiant Face Cream",
+    "jurisdiction": "EU",
+    "formula": [
+      {
+        "inci_name": "AQUA",
+        "cas_number": "7732-18-5",
+        "concentration_pct": 75.0,
+        "function": "Solvent",
+        "noael_mg_kg_day": 2000.0
+      },
+      {
+        "inci_name": "GLYCERIN",
+        "cas_number": "56-81-5",
+        "concentration_pct": 5.0,
+        "function": "Humectant",
+        "noael_mg_kg_day": 1000.0
+      },
+      {
+        "inci_name": "NIACINAMIDE",
+        "cas_number": "98-92-0",
+        "concentration_pct": 2.0,
+        "function": "Skin Conditioning",
+        "noael_mg_kg_day": 800.0
+      },
+      {
+        "inci_name": "PHENOXYETHANOL",
+        "cas_number": "122-99-6",
+        "concentration_pct": 0.8,
+        "function": "Preservative",
+        "noael_mg_kg_day": 500.0
+      }
+    ],
+    "exposure_scenario": {
+      "product_type": "Face Cream (Leave-on)",
+      "daily_applied_amount_g": 1.54,
+      "retention_factor": 1.0,
+      "body_weight_kg": 60.0
+    },
+    "supplier_documents": [
+      {
+        "doc_id": "doc-sds-001",
+        "filename": "doc-sds-001.pdf",
+        "doc_type": "SDS",
+        "sha256": "b1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "supplier_name": "BioSynthetics Ltd",
+        "issue_date": "2025-01-10",
+        "expiry_date": "2028-01-10"
+      }
+    ]
+  }
+}

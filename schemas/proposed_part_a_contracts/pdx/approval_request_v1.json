@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/proposed/pdx/approval_request_v1.json",
+  "title": "PDX Approval Request v1 (Proposed G1 Contract)",
+  "type": "object",
+  "required": [
+    "approval_request_id",
+    "run_id",
+    "checkpoint_id",
+    "subject_digest",
+    "plan_digest",
+    "evidence_digests",
+    "created_at",
+    "status"
+  ],
+  "properties": {
+    "approval_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkpoint_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "subject_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "plan_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidence_digests": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_.-]{1,128}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected", "expired"]
+    }
+  },
+  "additionalProperties": false
+}

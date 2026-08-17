@@ -1,0 +1,40 @@
+{
+  "project_name": "fortifiedreg-fleet",
+  "version": "0.3.0",
+  "allowlist_roots": [
+    "apps",
+    "packages",
+    "tests",
+    "fixtures",
+    "golden_test_files",
+    "schemas",
+    "scripts",
+    "conftest.py",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    ".gitignore"
+  ],
+  "denylist_patterns": [
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/*.pyo",
+    "**/*.pyd",
+    "**/.pytest_cache/**",
+    "**/.coverage",
+    "**/htmlcov/**",
+    "**/.env*",
+    "**/*.sqlite*",
+    "**/*.db",
+    "**/*.db-journal",
+    "**/*.db-wal",
+    "**/*.db-shm",
+    "**/.temp*/**",
+    "**/.local_artifacts/**",
+    "**/runs/**",
+    "**/*.log",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.git/**"
+  ]
+}

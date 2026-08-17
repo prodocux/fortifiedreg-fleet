@@ -1,0 +1,39 @@
+{
+  "_metadata": {
+    "contract_status": "fleet_owned",
+    "schema_id": "dossier_case_v1",
+    "schema_version": "1.1.0",
+    "upstream_repo": "prodocux/fortifiedreg-fleet",
+    "source_commit": "UNCOMMITTED_G1_DRAFT",
+    "data_sha256": "01af1ae23c60cd237131029dd1bd4d2dc79f484d67671387d80f59fc968b5888",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "case_id": "33333333-3333-4333-8333-333333333333",
+    "tenant_id": "tenant-acme-corp",
+    "product_name": "Synthetic Unverified Peptide Essence",
+    "jurisdiction": "EU",
+    "formula": [
+      {
+        "inci_name": "AQUA",
+        "cas_number": "7732-18-5",
+        "concentration_pct": 98.0,
+        "function": "Solvent",
+        "noael_mg_kg_day": 2000.0
+      },
+      {
+        "inci_name": "COPPER TRIPEPTIDE-1",
+        "cas_number": "89030-95-5",
+        "concentration_pct": 2.0,
+        "function": "Active"
+      }
+    ],
+    "exposure_scenario": {
+      "product_type": "Face Cream (Leave-on)",
+      "daily_applied_amount_g": 1.54,
+      "retention_factor": 1.0,
+      "body_weight_kg": 60.0
+    },
+    "supplier_documents": []
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "_metadata": {
+    "contract_status": "proposed_g1",
+    "schema_id": "verifier_result_v1",
+    "schema_version": "1.0.0",
+    "target_owner": "prodocux/pdx-artifact-engine",
+    "target_gate": "G3",
+    "source_commit": null,
+    "data_sha256": "458401893c40b2cc0c97645b6944636bc1f58cbea2d6e5e0c8405c1e92d4855a",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "verifier_id": "verifier-cosmetics-toxicology-mos",
+    "version": "1.0.0",
+    "status": "pass",
+    "reason_codes": [
+      "MOS_ABOVE_THRESHOLD_100",
+      "CONCENTRATION_WITHIN_LIMITS"
+    ],
+    "rule_set_id": "EU_COSMETICS_REG_1223_2009",
+    "rule_set_version": "2025.1",
+    "rule_digest": "c1c2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "evidence_ids": [
+      "doc-sds-001"
+    ],
+    "details": {
+      "minimum_mos": 2435.0,
+      "threshold": 100.0
+    },
+    "timestamp": "2026-08-13T09:00:00Z"
+  }
+}

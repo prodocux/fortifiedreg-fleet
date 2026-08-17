@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/proposed/prodocux/intake_response_v1.json",
+  "title": "ProDocuX Intake Response v1 (Proposed G1 Contract)",
+  "type": "object",
+  "required": ["status", "source_sha256", "page_count", "pages", "truncation"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["success", "ocr_required"]
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "pages": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["page_number", "text", "ocr_required"],
+        "properties": {
+          "page_number": { "type": "integer", "minimum": 1 },
+          "text": { "type": "string", "maxLength": 50000 },
+          "ocr_required": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "truncation": {
+      "type": "object",
+      "required": ["truncated", "total_characters"],
+      "properties": {
+        "truncated": { "type": "boolean" },
+        "total_characters": { "type": "integer", "minimum": 0, "maximum": 500000 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

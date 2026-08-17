@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/fleet/fleet_approval_record_v1.json",
+  "title": "FleetApprovalRecordV1",
+  "type": "object",
+  "required": [
+    "approval_record_id",
+    "tenant_id",
+    "run_id",
+    "checkpoint_id",
+    "canonical_idempotency_key",
+    "authenticated_actor",
+    "decision",
+    "subject_case_digest",
+    "plan_digest",
+    "evidence_digests",
+    "decided_at"
+  ],
+  "properties": {
+    "approval_record_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,64}$"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkpoint_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "canonical_idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[a-z0-9_-]+:[a-zA-Z0-9_-]+:[a-zA-Z0-9_@.-]+:[a-zA-Z0-9_-]+$"
+    },
+    "authenticated_actor": {
+      "type": "object",
+      "required": ["sub"],
+      "properties": {
+        "sub": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 20
+        }
+      },
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["approved", "rejected"]
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "subject_case_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "plan_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidence_digests": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_.-]{1,128}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

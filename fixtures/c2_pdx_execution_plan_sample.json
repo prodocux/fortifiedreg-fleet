@@ -1,0 +1,64 @@
+{
+  "_metadata": {
+    "contract_status": "upstream_snapshot",
+    "schema_id": "execution_plan_v1",
+    "schema_version": "1.0.0",
+    "upstream_repo": "prodocux/pdx-artifact-engine",
+    "source_commit": "93ec3514261bf89e9cb88b79f524e3fbc5ef4402",
+    "source_path": "packages/pdx_artifact_core/src/pdx_artifact_core/schemas/execution_plan.v1.schema.json",
+    "source_blob_sha256": "fff3e94c92a69e64987e29db7a9e18d215895c05a882caf3691c7987c0a4b37d",
+    "snapshot_mode": "byte_exact",
+    "data_sha256": "0bd72fe4404cfb4f8de89f396d6465d0e55007d1ed4c866e7a6a1bfce1da80af",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "schema_version": "pdx_execution_plan_v1",
+    "request_id": "req-pif-compile-001",
+    "producer": {
+      "type": "fleet_compiler",
+      "name": "fleet-adapter-pdx"
+    },
+    "intent": {
+      "summary": "Compile and verify cosmetics PIF dossier"
+    },
+    "steps": [
+      {
+        "id": "step_extract_sds",
+        "kind": "tool",
+        "tool": "prodocux.extract_pages",
+        "inputs": {
+          "document_filename": "sds.pdf"
+        },
+        "outputs": [
+          "sds_text"
+        ]
+      },
+      {
+        "id": "step_verify_toxicology",
+        "kind": "verify",
+        "depends_on": [
+          "step_extract_sds"
+        ],
+        "verification": [
+          {
+            "id": "chk_mos_threshold",
+            "check": "verifier-cosmetics-toxicology-mos",
+            "fail_action": "stop"
+          }
+        ]
+      },
+      {
+        "id": "step_human_approval",
+        "kind": "approval",
+        "depends_on": [
+          "step_verify_toxicology"
+        ]
+      }
+    ],
+    "policies": {
+      "timeout_seconds": 300,
+      "max_retries": 0,
+      "default_approval_required": true
+    }
+  }
+}

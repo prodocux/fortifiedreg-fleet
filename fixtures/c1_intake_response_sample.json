@@ -1,0 +1,38 @@
+{
+  "_metadata": {
+    "contract_status": "proposed_g1",
+    "schema_id": "intake_response_v1",
+    "schema_version": "1.0.0",
+    "target_owner": "prodocux/prodocux",
+    "target_gate": "G2",
+    "source_commit": null,
+    "data_sha256": "dced325ab2108fd4a7882cb2534d49af144f8949d95c1f53bc3a9901c56ba9f6",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "status": "success",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "page_count": 3,
+    "pages": [
+      {
+        "page_number": 1,
+        "text": "SYNTHETIC RAW MATERIAL SAFETY DATA SHEET\nProduct: AquaGlow Peptide\nSupplier: BioSynthetics Ltd\nCAS: 56-81-5",
+        "ocr_required": false
+      },
+      {
+        "page_number": 2,
+        "text": "SECTION 9: Physical and Chemical Properties\nPurity: 99.5%\nHeavy metals: < 10 ppm",
+        "ocr_required": false
+      },
+      {
+        "page_number": 3,
+        "text": "SECTION 11: Toxicological Information\nNOAEL (oral, rat): 1000 mg/kg bw/day\nSkin irritation: Non-irritant",
+        "ocr_required": false
+      }
+    ],
+    "truncation": {
+      "truncated": false,
+      "total_characters": 350
+    }
+  }
+}

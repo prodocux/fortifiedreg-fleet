@@ -1,0 +1,40 @@
+{
+  "_metadata": {
+    "contract_status": "fleet_owned",
+    "schema_id": "dossier_case_v1",
+    "schema_version": "1.1.0",
+    "upstream_repo": "prodocux/fortifiedreg-fleet",
+    "source_commit": "UNCOMMITTED_G1_DRAFT",
+    "data_sha256": "56cc26118dd71aec4c0ffe1863709799b05f1386580675b7ba107c01ae75212e",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "case_id": "22222222-2222-4222-8222-222222222222",
+    "tenant_id": "tenant-acme-corp",
+    "product_name": "Synthetic Overdose Preservative Serum",
+    "jurisdiction": "EU",
+    "formula": [
+      {
+        "inci_name": "AQUA",
+        "cas_number": "7732-18-5",
+        "concentration_pct": 97.5,
+        "function": "Solvent",
+        "noael_mg_kg_day": 2000.0
+      },
+      {
+        "inci_name": "PHENOXYETHANOL",
+        "cas_number": "122-99-6",
+        "concentration_pct": 2.5,
+        "function": "Preservative",
+        "noael_mg_kg_day": 50.0
+      }
+    ],
+    "exposure_scenario": {
+      "product_type": "Face Cream (Leave-on)",
+      "daily_applied_amount_g": 1.54,
+      "retention_factor": 1.0,
+      "body_weight_kg": 60.0
+    },
+    "supplier_documents": []
+  }
+}

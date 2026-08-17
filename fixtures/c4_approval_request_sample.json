@@ -1,0 +1,26 @@
+{
+  "_metadata": {
+    "contract_status": "proposed_g1",
+    "schema_id": "approval_request_v1",
+    "schema_version": "1.0.0",
+    "target_owner": "prodocux/pdx-artifact-engine",
+    "target_gate": "G4",
+    "source_commit": null,
+    "data_sha256": "667a73509674f4c55acb4c239a85b01aa68ca0ef2ad0d51b05e85e2ae29910f3",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "approval_request_id": "44444444-4444-4444-8444-444444444444",
+    "run_id": "run-pif-20260813-001",
+    "checkpoint_id": "chk-step-verify-final-001",
+    "subject_digest": "c57d0fa2db4b54cc249d7a5c2071bed46197ff5f8f81e431a20bf4eee18b8802",
+    "plan_digest": "0bd72fe4404cfb4f8de89f396d6465d0e55007d1ed4c866e7a6a1bfce1da80af",
+    "evidence_digests": {
+      "dossier_summary.json": "e1e2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "safety_assessment_report.pdf": "f1f2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    },
+    "summary": "Formula verification passed. Ready for Chief Safety Officer final review.",
+    "created_at": "2026-08-13T09:05:00Z",
+    "status": "pending"
+  }
+}

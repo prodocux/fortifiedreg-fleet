@@ -1,0 +1,28 @@
+{
+  "_metadata": {
+    "contract_status": "proposed_g1",
+    "schema_id": "verifier_result_v1",
+    "schema_version": "1.0.0",
+    "target_owner": "prodocux/pdx-artifact-engine",
+    "target_gate": "G3",
+    "source_commit": null,
+    "data_sha256": "1e0a503dd950ba99b9755f11db5d76cbf1a1e5c28976355a0b75b365b5033640",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "verifier_id": "verifier-cosmetics-toxicology-mos",
+    "version": "1.0.0",
+    "status": "review",
+    "reason_codes": [
+      "MISSING_NOAEL_EVIDENCE"
+    ],
+    "rule_set_id": "EU_COSMETICS_REG_1223_2009",
+    "rule_set_version": "2025.1",
+    "rule_digest": "c1c2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "evidence_ids": [],
+    "details": {
+      "missing_field": "COPPER TRIPEPTIDE-1.noael_mg_kg_day"
+    },
+    "timestamp": "2026-08-13T09:00:00Z"
+  }
+}

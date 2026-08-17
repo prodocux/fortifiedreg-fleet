@@ -1,0 +1,17 @@
+{
+  "_metadata": {
+    "contract_status": "proposed_g1",
+    "schema_id": "intake_request_v1",
+    "schema_version": "1.0.0",
+    "target_owner": "prodocux/prodocux",
+    "target_gate": "G2",
+    "source_commit": null,
+    "data_sha256": "df141e49f517aaf571ba139cd29f0da039526fda863b1bcb719888cfa6b5ff8b",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "document_filename": "synthetic_sds_aquaglow_peptide.pdf",
+    "document_b64": "JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwKL0ZpbHRlciAvRmxhdGVEZWNvZGUKL0xlbmd0aCAxMC4uLgo=",
+    "max_pages": 50
+  }
+}

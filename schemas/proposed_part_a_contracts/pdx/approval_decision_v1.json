@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/proposed/pdx/approval_decision_v1.json",
+  "title": "PDX Approval Decision v1 (Proposed G1 Contract)",
+  "type": "object",
+  "required": [
+    "decision_id",
+    "approval_request_id",
+    "checkpoint_id",
+    "idempotency_key",
+    "actor_id",
+    "decision",
+    "subject_digest",
+    "plan_digest",
+    "evidence_digests",
+    "decided_at"
+  ],
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "approval_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "checkpoint_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Opaque idempotency identity used by PDX runtime for replay and double-approval prevention"
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["approved", "rejected"]
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "subject_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "plan_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidence_digests": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_.-]{1,128}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+[project]
+name = "fleet-adapter-gcp"
+version = "0.3.0"
+description = "GCP and in-memory persistence adapters for Fortified Enterprise Fleet"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7.0",
+    "fleet-governance-core",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fleet_adapter_gcp"]

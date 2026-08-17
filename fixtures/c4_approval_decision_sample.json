@@ -1,0 +1,28 @@
+{
+  "_metadata": {
+    "contract_status": "proposed_g1",
+    "schema_id": "approval_decision_v1",
+    "schema_version": "1.0.0",
+    "target_owner": "prodocux/pdx-artifact-engine",
+    "target_gate": "G4",
+    "source_commit": null,
+    "data_sha256": "2a11b8ebe893b100b87eab4d0dbdc318e70a3b5ce6d2ea3aeb0110c775c76d2c",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "decision_id": "55555555-5555-4555-8555-555555555555",
+    "approval_request_id": "44444444-4444-4444-8444-444444444444",
+    "checkpoint_id": "chk-step-verify-final-001",
+    "idempotency_key": "idemp-key-999",
+    "actor_id": "usr-chief-safety-officer",
+    "decision": "approved",
+    "reason": "All toxicology parameters verified against EU SCCS Notes of Guidance 12th revision.",
+    "subject_digest": "c57d0fa2db4b54cc249d7a5c2071bed46197ff5f8f81e431a20bf4eee18b8802",
+    "plan_digest": "0bd72fe4404cfb4f8de89f396d6465d0e55007d1ed4c866e7a6a1bfce1da80af",
+    "evidence_digests": {
+      "dossier_summary.json": "e1e2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "safety_assessment_report.pdf": "f1f2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    },
+    "decided_at": "2026-08-13T09:10:00Z"
+  }
+}

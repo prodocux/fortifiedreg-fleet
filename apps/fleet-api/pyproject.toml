@@ -1,0 +1,24 @@
+[project]
+name = "fleet-api"
+version = "0.3.0"
+description = "FastAPI Service Application for Fortified Enterprise Fleet"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "pydantic>=2.7.0",
+    "pyjwt>=2.8.0",
+    "fleet-governance-core",
+    "fleet-domain-cosmetics",
+    "fleet-adapter-pdx",
+    "fleet-adapter-prodocux",
+    "fleet-adapter-gcp",
+    "fleet-adapter-google-adk",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fleet_api"]

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/proposed/pdx/verifier_result_v1.json",
+  "title": "PDX Verifier Result v1 (Proposed G1 Contract)",
+  "type": "object",
+  "required": [
+    "verifier_id",
+    "version",
+    "status",
+    "reason_codes",
+    "rule_set_id",
+    "rule_set_version",
+    "rule_digest",
+    "evidence_ids",
+    "timestamp"
+  ],
+  "properties": {
+    "verifier_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail", "review"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "rule_set_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "rule_set_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "rule_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidence_ids": {
+      "type": "array",
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "details": {
+      "type": "object",
+      "maxProperties": 10,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_.-]{1,64}$"
+      },
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

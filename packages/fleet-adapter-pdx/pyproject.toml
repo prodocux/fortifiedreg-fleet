@@ -1,0 +1,22 @@
+[project]
+name = "fleet-adapter-pdx"
+version = "0.3.0"
+description = "PDX Artifact Engine adapter for Fortified Enterprise Fleet"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7.0",
+    "jsonschema>=4.21.0",
+    "pdx-artifact-core @ git+https://github.com/prodocux/pdx-artifact-engine.git@93ec3514261bf89e9cb88b79f524e3fbc5ef4402#subdirectory=packages/pdx_artifact_core",
+    "fleet-governance-core",
+    "fleet-domain-cosmetics",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fleet_adapter_pdx"]

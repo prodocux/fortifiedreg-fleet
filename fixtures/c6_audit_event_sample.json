@@ -1,0 +1,26 @@
+{
+  "_metadata": {
+    "contract_status": "fleet_owned",
+    "schema_id": "audit_event_v1",
+    "schema_version": "1.0.0",
+    "upstream_repo": "prodocux/fortifiedreg-fleet",
+    "source_commit": "UNCOMMITTED_G1_DRAFT",
+    "data_sha256": "83df6e53caf843b07a0c5e4fc86a6637883e81ae62b8b7148c53ff3ebf1249fd",
+    "synthetic_data_declaration": "This fixture contains 100% synthetic fictitious cosmetic brand, formula, and supplier data created solely for automated testing."
+  },
+  "data": {
+    "event_id": "66666666-6666-4666-8666-666666666666",
+    "tenant_id": "tenant-acme-corp",
+    "run_id": "run-pif-20260813-001",
+    "event_type": "APPROVAL_DECIDED",
+    "actor_id": "usr-chief-safety-officer",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "span_id": "00f067aa0ba902b7",
+    "timestamp": "2026-08-13T09:10:01Z",
+    "payload": {
+      "decision": "approved",
+      "checkpoint_id": "chk-step-verify-final-001",
+      "idempotency_key": "tenant-acme-corp:chk-step-verify-final-001:usr-chief-safety-officer:idemp-key-999"
+    }
+  }
+}

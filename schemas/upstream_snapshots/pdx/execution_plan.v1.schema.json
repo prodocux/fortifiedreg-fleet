@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prodocux.dev/schemas/pdx/execution_plan.v1.schema.json",
+  "title": "PDX Execution Plan v1",
+  "type": "object",
+  "required": ["schema_version", "request_id", "producer", "steps"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "pdx_execution_plan_v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "description": "Caller-defined producer identifier; Core does not interpret providers"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "intent": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional human-readable intent; not executed by Core"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verification_item"
+      },
+      "description": "Plan-level verification checks (generic Core registry ids)"
+    },
+    "policies": {
+      "$ref": "#/$defs/plan_policies"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "step_policies": {
+      "type": "object",
+      "properties": {
+        "approval_required": {
+          "type": "boolean",
+          "default": false
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "plan_policies": {
+      "type": "object",
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "default_approval_required": {
+          "type": "boolean",
+          "description": "Default for steps that omit policies.approval_required"
+        }
+      },
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["tool", "approval", "transform", "verify"]
+        },
+        "tool": {
+          "type": "string",
+          "description": "Required when kind=tool: tool id registered with an executor"
+        },
+        "transform": {
+          "type": "string",
+          "description": "Required when kind=transform: transform/op id"
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional display name"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inputs": {
+          "type": "object"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policies": {
+          "$ref": "#/$defs/step_policies"
+        },
+        "verification": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/verification_item"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "tool" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["tool"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "transform" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["transform"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "verify" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["verification"],
+            "properties": {
+              "verification": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "verification_item": {
+      "type": "object",
+      "required": ["id", "check"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "check": {
+          "type": "string",
+          "description": "Verifier registry id or expression (e.g. file.exists:path)"
+        },
+        "fail_action": {
+          "type": "string",
+          "enum": ["repair", "ask_human", "stop"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
