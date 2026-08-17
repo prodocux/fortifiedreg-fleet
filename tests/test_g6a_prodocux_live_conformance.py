@@ -55,15 +55,13 @@ def test_live_prodocux_endpoint_conformance(live_adapter):
     assert extract_pdf.get("status") in ("success", "ocr_required")
 
     # 4. DOCX Profiling
-    docx_bytes = (
-        b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00[Content_Types].xml<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        b"<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"></Types>PK\x01\x02"
-        b"\x14\x00\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00[Content_Types].xmlPK\x05\x06\x00\x00"
-        b"\x00\x00\x01\x00\x01\x00A\x00\x00\x00\x87\x00\x00\x00\x00\x00"
-    )
-    profile_docx = live_adapter.profile_document("live_test.docx", docx_bytes)
+    from docx import Document
+    doc = Document()
+    doc.add_heading("Specification", 0)
+    doc.add_paragraph("Valid docx specification content.")
+    buf_docx = io.BytesIO()
+    doc.save(buf_docx)
+    profile_docx = live_adapter.profile_document("live_test.docx", buf_docx.getvalue())
     assert profile_docx.get("schema_version") == "prodocux_docx_profile_v1"
 
     # 5. CSV Table Profiling
@@ -83,15 +81,13 @@ def test_live_prodocux_endpoint_conformance(live_adapter):
     assert profile_xlsx.get("schema_version") == "prodocux_workbook_profile_v1"
 
     # 7. PPTX Presentation Profiling
-    pptx_bytes = (
-        b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00[Content_Types].xml<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        b"<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"></Types>PK\x01\x02"
-        b"\x14\x00\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00[Content_Types].xmlPK\x05\x06\x00\x00"
-        b"\x00\x00\x01\x00\x01\x00A\x00\x00\x00\x87\x00\x00\x00\x00\x00"
-    )
-    profile_pptx = live_adapter.profile_presentation("live_test.pptx", pptx_bytes)
+    from pptx import Presentation
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[0])
+    slide.shapes.title.text = "Presentation Title"
+    buf_pptx = io.BytesIO()
+    prs.save(buf_pptx)
+    profile_pptx = live_adapter.profile_presentation("live_test.pptx", buf_pptx.getvalue())
     assert profile_pptx.get("schema_version") == "prodocux_presentation_profile_v1"
 
     # Record evidence metadata

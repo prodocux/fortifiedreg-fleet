@@ -258,14 +258,13 @@ def generate_valid_document_bytes() -> Dict[str, Tuple[str, str, bytes]]:
     pdf_bytes = pdf_buf.getvalue()
 
     # 2. Valid DOCX
-    docx_bytes = (
-        b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00[Content_Types].xml<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        b"<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"></Types>PK\x01\x02"
-        b"\x14\x00\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00[Content_Types].xmlPK\x05\x06\x00\x00"
-        b"\x00\x00\x01\x00\x01\x00A\x00\x00\x00\x87\x00\x00\x00\x00\x00"
-    )
+    from docx import Document
+    doc = Document()
+    doc.add_heading("Specification", 0)
+    doc.add_paragraph("Valid docx specification content.")
+    buf_docx = io.BytesIO()
+    doc.save(buf_docx)
+    docx_bytes = buf_docx.getvalue()
 
     # 3. Valid CSV
     csv_bytes = b"inci_name,cas_number,percentage\nAqua,7732-18-5,85.0\nGlycerin,56-81-5,5.0\n"
@@ -281,14 +280,13 @@ def generate_valid_document_bytes() -> Dict[str, Tuple[str, str, bytes]]:
     xlsx_bytes = xlsx_buf.getvalue()
 
     # 5. Valid PPTX
-    pptx_bytes = (
-        b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00[Content_Types].xml<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        b"<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"></Types>PK\x01\x02"
-        b"\x14\x00\x14\x00\x00\x00\x08\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x13\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00[Content_Types].xmlPK\x05\x06\x00\x00"
-        b"\x00\x00\x01\x00\x01\x00A\x00\x00\x00\x87\x00\x00\x00\x00\x00"
-    )
+    from pptx import Presentation
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[0])
+    slide.shapes.title.text = "Presentation Title"
+    buf_pptx = io.BytesIO()
+    prs.save(buf_pptx)
+    pptx_bytes = buf_pptx.getvalue()
 
     return {
         ".pdf": ("doc-sds-001", "safety_sheet.pdf", pdf_bytes),

@@ -68,7 +68,18 @@ def validate_prodocux_url(url: str, is_production: bool = False) -> str:
         )
 
     if is_production and parsed.scheme != "https":
-        raise IntakeConfigurationError("HTTPS is strictly required for ProDocuX Base URL in production.")
+        hostname = (parsed.hostname or "").lower()
+        is_internal = (
+            hostname in ("localhost", "127.0.0.1")
+            or hostname.startswith("10.")
+            or hostname.startswith("172.")
+            or hostname.startswith("192.168.")
+            or "." not in hostname
+            or hostname.endswith(".internal")
+            or hostname.endswith(".local")
+        )
+        if not is_internal:
+            raise IntakeConfigurationError("HTTPS is strictly required for external ProDocuX Base URL in production.")
 
     if parsed.username or parsed.password:
         raise IntakeConfigurationError("Credentials/userinfo are forbidden in ProDocuX Base URL.")
