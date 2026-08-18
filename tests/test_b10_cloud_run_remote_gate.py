@@ -43,7 +43,7 @@ JWT_SECRET = os.getenv("FLEET_JWT_SECRET", "cloudrun-remote-gate-secret-2026-for
 def make_jwt_token(tenant_id: str, user_id: str, email: str, role: str) -> str:
     """Generate authenticated JWT bearer token."""
     payload = {
-        "iss": "fortifiedreg-fleet",
+        "iss": "fortified-enterprise-fleet-auth",
         "sub": user_id,
         "tenant_id": tenant_id,
         "email": email,
