@@ -1,38 +1,58 @@
 """
-Authentication and Dev-Token Router.
-Exposes development token generation endpoint strictly for local testing and prototype UI.
+Authentication and Demo Session Router.
+Provides strictly scoped ephemeral demo sessions for evaluation and controlled dev tokens.
 """
+import json
+import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from fleet_api.security import FLEET_ENV, create_access_token
 
-router = APIRouter(prefix="/v1/auth", tags=["Auth"])
+router = APIRouter(tags=["Auth"])
 
-class TokenRequest(BaseModel):
-    tenant_id: str = Field(default="tenant-demo-corp", pattern=r"^[a-z0-9_-]{1,64}$")
-    sub: str = Field(default="usr-cso-evaluator", min_length=1, max_length=64)
-    roles: List[str] = Field(default_factory=lambda: ["cso"])
-    email: Optional[str] = Field(default="cso@democorp.com")
+@router.post("/v1/demo/session", response_model=Dict[str, Any])
+async def create_demo_session(request: Request, response: Response) -> Dict[str, Any]:
+    """Issue a strictly scoped, ephemeral 15-minute demo session token.
+    Client-supplied tenant, role, or subject overrides are strictly forbidden and rejected.
+    """
+    body_bytes = await request.body()
+    if body_bytes.strip():
+        try:
+            data = json.loads(body_bytes)
+            if isinstance(data, dict) and any(k in data for k in ("tenant_id", "roles", "sub", "email", "role", "permissions")):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Client-supplied tenant_id, sub, or roles parameters are strictly forbidden on demo session.",
+                )
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid JSON payload in demo session request.",
+            )
 
-@router.post("/token", response_model=Dict[str, Any])
-def generate_token(body: TokenRequest) -> Dict[str, Any]:
-    """Issue authenticated JWT access token for web portal evaluators and API clients."""
+    session_id = f"demo-session-{uuid.uuid4().hex[:12]}"
     token = create_access_token(
-        tenant_id=body.tenant_id,
-        sub=body.sub,
-        roles=body.roles,
-        email=body.email,
-        expires_in_seconds=3600,
+        tenant_id="tenant-demo",
+        sub=session_id,
+        roles=["demo_evaluator"],
+        email="demo-evaluator@democorp.com",
+        expires_in_seconds=900,
     )
+
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+
     return {
         "access_token": token,
         "token_type": "bearer",
-        "expires_in": 3600,
-        "tenant_id": body.tenant_id,
-        "sub": body.sub,
-        "roles": body.roles,
+        "expires_in": 900,
+        "tenant_id": "tenant-demo",
+        "sub": session_id,
+        "roles": ["demo_evaluator"],
+        "mode": "demo_evaluator_session",
     }
+
 
 class DevTokenRequest(BaseModel):
     tenant_id: str = Field(default="tenant-acme-corp")
@@ -40,7 +60,8 @@ class DevTokenRequest(BaseModel):
     roles: List[str] = Field(default_factory=lambda: ["safety_assessor", "approver", "cso"])
     email: Optional[str] = Field(default="cso@acme.com")
 
-@router.post("/dev-token", response_model=Dict[str, Any])
+
+@router.post("/v1/auth/dev-token", response_model=Dict[str, Any])
 def generate_dev_token(body: DevTokenRequest = DevTokenRequest()) -> Dict[str, Any]:
     """Generate a development JWT token. Available ONLY when FLEET_ENV is test, local, or dev."""
     if FLEET_ENV not in ("test", "local", "dev"):

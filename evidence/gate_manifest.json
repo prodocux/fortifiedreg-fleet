@@ -1,0 +1,58 @@
+{
+  "project": "FortifiedReg Fleet",
+  "version": "0.3.1",
+  "track": "Track 3 - Fortified Enterprise Fleet",
+  "hackathon": "All Things Agentic Hackathon",
+  "gates": {
+    "B1_schema_contract": {
+      "status": "PASS_LOCAL",
+      "test_count": 79,
+      "details": "JSON Schema, Pydantic models, and cross-package contract conformance."
+    },
+    "B2_domain_cosmetics": {
+      "status": "PASS_LOCAL",
+      "test_count": 14,
+      "details": "SCCS 12th Notes of Guidance MoS calculations and INCI Annex II/V compliance."
+    },
+    "B3_pdx_adapter": {
+      "status": "PASS_LOCAL",
+      "test_count": 12,
+      "details": "PDX Core orchestrator adapter with live RC sealing pin 61cff57."
+    },
+    "B4_prodocux_adapter": {
+      "status": "PASS_LOCAL",
+      "test_count": 6,
+      "details": "ProDocuX HTTP live intake adapter with 5 binary formats (PDF, DOCX, CSV, XLSX, PPTX)."
+    },
+    "B5_google_adk_adapter": {
+      "status": "PASS_LOCAL",
+      "test_count": 5,
+      "details": "Prompt security scanner and Google Model Armor emulation."
+    },
+    "B6_fleet_api": {
+      "status": "PASS_LOCAL",
+      "test_count": 8,
+      "details": "FastAPI service with scoped demo sessions and tenant-bound audit queries."
+    },
+    "B7_lifecycle_conformance": {
+      "status": "PASS_LOCAL",
+      "test_count": 14,
+      "details": "Full PIF compile, checkpoint pause, and single-transaction CSO approval execution."
+    },
+    "B8_deployment_and_docker_gate": {
+      "status": "PASS_LOCAL",
+      "test_count": 12,
+      "details": "Docker OCI image build, SQLite persistence, and fail-closed security enforcement."
+    },
+    "B9_docker_production_live_gate": {
+      "status": "PASS_LOCAL",
+      "test_count": 4,
+      "details": "Production container with live ProDocuX container over HTTP network bridge."
+    },
+    "B10_cloud_run_remote_gate": {
+      "status": "PASS_REMOTE",
+      "test_count": 8,
+      "details": "Live deployment on Google Cloud Run with Truth, SCCS, and 5-Format Profiling endpoints."
+    }
+  }
+}

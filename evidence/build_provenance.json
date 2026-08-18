@@ -1,0 +1,28 @@
+{
+  "service": "fortified-enterprise-fleet-api",
+  "version": "0.3.1",
+  "build_timestamp_utc": "2026-08-18T15:26:00Z",
+  "target_platform": "Google Cloud Run (managed, serverless)",
+  "target_region": "us-central1",
+  "registry": "us-central1-docker.pkg.dev/fortifiedreg-fleet/fortifiedreg/fleet",
+  "exact_pins": {
+    "pdx_core": {
+      "repo": "prodocux/pdx-artifact-engine",
+      "commit": "61cff57ec7938165234dd895177dccade7ac1a5f",
+      "version": "0.2.0a2"
+    },
+    "prodocux": {
+      "repo": "prodocux/prodocux",
+      "commit": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
+      "version": "0.2.0"
+    }
+  },
+  "compatibility_manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+  "store_modes": {
+    "resume_context": "sqlite",
+    "artifact": "local_filesystem_ephemeral",
+    "audit": "in_memory",
+    "memory": "in_memory"
+  },
+  "security_mode": "local_regex_emulation"
+}

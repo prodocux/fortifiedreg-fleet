@@ -21,7 +21,7 @@ if (Test-Path Variable:PSNativeCommandUseErrorActionPreference) {
 $ErrorActionPreference = "Continue"
 
 Write-Host "====================================================================" -ForegroundColor Cyan
-Write-Host "   FortifiedReg Fleet v0.3.0 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
+Write-Host "   FortifiedReg Fleet v0.3.1 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
 Write-Host "====================================================================" -ForegroundColor Cyan
 
 # 1. Resolve Project and Roots
@@ -111,7 +111,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 6. Deploy to Cloud Run
 Write-Host "`n[Step 5/5] Deploying Service to Google Cloud Run..." -ForegroundColor Cyan
-$envVars = "FLEET_ENV=$FleetEnv,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PRODOCUX_BASE_URL=$ProDocuXUrl"
+$envVars = "FLEET_ENV=$FleetEnv,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PRODOCUX_BASE_URL=$ProDocuXUrl,GIT_COMMIT=$GitHead"
 
 gcloud run deploy $ServiceName `
     --image=$ImageUri `

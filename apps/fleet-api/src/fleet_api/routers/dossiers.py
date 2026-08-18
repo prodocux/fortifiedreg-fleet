@@ -1,13 +1,18 @@
 """
 Dossier Management Router.
-Handles dossier creation, document content registration, plan compilation, and execution orchestration.
+Handles dossier creation, document content registration, 5-format binary profiling,
+SCCS toxicology evaluation, plan compilation, and execution orchestration.
 """
 import base64
+import csv
 import hashlib
-from typing import Any, Dict, Optional, Tuple
+import io
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from fleet_api.deps import (
     get_audit_log,
@@ -17,11 +22,12 @@ from fleet_api.deps import (
     get_resume_context_store,
     get_tenant_and_actor,
 )
-from fleet_governance_core.ports.audit_log_port import AuditLogPort
-from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
-from fleet_governance_core.ports.document_resolver_port import DocumentResolverPort
-from fleet_governance_core.ports.orchestrator_port import ExecutionOrchestratorPort
-from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
+from fleet_domain_cosmetics.inci_verifier import evaluate_inci_compliance
+from fleet_domain_cosmetics.mos_calculator import (
+    calculate_mos,
+    calculate_sed,
+    evaluate_toxicology_mos,
+)
 from fleet_governance_core.models.approval import (
     AuthenticatedActor,
     PDXApprovalRequest,
@@ -30,12 +36,16 @@ from fleet_governance_core.models.approval import (
 from fleet_governance_core.models.audit import AuditEvent, AuditEventTypeEnum
 from fleet_governance_core.models.case import DossierCase
 from fleet_governance_core.models.hashing import compute_data_sha256
+from fleet_governance_core.models.verifier import VerifierStatusEnum
+from fleet_governance_core.ports.audit_log_port import AuditLogPort
+from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
+from fleet_governance_core.ports.document_resolver_port import DocumentResolverPort
+from fleet_governance_core.ports.orchestrator_port import ExecutionOrchestratorPort
+from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 
 router = APIRouter(prefix="/v1/dossiers", tags=["Dossiers"])
 
 CASES_DB: Dict[str, Dict[str, DossierCase]] = {}  # tenant_id -> {case_id_str: case}
-
-from pathlib import Path
 
 MAX_BASE64_CHARS = 68_000_000  # ~50 MiB raw ceiling
 FORMAT_LIMITS = {
@@ -46,13 +56,19 @@ FORMAT_LIMITS = {
     ".pptx": 32 * 1024 * 1024,
 }
 
-from pydantic import BaseModel, Field
 
 class DocumentRegistrationRequest(BaseModel):
     doc_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     content_b64: str = Field(min_length=1, max_length=MAX_BASE64_CHARS)
     filename: Optional[str] = Field(default=None, min_length=1, max_length=255, pattern=r"^[a-zA-Z0-9_.-]+$")
     expected_sha256: Optional[str] = Field(default=None, pattern=r"^[a-fA-F0-9]{64}$")
+
+
+class DocumentProfileRequest(BaseModel):
+    doc_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    filename: str = Field(min_length=1, max_length=255, pattern=r"^[a-zA-Z0-9_.-]+$")
+    content_b64: str = Field(min_length=1, max_length=MAX_BASE64_CHARS)
+
 
 @router.post("/documents/register", response_model=Dict[str, Any])
 def register_document(
@@ -69,7 +85,6 @@ def register_document(
     if not req.content_b64 or len(req.content_b64) > MAX_BASE64_CHARS:
         raise HTTPException(status_code=400, detail="Document payload exceeds maximum allowed request ceiling.")
 
-    # Strict Base64 Decoding with sanitized static error
     try:
         raw_bytes = base64.b64decode(req.content_b64, validate=True)
     except Exception:
@@ -78,23 +93,15 @@ def register_document(
     if len(raw_bytes) == 0:
         raise HTTPException(status_code=400, detail="Document content cannot be empty.")
 
-    # Validate format and enforce format size limits
     filename = req.filename or f"{req.doc_id}.pdf"
     ext = Path(filename).suffix.casefold()
     if ext not in FORMAT_LIMITS:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported document format.",
-        )
+        raise HTTPException(status_code=400, detail="Unsupported document format.")
 
     limit = FORMAT_LIMITS[ext]
     if len(raw_bytes) > limit:
-        raise HTTPException(
-            status_code=400,
-            detail="Document payload exceeds maximum allowed size for format.",
-        )
+        raise HTTPException(status_code=400, detail="Document payload exceeds maximum allowed size for format.")
 
-    # Register with CAS & tenant scoping
     try:
         sha256_digest = resolver.register_document(
             tenant_id=tenant_id,
@@ -103,7 +110,7 @@ def register_document(
             filename=filename,
             expected_sha256=req.expected_sha256,
         )
-    except ValueError as exc:
+    except ValueError:
         raise HTTPException(status_code=409, detail="Document already registered with different content.")
 
     return {
@@ -115,6 +122,184 @@ def register_document(
         "size_bytes": len(raw_bytes),
     }
 
+
+@router.post("/documents/profile", response_model=Dict[str, Any])
+def profile_document(
+    req: DocumentProfileRequest,
+    identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+) -> Dict[str, Any]:
+    """Parse real binary document content and extract structural metadata properties."""
+    tenant_id, _ = identity
+    ext = Path(req.filename).suffix.casefold()
+
+    if ext not in FORMAT_LIMITS:
+        raise HTTPException(status_code=400, detail=f"Unsupported format '{ext}'. Must be PDF, DOCX, CSV, XLSX, or PPTX.")
+
+    try:
+        raw_bytes = base64.b64decode(req.content_b64, validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Base64 payload.")
+
+    if len(raw_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Document content cannot be empty.")
+
+    if len(raw_bytes) > FORMAT_LIMITS[ext]:
+        raise HTTPException(status_code=400, detail=f"Document exceeds maximum limit of {FORMAT_LIMITS[ext]} bytes.")
+
+    sha256_raw = hashlib.sha256(raw_bytes).hexdigest()
+    profile_data: Dict[str, Any] = {
+        "doc_id": req.doc_id,
+        "filename": req.filename,
+        "format": ext.lstrip(".").upper(),
+        "size_bytes": len(raw_bytes),
+        "raw_sha256": sha256_raw,
+    }
+
+    # Validate Magic Bytes & Extract Real Structural Profile
+    try:
+        if ext == ".pdf":
+            if not raw_bytes.startswith(b"%PDF"):
+                raise HTTPException(status_code=400, detail="Magic bytes mismatch: Not a valid PDF file.")
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+            profile_data["page_count"] = len(reader.pages)
+            profile_data["is_encrypted"] = reader.is_encrypted
+
+        elif ext == ".docx":
+            if not raw_bytes.startswith(b"PK\x03\x04"):
+                raise HTTPException(status_code=400, detail="Magic bytes mismatch: Not a valid DOCX container.")
+            import docx
+            doc = docx.Document(io.BytesIO(raw_bytes))
+            profile_data["paragraph_count"] = len(doc.paragraphs)
+            profile_data["table_count"] = len(doc.tables)
+
+        elif ext == ".xlsx":
+            if not raw_bytes.startswith(b"PK\x03\x04"):
+                raise HTTPException(status_code=400, detail="Magic bytes mismatch: Not a valid XLSX container.")
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True)
+            profile_data["sheet_names"] = wb.sheetnames
+            profile_data["sheet_count"] = len(wb.sheetnames)
+
+        elif ext == ".pptx":
+            if not raw_bytes.startswith(b"PK\x03\x04"):
+                raise HTTPException(status_code=400, detail="Magic bytes mismatch: Not a valid PPTX container.")
+            import pptx
+            prs = pptx.Presentation(io.BytesIO(raw_bytes))
+            profile_data["slide_count"] = len(prs.slides)
+
+        elif ext == ".csv":
+            text = raw_bytes.decode("utf-8", errors="replace")
+            reader = csv.reader(io.StringIO(text))
+            rows = list(reader)
+            profile_data["row_count"] = len(rows)
+            profile_data["column_count"] = len(rows[0]) if rows else 0
+            profile_data["header_columns"] = rows[0] if rows else []
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to parse {ext.upper()} structure: {str(exc)}",
+        )
+
+    profile_digest = hashlib.sha256(json.dumps(profile_data, sort_keys=True).encode("utf-8")).hexdigest()
+    profile_data["profile_digest"] = profile_digest
+    return profile_data
+
+
+@router.post("/evaluate-sccs", response_model=Dict[str, Any])
+def evaluate_sccs_compliance(
+    case: DossierCase,
+    identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+) -> Dict[str, Any]:
+    """Run real server-side SCCS 12th Notes of Guidance toxicology and Annex II/V compliance evaluation."""
+    tenant_id, _ = identity
+    if case.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Payload tenant_id '{case.tenant_id}' does not match authenticated token tenant '{tenant_id}'",
+        )
+
+    inci_res = evaluate_inci_compliance(case)
+    mos_res = evaluate_toxicology_mos(case)
+
+    # Determine overall verifier status
+    if inci_res.status == VerifierStatusEnum.FAIL or mos_res.status == VerifierStatusEnum.FAIL:
+        overall_status = "fail"
+    elif mos_res.status == VerifierStatusEnum.REVIEW or inci_res.status == VerifierStatusEnum.REVIEW:
+        overall_status = "review"
+    else:
+        overall_status = "pass"
+
+    exp = case.exposure_scenario
+    substance_evaluations: List[Dict[str, Any]] = []
+    for item in case.formula:
+        if item.inci_name.upper() == "AQUA":
+            substance_evaluations.append({
+                "inci_name": item.inci_name,
+                "concentration_pct": item.concentration_pct,
+                "cas_number": item.cas_number,
+                "noael_mg_kg_day": item.noael_mg_kg_day,
+                "sed_mg_kg_day": 0.0,
+                "margin_of_safety": None,
+                "status": "exempt",
+            })
+            continue
+
+        sed = calculate_sed(
+            daily_applied_amount_g=exp.daily_applied_amount_g,
+            concentration_pct=item.concentration_pct,
+            retention_factor=exp.retention_factor,
+            body_weight_kg=exp.body_weight_kg,
+        )
+        mos = calculate_mos(item.noael_mg_kg_day, sed) if (item.noael_mg_kg_day is not None and item.noael_mg_kg_day > 0) else None
+
+        if mos is None:
+            status_item = "review"
+        elif mos < 100.0:
+            status_item = "fail"
+        else:
+            status_item = "pass"
+
+        substance_evaluations.append({
+            "inci_name": item.inci_name,
+            "concentration_pct": item.concentration_pct,
+            "cas_number": item.cas_number,
+            "noael_mg_kg_day": item.noael_mg_kg_day,
+            "sed_mg_kg_day": sed,
+            "margin_of_safety": mos,
+            "status": status_item,
+        })
+
+    evidence_summary = {
+        "case_id": str(case.case_id),
+        "product_name": case.product_name,
+        "overall_status": overall_status,
+        "inci_result": inci_res.model_dump(mode="json"),
+        "mos_result": mos_res.model_dump(mode="json"),
+        "substances": substance_evaluations,
+    }
+    evidence_digest = hashlib.sha256(json.dumps(evidence_summary, sort_keys=True).encode("utf-8")).hexdigest()
+
+    return {
+        "case_id": str(case.case_id),
+        "product_name": case.product_name,
+        "rule_set_version": "SCCS_12TH_NOTES_OF_GUIDANCE_2025.1",
+        "verifier_status": overall_status,
+        "inci_compliance": inci_res.model_dump(mode="json"),
+        "toxicology_mos": mos_res.model_dump(mode="json"),
+        "substance_evaluations": substance_evaluations,
+        "exposure_summary": {
+            "daily_applied_amount_g": exp.daily_applied_amount_g,
+            "retention_factor": exp.retention_factor,
+            "body_weight_kg": exp.body_weight_kg,
+        },
+        "evidence_digest": evidence_digest,
+    }
+
+
 @router.post("/create", response_model=Dict[str, Any])
 def create_dossier(
     case: DossierCase,
@@ -125,7 +310,6 @@ def create_dossier(
     """Create a new product regulatory dossier case and compute canonical digest."""
     tenant_id, actor = identity
 
-    # Ensure payload tenant matches authenticated tenant
     if case.tenant_id != tenant_id:
         raise HTTPException(
             status_code=403,
@@ -138,7 +322,6 @@ def create_dossier(
         resume_context_store.save_case(tenant_id, case)
     case_digest = compute_data_sha256(case)
 
-    # Emit audit event
     audit_log.append_audit_event(
         AuditEvent(
             tenant_id=tenant_id,
@@ -160,6 +343,7 @@ def create_dossier(
         "case_digest": case_digest,
     }
 
+
 @router.post("/{case_id}/compile-and-run", response_model=Dict[str, Any])
 def compile_and_run_dossier(
     case_id: UUID,
@@ -179,8 +363,6 @@ def compile_and_run_dossier(
         raise HTTPException(status_code=404, detail=f"Dossier case '{case_id_str}' not found.")
 
     case_payload = case.model_dump(mode="json")
-    
-    # 1. Compile Plan (request_id derived uniquely from case.case_id)
     plan = orch.compile_execution_plan(case_payload)
     plan_digest = compute_data_sha256(plan)
 
@@ -194,10 +376,8 @@ def compile_and_run_dossier(
         )
     )
 
-    # 2. Execute Plan
     exec_result = orch.execute_plan(plan, case_payload=case_payload)
 
-    # 3. If paused at checkpoint, persist real checkpoint AND approval request to checkpoint store
     if exec_result.get("status") == "awaiting_approval":
         chk_dict = exec_result["checkpoint"]
         checkpoint = PDXWorkflowCheckpoint.model_validate(chk_dict)
@@ -207,7 +387,7 @@ def compile_and_run_dossier(
             req_dict = exec_result["approval_request"]
             approval_req = PDXApprovalRequest.model_validate(req_dict)
             checkpoint_store.save_approval_request(tenant_id, approval_req)
-        
+
         audit_log.append_audit_event(
             AuditEvent(
                 tenant_id=tenant_id,
@@ -227,6 +407,7 @@ def compile_and_run_dossier(
         "plan_digest": plan_digest,
         "execution": exec_result,
     }
+
 
 @router.get("/{case_id}", response_model=Dict[str, Any])
 def get_dossier(

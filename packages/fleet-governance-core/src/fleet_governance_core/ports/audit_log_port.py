@@ -16,3 +16,8 @@ class AuditLogPort(ABC):
     def list_events_for_run(self, tenant_id: str, run_id: str) -> List[AuditEvent]:
         """Query audit events by run ID within tenant boundary."""
         pass
+
+    @abstractmethod
+    def list_all_events(self, tenant_id: str, limit: int = 50) -> List[AuditEvent]:
+        """Query all audit events for a tenant bounded by limit."""
+        pass

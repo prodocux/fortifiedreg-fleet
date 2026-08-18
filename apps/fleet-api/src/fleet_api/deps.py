@@ -139,7 +139,14 @@ def get_tenant_and_actor(
 
 def get_approver_identity(
     identity: Tuple[str, AuthenticatedActor] = Depends(
-        require_roles(["approver", "regulatory_approver", "safety_assessor", "cso"])
+        require_roles(["approver", "regulatory_approver", "safety_assessor", "cso", "demo_evaluator"])
     ),
 ) -> Tuple[str, AuthenticatedActor]:
+    tenant_id, actor = identity
+    if "demo_evaluator" in actor.roles and tenant_id != "tenant-demo":
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Role 'demo_evaluator' is strictly restricted to tenant 'tenant-demo'.",
+        )
     return identity
