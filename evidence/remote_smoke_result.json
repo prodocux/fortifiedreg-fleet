@@ -1,0 +1,133 @@
+{
+  "verified_at": "2026-08-18T07:52:03.497766+00:00",
+  "target_url": "https://fortifiedreg-fleet-251114662133.us-central1.run.app",
+  "mode": "full_demo_lifecycle",
+  "tests": {
+    "health_probe": {
+      "status": "PASS",
+      "data": {
+        "status": "healthy",
+        "service": "fortified-enterprise-fleet-api",
+        "version": "0.3.1",
+        "environment": "production",
+        "runtime_mode": "local_memory_emulation",
+        "adapters": {
+          "intake": {
+            "configured_mode": "live"
+          },
+          "orchestrator": {
+            "configured_mode": "live"
+          },
+          "stores": {
+            "configured_mode": "in_memory"
+          }
+        },
+        "security_scanner": "regex_prompt_scanner (local_emulation)",
+        "auth_provider": "jwt_bearer_rbac"
+      }
+    },
+    "readiness_probe": {
+      "status": "PASS",
+      "data": {
+        "status": "degraded",
+        "version": "0.3.1",
+        "adapters": {
+          "intake": {
+            "mode": "live",
+            "status": "unavailable",
+            "error": "Upstream unreachable"
+          },
+          "orchestrator": {
+            "mode": "live",
+            "status": "ready",
+            "pdx_core_version": "0.2.0a2"
+          },
+          "stores": {
+            "mode": "in_memory",
+            "status": "ready"
+          }
+        }
+      }
+    },
+    "version_truth": {
+      "status": "PASS",
+      "data": {
+        "service": "fortified-enterprise-fleet-api",
+        "fleet_version": "0.3.1",
+        "fleet_commit": "79ba318800153c4e31dfe11e3af73ab609dd4917",
+        "cloud_run_revision": "fortifiedreg-fleet-00007-df4",
+        "image_digest": "sha256:ec0c3320fa3bfe3aff2472df165abc3921fa485ff1d3e45d1ab395e22c60fc6a",
+        "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
+        "prodocux_pin": "c8acd2b8109bf5a74e50eb9aa3b028fc76eb1543",
+        "compatibility_manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+        "environment": "production",
+        "adapter_modes": {
+          "intake": "live",
+          "orchestrator": "live"
+        },
+        "store_modes": {
+          "resume_context": "sqlite",
+          "artifact": "local_filesystem_ephemeral",
+          "audit": "in_memory",
+          "memory": "in_memory"
+        },
+        "security_scanner": "regex_prompt_scanner (local_emulation)"
+      }
+    },
+    "manifest_gates": {
+      "status": "PASS",
+      "data": {
+        "manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+        "raw_manifest": {},
+        "verification_gates": {
+          "B1_schema_contract": "PASS_LOCAL",
+          "B2_domain_cosmetics": "PASS_LOCAL",
+          "B3_pdx_adapter": "PASS_LOCAL",
+          "B4_prodocux_adapter": "PASS_LOCAL",
+          "B5_google_adk_adapter": "PASS_LOCAL",
+          "B6_fleet_api": "PASS_LOCAL",
+          "B7_lifecycle_conformance": "PASS_LOCAL",
+          "B8_deployment_and_docker_gate": "PASS_LOCAL",
+          "B9_docker_production_live_gate": "PASS_LOCAL",
+          "B10_cloud_run_remote_gate": "PASS_REMOTE"
+        }
+      }
+    },
+    "security_scanner": {
+      "status": "PASS",
+      "prompt_decision": "BLOCK",
+      "path_decision": "BLOCK"
+    },
+    "demo_session": {
+      "status": "PASS",
+      "tenant_id": "tenant-demo",
+      "roles": [
+        "demo_evaluator"
+      ]
+    },
+    "sccs_evaluation": {
+      "status": "PASS",
+      "verifier_status": "pass",
+      "digest": "1152468ba60a0c58790417c4bf53917b0fd590ba57801e157eed5f56e448327f"
+    },
+    "document_profiling": {
+      "status": "PASS",
+      "format": "PDF",
+      "profile_digest": "135f0625a8e8e6aa29f840b2269c381f3c86a431eb1c1be44d73cf85b3b355e5"
+    },
+    "audit_stream": {
+      "status": "PASS",
+      "store_mode": "in_memory",
+      "event_count": 0
+    }
+  },
+  "summary": "ALL_CHECKS_PASSED",
+  "build_provenance": {
+    "fleet_commit": "79ba318800153c4e31dfe11e3af73ab609dd4917",
+    "cloud_run_revision": "fortifiedreg-fleet-00007-df4",
+    "image_digest": "sha256:ec0c3320fa3bfe3aff2472df165abc3921fa485ff1d3e45d1ab395e22c60fc6a",
+    "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
+    "prodocux_pin": "c8acd2b8109bf5a74e50eb9aa3b028fc76eb1543",
+    "manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303"
+  }
+}

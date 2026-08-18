@@ -46,10 +46,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
         health_data = r.json()
         assert health_data["status"] == "healthy"
         results["tests"]["health_probe"] = {"status": "PASS", "data": health_data}
-        print(" [✓] 1. Liveness Probe (/v1/health)             : PASS (HTTP 200)")
+        print(" [PASS] 1. Liveness Probe (/v1/health)             : PASS (HTTP 200)")
     except Exception as e:
         results["tests"]["health_probe"] = {"status": "FAIL", "error": str(e)}
-        print(f" [X] 1. Liveness Probe (/v1/health)             : FAIL ({e})")
+        print(f" [FAIL] 1. Liveness Probe (/v1/health)             : FAIL ({e})")
         all_passed = False
 
     # 2. Readiness Probe
@@ -57,10 +57,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
         r = requests.get(f"{base_url}/v1/ready", timeout=10)
         assert r.status_code in (200, 503)
         results["tests"]["readiness_probe"] = {"status": "PASS", "data": r.json()}
-        print(f" [✓] 2. Readiness Probe (/v1/ready)            : PASS (HTTP {r.status_code})")
+        print(f" [PASS] 2. Readiness Probe (/v1/ready)            : PASS (HTTP {r.status_code})")
     except Exception as e:
         results["tests"]["readiness_probe"] = {"status": "FAIL", "error": str(e)}
-        print(f" [X] 2. Readiness Probe (/v1/ready)            : FAIL ({e})")
+        print(f" [FAIL] 2. Readiness Probe (/v1/ready)            : FAIL ({e})")
         all_passed = False
 
     # 3. Truth & Version Discovery
@@ -78,10 +78,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
             "prodocux_pin": ver_data.get("prodocux_pin"),
             "manifest_sha256": ver_data.get("compatibility_manifest_sha256"),
         }
-        print(f" [✓] 3. Version Truth Discovery (/v1/version)  : PASS (v{ver_data['fleet_version']}, rev: {ver_data.get('cloud_run_revision')})")
+        print(f" [PASS] 3. Version Truth Discovery (/v1/version)  : PASS (v{ver_data['fleet_version']}, rev: {ver_data.get('cloud_run_revision')})")
     except Exception as e:
         results["tests"]["version_truth"] = {"status": "FAIL", "error": str(e)}
-        print(f" [X] 3. Version Truth Discovery (/v1/version)  : FAIL ({e})")
+        print(f" [FAIL] 3. Version Truth Discovery (/v1/version)  : FAIL ({e})")
         all_passed = False
 
     # 4. Manifest Gate Discovery
@@ -90,10 +90,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
         assert r.status_code == 200
         man_data = r.json()
         results["tests"]["manifest_gates"] = {"status": "PASS", "data": man_data}
-        print(f" [✓] 4. Verification Manifest (/v1/manifest)    : PASS ({man_data.get('manifest_sha256')[:16]}...)")
+        print(f" [PASS] 4. Verification Manifest (/v1/manifest)    : PASS ({man_data.get('manifest_sha256')[:16]}...)")
     except Exception as e:
         results["tests"]["manifest_gates"] = {"status": "FAIL", "error": str(e)}
-        print(f" [X] 4. Verification Manifest (/v1/manifest)    : FAIL ({e})")
+        print(f" [FAIL] 4. Verification Manifest (/v1/manifest)    : FAIL ({e})")
         all_passed = False
 
     # 5. Security Scanner Probes
@@ -103,10 +103,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
         r_sec2 = requests.post(f"{base_url}/v1/security/scan", json={"payload_type": "path", "content": "../../etc/shadow"}, timeout=10)
         assert r_sec2.status_code == 200 and r_sec2.json()["decision"] == "BLOCK"
         results["tests"]["security_scanner"] = {"status": "PASS", "prompt_decision": "BLOCK", "path_decision": "BLOCK"}
-        print(" [✓] 5. Server Security Scanner (/v1/security) : PASS (Prompt & Path Blocked)")
+        print(" [PASS] 5. Server Security Scanner (/v1/security) : PASS (Prompt & Path Blocked)")
     except Exception as e:
         results["tests"]["security_scanner"] = {"status": "FAIL", "error": str(e)}
-        print(f" [X] 5. Server Security Scanner (/v1/security) : FAIL ({e})")
+        print(f" [FAIL] 5. Server Security Scanner (/v1/security) : FAIL ({e})")
         all_passed = False
 
     # 6. Demo Session Creation & Tampering
@@ -127,10 +127,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
         assert sess_data["roles"] == ["demo_evaluator"]
         token = sess_data["access_token"]
         results["tests"]["demo_session"] = {"status": "PASS", "tenant_id": sess_data["tenant_id"], "roles": sess_data["roles"]}
-        print(" [✓] 6. Scoped Demo Session (/v1/demo/session) : PASS (Fixed tenant-demo, Evaluator Role)")
+        print(" [PASS] 6. Scoped Demo Session (/v1/demo/session) : PASS (Fixed tenant-demo, Evaluator Role)")
     except Exception as e:
         results["tests"]["demo_session"] = {"status": "FAIL", "error": str(e)}
-        print(f" [X] 6. Scoped Demo Session (/v1/demo/session) : FAIL ({e})")
+        print(f" [FAIL] 6. Scoped Demo Session (/v1/demo/session) : FAIL ({e})")
         all_passed = False
 
     # 7. SCCS Toxicology Evaluation
@@ -156,10 +156,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
             sccs_data = r_sccs.json()
             assert sccs_data["verifier_status"] == "pass"
             results["tests"]["sccs_evaluation"] = {"status": "PASS", "verifier_status": "pass", "digest": sccs_data.get("evidence_digest")}
-            print(" [✓] 7. SCCS 12th Notes Verifier (/evaluate-sccs): PASS (MoS Calculated, Compliant)")
+            print(" [PASS] 7. SCCS 12th Notes Verifier (/evaluate-sccs): PASS (MoS Calculated, Compliant)")
         except Exception as e:
             results["tests"]["sccs_evaluation"] = {"status": "FAIL", "error": str(e)}
-            print(f" [X] 7. SCCS 12th Notes Verifier (/evaluate-sccs): FAIL ({e})")
+            print(f" [FAIL] 7. SCCS 12th Notes Verifier (/evaluate-sccs): FAIL ({e})")
             all_passed = False
 
         # 8. 5-Format Binary Profiling
@@ -176,10 +176,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
             assert prof_data["format"] == "PDF"
             assert "profile_digest" in prof_data
             results["tests"]["document_profiling"] = {"status": "PASS", "format": "PDF", "profile_digest": prof_data["profile_digest"]}
-            print(" [✓] 8. 5-Format Binary Profiler (/documents/profile): PASS (Real Structure Profiled)")
+            print(" [PASS] 8. 5-Format Binary Profiler (/documents/profile): PASS (Real Structure Profiled)")
         except Exception as e:
             results["tests"]["document_profiling"] = {"status": "FAIL", "error": str(e)}
-            print(f" [X] 8. 5-Format Binary Profiler (/documents/profile): FAIL ({e})")
+            print(f" [FAIL] 8. 5-Format Binary Profiler (/documents/profile): FAIL ({e})")
             all_passed = False
 
         # 9. Tenant-Bound Audit Stream
@@ -189,10 +189,10 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
             aud_data = r_aud.json()
             assert aud_data["tenant_id"] == "tenant-demo"
             results["tests"]["audit_stream"] = {"status": "PASS", "store_mode": aud_data.get("store_mode"), "event_count": len(aud_data.get("events", []))}
-            print(" [✓] 9. Tenant-Bound Audit Stream (/v1/audit/events): PASS (In-Memory Prototype)")
+            print(" [PASS] 9. Tenant-Bound Audit Stream (/v1/audit/events): PASS (In-Memory Prototype)")
         except Exception as e:
             results["tests"]["audit_stream"] = {"status": "FAIL", "error": str(e)}
-            print(f" [X] 9. Tenant-Bound Audit Stream (/v1/audit/events): FAIL ({e})")
+            print(f" [FAIL] 9. Tenant-Bound Audit Stream (/v1/audit/events): FAIL ({e})")
             all_passed = False
 
     results["summary"] = "ALL_CHECKS_PASSED" if all_passed else "VERIFICATION_FAILED"
