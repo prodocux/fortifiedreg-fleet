@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install pinned upstream dependencies from GitHub RC sealing pins with exact pinned dependencies
 RUN pip install --no-cache-dir \
-    "git+https://github.com/prodocux/pdx-artifact-engine.git@55a9293c8d5c0091e04e457dc43f662058e50068#subdirectory=packages/pdx_artifact_core" \
+    "git+https://github.com/prodocux/pdx-artifact-engine.git@61cff57ec7938165234dd895177dccade7ac1a5f#subdirectory=packages/pdx_artifact_core" \
     "git+https://github.com/prodocux/prodocux.git@c8acd2ba69c23458cb2589d8450246fe9b16424f" \
     uvicorn==0.34.0 \
     fastapi==0.115.6 \

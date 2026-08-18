@@ -32,7 +32,7 @@ FIXTURES_DIR = ROOT_DIR / "fixtures"
 PDX_REPO_DIR = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
 PRODOCUX_REPO_DIR = Path(os.getenv("PRODOCUX_REPO_DIR")) if os.getenv("PRODOCUX_REPO_DIR") else None
 
-PDX_COMMIT = "55a9293c8d5c0091e04e457dc43f662058e50068"
+PDX_COMMIT = "61cff57ec7938165234dd895177dccade7ac1a5f"
 PDX_SOURCE_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
 FLEET_COMMIT = "af8c8a508134a774af568cf9d29c7b412268e518"
 FLEET_REPO = "prodocux/fortifiedreg-fleet"

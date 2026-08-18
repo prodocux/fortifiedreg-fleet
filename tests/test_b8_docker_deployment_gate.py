@@ -2,7 +2,7 @@
 Gate B8-Docker: Docker Container Integration & Packaging Conformance Suite.
 Validates:
 1. Dynamic OCI Revision-Pinned Docker Image Build (org.opencontainers.image.revision = Fleet HEAD SHA).
-2. Inside-Image Package Provenance & Compatibility Manifest Verification (pdx==55a9293..., prodocux==c8acd2b...).
+2. Inside-Image Package Provenance & Compatibility Manifest Verification (pdx==61cff57..., prodocux==c8acd2b...).
 3. Fail-Closed Production Runtime Enforcement:
    - FLEET_ENV=production with fake PDX adapter -> fails-closed.
    - FLEET_ENV=production with fake intake adapter -> fails-closed.
@@ -37,9 +37,9 @@ FIXTURES_DIR = ROOT_DIR / "fixtures"
 
 JWT_SECRET = "b8-docker-prod-deployment-secret-key-2026-fortified-998877665544332211"
 
-EXPECTED_PDX_COMMIT = "55a9293c8d5c0091e04e457dc43f662058e50068"
+EXPECTED_PDX_COMMIT = "61cff57ec7938165234dd895177dccade7ac1a5f"
 EXPECTED_PRODOCUX_COMMIT = "c8acd2ba69c23458cb2589d8450246fe9b16424f"
-EXPECTED_MANIFEST_SHA = "a5eff2cc21aeff8eb0f6cad1e6e7dd3f50daff3ea3faedb4989c03b1af87161c"
+EXPECTED_MANIFEST_SHA = "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303"
 
 
 def get_current_git_commit() -> str:

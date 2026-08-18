@@ -41,7 +41,7 @@ from fleet_governance_core.models.case import DossierCase
 import os
 
 PDX_REPO = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
-PIN_PDX_COMMIT = "55a9293c8d5c0091e04e457dc43f662058e50068"
+PIN_PDX_COMMIT = "61cff57ec7938165234dd895177dccade7ac1a5f"
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 
 # Minimal valid PDF fixture

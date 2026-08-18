@@ -31,8 +31,8 @@ FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 COMPATIBILITY_DIR = Path(__file__).resolve().parent.parent / "compatibility"
 
 PIN_PRODOCUX = "c8acd2ba69c23458cb2589d8450246fe9b16424f"
-PIN_PDX = "55a9293c8d5c0091e04e457dc43f662058e50068"
-COMPATIBILITY_MANIFEST_SHA256 = "a5eff2cc21aeff8eb0f6cad1e6e7dd3f50daff3ea3faedb4989c03b1af87161c"
+PIN_PDX = "61cff57ec7938165234dd895177dccade7ac1a5f"
+COMPATIBILITY_MANIFEST_SHA256 = "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303"
 
 PDX_REPO = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
 PRODOCUX_REPO = Path(os.getenv("PRODOCUX_REPO_DIR")) if os.getenv("PRODOCUX_REPO_DIR") else None
