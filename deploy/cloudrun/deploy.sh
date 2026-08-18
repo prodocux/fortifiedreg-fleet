@@ -102,7 +102,6 @@ echo -n "${FLEET_JWT_SECRET}" | gcloud secrets versions add "${SECRET_NAME}" \
 echo -e "\n${BLUE}[Step 4/5] Building OCI-Pinned Container Image via Cloud Build...${NC}"
 gcloud builds submit "${ROOT_DIR}" \
     --tag="${IMAGE_URI}" \
-    --build-arg="GIT_COMMIT=${GIT_HEAD}" \
     --project="${GCP_PROJECT_ID}"
 
 # 7. Deploy to Google Cloud Run

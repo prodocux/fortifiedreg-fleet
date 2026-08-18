@@ -92,7 +92,6 @@ try {
 Write-Host "`n[Step 4/5] Building OCI-Pinned Container Image via Cloud Build..." -ForegroundColor Cyan
 gcloud builds submit $RootDir `
     --tag=$ImageUri `
-    --build-arg="GIT_COMMIT=$GitHead" `
     --project=$ProjectId
 
 if ($LASTEXITCODE -ne 0) {
