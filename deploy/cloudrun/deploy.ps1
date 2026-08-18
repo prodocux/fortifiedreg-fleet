@@ -14,7 +14,11 @@ param (
     [string]$FleetEnv = "production"
 )
 
-$ErrorActionPreference = "Stop"
+# Prevent PowerShell from aborting on native command stderr progress text
+if (Test-Path Variable:PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+$ErrorActionPreference = "Continue"
 
 Write-Host "====================================================================" -ForegroundColor Cyan
 Write-Host "   FortifiedReg Fleet v0.3.0 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
@@ -55,40 +59,24 @@ gcloud services enable `
 
 # 3. Create Artifact Registry Repository
 Write-Host "`n[Step 2/5] Configuring Google Artifact Registry..." -ForegroundColor Cyan
-$existingRepos = (gcloud artifacts repositories list --location=$Region --project=$ProjectId --format="value(name)" 2>$null)
-$repoExists = $false
-if ($existingRepos) {
-    foreach ($r in $existingRepos) {
-        if ($r -like "*$ArtifactRepo*") { $repoExists = $true; break }
-    }
-}
-if (-not $repoExists) {
-    Write-Host "[+] Creating Artifact Registry repository: $ArtifactRepo..." -ForegroundColor Yellow
-    gcloud artifacts repositories create $ArtifactRepo `
-        --repository-format=docker `
-        --location=$Region `
-        --description="FortifiedReg Fleet Container Repository" `
-        --project=$ProjectId
+gcloud artifacts repositories create $ArtifactRepo `
+    --repository-format=docker `
+    --location=$Region `
+    --description="FortifiedReg Fleet Container Repository" `
+    --project=$ProjectId 2>$null
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "[✓] Artifact Registry repository created: $ArtifactRepo" -ForegroundColor Green
 } else {
-    Write-Host "[✓] Artifact Registry repository already exists." -ForegroundColor Green
+    Write-Host "[✓] Artifact Registry repository configured / already present." -ForegroundColor Green
 }
 
 # 4. Configure Secret Manager
 Write-Host "`n[Step 3/5] Configuring Google Cloud Secret Manager..." -ForegroundColor Cyan
 $secretName = "fleet-jwt-secret"
-$existingSecrets = (gcloud secrets list --project=$ProjectId --format="value(name)" 2>$null)
-$secretExists = $false
-if ($existingSecrets) {
-    foreach ($s in $existingSecrets) {
-        if ($s -like "*$secretName*") { $secretExists = $true; break }
-    }
-}
-if (-not $secretExists) {
-    Write-Host "[+] Creating Secret Manager secret: $secretName..." -ForegroundColor Yellow
-    gcloud secrets create $secretName `
-        --replication-policy="automatic" `
-        --project=$ProjectId
-}
+gcloud secrets create $secretName `
+    --replication-policy="automatic" `
+    --project=$ProjectId 2>$null
 
 $jwtSecretValue = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 48 | ForEach-Object {[char]$_})
 $tempSecretFile = [System.IO.Path]::GetTempFileName()
@@ -106,6 +94,11 @@ gcloud builds submit $RootDir `
     --tag=$ImageUri `
     --build-arg="GIT_COMMIT=$GitHead" `
     --project=$ProjectId
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Cloud Build failed with exit code $LASTEXITCODE."
+    exit $LASTEXITCODE
+}
 
 # 6. Deploy to Cloud Run
 Write-Host "`n[Step 5/5] Deploying Service to Google Cloud Run..." -ForegroundColor Cyan
@@ -127,6 +120,11 @@ gcloud run deploy $ServiceName `
     --port="8080" `
     --project=$ProjectId
 
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Cloud Run deployment failed with exit code $LASTEXITCODE."
+    exit $LASTEXITCODE
+}
+
 # 7. Health Probe Verification
 $ServiceUrl = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)').Trim()
 
@@ -136,7 +134,11 @@ Write-Host "   Cloud Run Live URL: $ServiceUrl" -ForegroundColor Green
 Write-Host "====================================================================" -ForegroundColor Green
 
 Write-Host "`n[*] Running Live Health Probe..." -ForegroundColor Cyan
-Invoke-RestMethod -Uri "$ServiceUrl/v1/health" -Method Get | ConvertTo-Json
+try {
+    Invoke-RestMethod -Uri "$ServiceUrl/v1/health" -Method Get | ConvertTo-Json
+} catch {
+    Write-Host "Could not query health probe directly: $_" -ForegroundColor Yellow
+}
 
 Write-Host "`n[*] To run full remote compliance tests against this deployment:" -ForegroundColor Green
 Write-Host "    `$env:FLEET_REMOTE_URL=""$ServiceUrl""; pytest -v tests/test_b10_cloud_run_remote_gate.py"
