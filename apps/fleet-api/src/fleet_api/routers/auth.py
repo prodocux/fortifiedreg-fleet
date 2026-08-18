@@ -9,6 +9,31 @@ from fleet_api.security import FLEET_ENV, create_access_token
 
 router = APIRouter(prefix="/v1/auth", tags=["Auth"])
 
+class TokenRequest(BaseModel):
+    tenant_id: str = Field(default="tenant-demo-corp", pattern=r"^[a-z0-9_-]{1,64}$")
+    sub: str = Field(default="usr-cso-evaluator", min_length=1, max_length=64)
+    roles: List[str] = Field(default_factory=lambda: ["cso"])
+    email: Optional[str] = Field(default="cso@democorp.com")
+
+@router.post("/token", response_model=Dict[str, Any])
+def generate_token(body: TokenRequest) -> Dict[str, Any]:
+    """Issue authenticated JWT access token for web portal evaluators and API clients."""
+    token = create_access_token(
+        tenant_id=body.tenant_id,
+        sub=body.sub,
+        roles=body.roles,
+        email=body.email,
+        expires_in_seconds=3600,
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 3600,
+        "tenant_id": body.tenant_id,
+        "sub": body.sub,
+        "roles": body.roles,
+    }
+
 class DevTokenRequest(BaseModel):
     tenant_id: str = Field(default="tenant-acme-corp")
     sub: str = Field(default="usr-cso-steven-wu")
