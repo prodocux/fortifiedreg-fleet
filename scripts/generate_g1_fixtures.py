@@ -9,7 +9,7 @@ import json
 import shutil
 from pathlib import Path
 
-PDX_COMMIT = "93ec3514261bf89e9cb88b79f524e3fbc5ef4402"
+PDX_COMMIT = "61cff57ec7938165234dd895177dccade7ac1a5f"
 FLEET_COMMIT = "af8c8a508134a774af568cf9d29c7b412268e518"
 
 
@@ -237,7 +237,7 @@ def main():
             PDX_REPO,
             PDX_COMMIT,
             "packages/pdx_artifact_core/src/pdx_artifact_core/schemas/execution_plan.v1.schema.json",
-            "8993c6e640573fee74d1b01fc6d70db9db5053cfafaf0edc254ac936814dec5b",
+            "fff3e94c92a69e64987e29db7a9e18d215895c05a882caf3691c7987c0a4b37d",
             "byte_exact"
         ), indent=2, ensure_ascii=False),
         encoding="utf-8"
