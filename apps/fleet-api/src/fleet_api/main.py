@@ -7,7 +7,7 @@ import os
 from typing import Any, Dict
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from fleet_adapter_prodocux import (
     IntakeConnectionError,
@@ -23,6 +23,7 @@ from fleet_api.deps import (
     intake_adapter,
     orchestrator,
 )
+from fleet_api.portal import PORTAL_HTML
 from fleet_api.routers import approvals, audit, auth, dossiers
 
 app = FastAPI(
@@ -43,6 +44,11 @@ app.include_router(auth.router)
 app.include_router(dossiers.router)
 app.include_router(approvals.router)
 app.include_router(audit.router)
+
+@app.get("/", response_class=HTMLResponse, tags=["Portal"])
+def index() -> HTMLResponse:
+    """Enterprise Web Portal & Interactive Live PIF Evaluation Dashboard."""
+    return HTMLResponse(content=PORTAL_HTML, status_code=200)
 
 # ---------------------------------------------------------------------------
 # Exception Handlers: Differentiated 502 / 504 / 400 Errors

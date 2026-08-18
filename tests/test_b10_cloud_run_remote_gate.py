@@ -203,6 +203,14 @@ def remote_fleet_url(tmp_path_factory) -> Generator[str, None, None]:
         subprocess.run(["docker", "network", "rm", network_name], capture_output=True, text=True)
 
 
+def test_b10_cloud_run_portal_landing_page(remote_fleet_url: str):
+    """Verify Cloud Run root landing page renders the executive portal."""
+    resp = requests.get(f"{remote_fleet_url}/")
+    assert resp.status_code == 200
+    assert "FortifiedReg Fleet" in resp.text
+    assert "Live Interactive PIF Evaluation Simulator" in resp.text
+
+
 def test_b10_cloud_run_health_and_liveness(remote_fleet_url: str):
     """Verify Cloud Run liveness probe and production configuration."""
     resp = requests.get(f"{remote_fleet_url}/v1/health")
