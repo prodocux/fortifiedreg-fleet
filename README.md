@@ -39,6 +39,61 @@ pytest tests/test_g6b_pdx_core_conformance.py -v
 # G7: Lifecycle Conformance, SQLite ACID, Lease Fencing & Crash-Safe Storage (12 tests)
 pytest tests/test_g7_lifecycle_conformance.py -v
 
-# Full Workspace Regression Suite (240+ tests)
+# B8: Host Subprocess & Docker Container Integration Gates
+pytest tests/test_b8_production_deployment_gate.py tests/test_b8_docker_deployment_gate.py -v
+
+# B9: Docker Production Live-Adapter Integration Gate
+pytest tests/test_b9_docker_production_live_gate.py -v
+
+# B10: Google Cloud Run Remote Deployment Gate
+pytest tests/test_b10_cloud_run_remote_gate.py -v
+
+# Full Workspace Regression Suite (120+ tests)
 pytest -v
 ```
+
+## Google Cloud Run Deployment & Spin-up Guide
+
+FortifiedReg Fleet is packaged for serverless deployment on **Google Cloud Run**, utilizing **Google Artifact Registry**, **Google Cloud Secret Manager**, and **Google Model Armor** guardrails.
+
+### 1. Prerequisites
+- [Google Cloud SDK (`gcloud`)](https://cloud.google.com/sdk/docs/install) installed and authenticated.
+- A Google Cloud Project with Billing enabled.
+
+### 2. One-Click Deployment
+Set your Project ID and execute the automated deployment script:
+
+```bash
+# Set your GCP Project ID
+export GCP_PROJECT_ID="your-gcp-project-id"
+
+# Run automated Cloud Run deployment (Linux / macOS / Cloud Shell)
+bash deploy/cloudrun/deploy.sh
+```
+
+Or on Windows (PowerShell):
+```powershell
+$env:GCP_PROJECT_ID = "your-gcp-project-id"
+.\deploy\cloudrun\deploy.ps1
+```
+
+The script automatically:
+1. Enables required Google Cloud APIs (`run`, `artifactregistry`, `secretmanager`, `cloudbuild`, `logging`).
+2. Creates an Artifact Registry repository (`fortifiedreg`).
+3. Generates and stores secure keys in Google Secret Manager (`fleet-jwt-secret`).
+4. Builds the OCI revision-pinned container image via Cloud Build.
+5. Deploys to Cloud Run with scale-to-zero configuration (`--min-instances 0`) to avoid unnecessary cloud costs.
+6. Prints the live HTTPS URL (`https://fortifiedreg-fleet-<hash>-<region>.a.run.app`) and runs a health probe.
+
+### 3. Remote Verification Suite
+To run the automated compliance suite against your live Cloud Run deployment:
+```bash
+FLEET_REMOTE_URL="https://fortifiedreg-fleet-<hash>-<region>.a.run.app" pytest -v tests/test_b10_cloud_run_remote_gate.py
+```
+
+### 4. Zero-Cost Teardown
+When demo recording is completed, teardown all deployed resources with a single command:
+```bash
+bash deploy/cloudrun/destroy.sh
+```
+
