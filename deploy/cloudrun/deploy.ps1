@@ -55,8 +55,14 @@ gcloud services enable `
 
 # 3. Create Artifact Registry Repository
 Write-Host "`n[Step 2/5] Configuring Google Artifact Registry..." -ForegroundColor Cyan
-$repoCheck = gcloud artifacts repositories describe $ArtifactRepo --location=$Region --project=$ProjectId 2>$null
-if (-not $repoCheck) {
+$existingRepos = (gcloud artifacts repositories list --location=$Region --project=$ProjectId --format="value(name)" 2>$null)
+$repoExists = $false
+if ($existingRepos) {
+    foreach ($r in $existingRepos) {
+        if ($r -like "*$ArtifactRepo*") { $repoExists = $true; break }
+    }
+}
+if (-not $repoExists) {
     Write-Host "[+] Creating Artifact Registry repository: $ArtifactRepo..." -ForegroundColor Yellow
     gcloud artifacts repositories create $ArtifactRepo `
         --repository-format=docker `
@@ -70,8 +76,14 @@ if (-not $repoCheck) {
 # 4. Configure Secret Manager
 Write-Host "`n[Step 3/5] Configuring Google Cloud Secret Manager..." -ForegroundColor Cyan
 $secretName = "fleet-jwt-secret"
-$secretCheck = gcloud secrets describe $secretName --project=$ProjectId 2>$null
-if (-not $secretCheck) {
+$existingSecrets = (gcloud secrets list --project=$ProjectId --format="value(name)" 2>$null)
+$secretExists = $false
+if ($existingSecrets) {
+    foreach ($s in $existingSecrets) {
+        if ($s -like "*$secretName*") { $secretExists = $true; break }
+    }
+}
+if (-not $secretExists) {
     Write-Host "[+] Creating Secret Manager secret: $secretName..." -ForegroundColor Yellow
     gcloud secrets create $secretName `
         --replication-policy="automatic" `
