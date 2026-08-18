@@ -162,6 +162,8 @@ def remote_fleet_url(tmp_path_factory) -> Generator[str, None, None]:
         "-e", "FLEET_ENV=production",
         "-e", "FLEET_INTAKE_ADAPTER=live",
         "-e", "FLEET_PDX_ADAPTER=live",
+        "-e", "PRODOCUX_BASE_URL=http://127.0.0.1:8900",
+        "-e", "PRODOCUX_TRUSTED_HTTP_HOSTS=127.0.0.1,localhost",
         "-v", f"{data_dir.resolve()}:/app/data",
         "-v", f"{artifacts_dir.resolve()}:/app/artifacts",
         image_tag,
