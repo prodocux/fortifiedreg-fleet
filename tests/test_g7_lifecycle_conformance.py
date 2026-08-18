@@ -587,13 +587,14 @@ def test_local_artifact_store_cross_process_atomic_put_if_absent_race():
     import concurrent.futures
 
     with tempfile.TemporaryDirectory() as tmpdir:
+        resolved_tmp = str(Path(tmpdir).resolve())
         uri = "artifact://opaque-tenant/checkpoints/chk-race/final.json"
         content = b'{"race_test": "atomic_link_verification"}'
         sha = hashlib.sha256(content).hexdigest()
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
             futures = [
-                executor.submit(_worker_put_artifact, tmpdir, uri, content, sha)
+                executor.submit(_worker_put_artifact, resolved_tmp, uri, content, sha)
                 for _ in range(5)
             ]
             results = [f.result() for f in futures]

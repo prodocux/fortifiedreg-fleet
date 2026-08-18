@@ -33,9 +33,10 @@ class LocalArtifactStore(ArtifactStorePort):
         # Strip leading slashes to prevent root escapes
         rel_path = f"{parsed.netloc}/{parsed.path.lstrip('/')}"
         clean_path = (self.root_dir / rel_path).resolve()
+        root_resolved = self.root_dir.resolve()
 
         # Strict containment check to prevent directory traversal and sibling-prefix attacks
-        if not clean_path.is_relative_to(self.root_dir) or clean_path == self.root_dir:
+        if not clean_path.is_relative_to(root_resolved) or clean_path == root_resolved:
             raise ValueError(f"Path traversal detected for URI: {uri}")
 
         # Support extended length paths on Windows (exceeding MAX_PATH 260 chars)
