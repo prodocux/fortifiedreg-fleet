@@ -98,6 +98,16 @@ echo -n "${FLEET_JWT_SECRET}" | gcloud secrets versions add "${SECRET_NAME}" \
     --data-file=- \
     --project="${GCP_PROJECT_ID}"
 
+# Grant Secret Manager Secret Accessor role to Cloud Run compute service account
+PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" --format='value(projectNumber)' 2>/dev/null || true)"
+if [ -n "${PROJECT_NUMBER}" ]; then
+    echo -e "${YELLOW}[+] Granting Secret Accessor permission to Cloud Run service account...${NC}"
+    gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
+        --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+        --role="roles/secretmanager.secretAccessor" \
+        --quiet >/dev/null 2>&1 || true
+fi
+
 # 6. Build and Push Container Image via Google Cloud Build
 echo -e "\n${BLUE}[Step 4/5] Building OCI-Pinned Container Image via Cloud Build...${NC}"
 gcloud builds submit "${ROOT_DIR}" \

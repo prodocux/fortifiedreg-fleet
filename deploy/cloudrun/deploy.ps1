@@ -88,6 +88,16 @@ try {
     Remove-Item $tempSecretFile -Force -ErrorAction SilentlyContinue
 }
 
+# Grant Secret Manager Secret Accessor role to Cloud Run compute service account
+$projectNumber = (gcloud projects describe $ProjectId --format="value(projectNumber)" 2>$null)
+if ($projectNumber) {
+    Write-Host "[+] Granting Secret Accessor permission to Cloud Run service account..." -ForegroundColor Yellow
+    gcloud projects add-iam-policy-binding $ProjectId `
+        --member="serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com" `
+        --role="roles/secretmanager.secretAccessor" `
+        --quiet 2>$null
+}
+
 # 5. Build Container Image via Cloud Build
 Write-Host "`n[Step 4/5] Building OCI-Pinned Container Image via Cloud Build..." -ForegroundColor Cyan
 gcloud builds submit $RootDir `
