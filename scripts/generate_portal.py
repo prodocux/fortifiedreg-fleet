@@ -765,15 +765,14 @@ async function selectPersona(persona) {{
   try {{
     const result = await safePost('/v1/demo/session', {{persona}});
     let token, sub, expires_at;
-    if (result.parsed && result.parsed.token) {{
-      token = result.parsed.token;
+    if (result.parsed && result.parsed.access_token) {{
+      token = result.parsed.access_token;
       sub = result.parsed.sub || PERSONA_SUBS[persona];
-      expires_at = result.parsed.expires_at || (Date.now()/1000 + 3600);
+      expires_at = result.parsed.expires_at || (Date.now()/1000 + 900);
     }} else {{
-      // Fallback mock token for UI demo
-      token = 'demo.' + btoa(JSON.stringify({{sub:PERSONA_SUBS[persona],persona,tenant_id:'tenant-demo',roles:['demo_evaluator'],iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600}})) + '.sig';
-      sub = PERSONA_SUBS[persona];
-      expires_at = Date.now()/1000 + 3600;
+      // Session call failed — show error and abort
+      alert('Failed to obtain demo session: ' + (result.raw || 'Unknown error') + '\n\nPlease refresh the page and try again.');
+      return;
     }}
 
     SESSION = {{token, sub, persona, persona_label: PERSONA_LABELS[persona], expires_at}};
@@ -1273,8 +1272,8 @@ async function probeSession(type) {{
     const r = await safePost('/v1/demo/session', body);
     appendOutput('session-probe-output', '[HTTP ' + r.status + ']\\n');
 
-    if (type === 'valid' && r.parsed && r.parsed.token) {{
-      const payload = decodeJwtPayload(r.parsed.token);
+    if (type === 'valid' && r.parsed && r.parsed.access_token) {{
+      const payload = decodeJwtPayload(r.parsed.access_token);
       if (payload) {{
         appendOutput('session-probe-output', '── Decoded JWT Payload ──\\n');
         const keys = ['iss','sub','tenant_id','roles','persona','exp','iat'];
