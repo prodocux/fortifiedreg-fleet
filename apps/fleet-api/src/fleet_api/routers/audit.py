@@ -1,8 +1,8 @@
 """
 Audit Query Router.
-Exposes tenant-isolated, append-only audit event queries for governance verification.
+Exposes tenant-isolated, session-scoped, append-only audit event queries for governance verification.
 """
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fleet_api.deps import audit_log, get_tenant_and_actor
 from fleet_governance_core.models.approval import AuthenticatedActor
@@ -15,14 +15,29 @@ def list_tenant_audit_events(
     limit: int = Query(default=50, ge=1, le=100),
     identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
 ) -> Dict[str, Any]:
-    """Retrieve all immutable audit events for the authenticated tenant.
-    Tenant ID is bound strictly to the authenticated JWT token claim; caller override is forbidden.
+    """Retrieve immutable audit events for the authenticated session.
+
+    Results are bound to both:
+    - The tenant extracted from the JWT ``tenant_id`` claim (caller cannot override)
+    - The session actor extracted from the JWT ``sub`` claim (session isolation)
+
+    In a production deployment, enterprise tenants are fully isolated at the tenant level.
+    Within the shared demo tenant, results are filtered per-session to avoid cross-session leakage.
     """
-    tenant_id, _ = identity
-    events = audit_log.list_all_events(tenant_id=tenant_id, limit=limit)
+    tenant_id, actor = identity
+    events = audit_log.list_events_for_actor(
+        tenant_id=tenant_id,
+        actor_id=actor.sub,
+        limit=limit,
+    )
     return {
         "tenant_id": tenant_id,
+        "session_actor": actor.sub,
         "store_mode": "in_memory",
+        "isolation_note": (
+            "Events are filtered by session actor (sub claim). "
+            "In production, full tenant isolation applies."
+        ),
         "count": len(events),
         "events": [e.model_dump(mode="json") for e in events],
     }

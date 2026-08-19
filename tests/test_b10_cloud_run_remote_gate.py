@@ -166,11 +166,12 @@ def remote_fleet_url(tmp_path_factory) -> Generator[str, None, None]:
 
 
 def test_b10_cloud_run_portal_landing_page(remote_fleet_url: str):
-    """Verify Cloud Run root landing page renders the executive portal."""
+    """Verify Cloud Run root landing page renders the v0.3.2 two-zone portal."""
     resp = requests.get(f"{remote_fleet_url}/")
     assert resp.status_code == 200
     assert "FortifiedReg Fleet" in resp.text
-    assert "Truth & Verification" in resp.text
+    assert "Enterprise Compliance Pipeline" in resp.text
+    assert "API Feature Sandboxes" in resp.text
 
 
 def test_b10_cloud_run_health_and_liveness(remote_fleet_url: str):

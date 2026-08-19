@@ -25,6 +25,7 @@ def create_access_token(
     roles: List[str],
     email: Optional[str] = None,
     expires_in_seconds: int = 3600,
+    extra_claims: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Generate a signed JWT access token."""
     now = int(time.time())
@@ -38,7 +39,10 @@ def create_access_token(
     }
     if email:
         payload["email"] = email
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, FLEET_JWT_SECRET, algorithm=FLEET_JWT_ALGORITHM)
+
 
 def decode_access_token(token: str) -> Dict[str, Any]:
     """Decode and verify JWT token signature and claims."""

@@ -111,6 +111,14 @@ class InMemoryAuditLog(AuditLogPort):
             capped_limit = max(1, min(limit, 100))
             return [e.model_copy() for e in reversed(tenant_events[-capped_limit:])]
 
+    def list_events_for_actor(self, tenant_id: str, actor_id: str, limit: int = 50) -> List[AuditEvent]:
+        with self._lock:
+            tenant_events = self._log_db.get(tenant_id, [])
+            filtered = [e for e in tenant_events if e.actor_id == actor_id]
+            capped_limit = max(1, min(limit, 100))
+            return [e.model_copy() for e in reversed(filtered[-capped_limit:])]
+
+
 class InMemoryArtifactStorageAdapter(ArtifactStoragePort):
     def __init__(self, default_bucket: str = "fleet-compliance-artifacts", default_prefix: str = "dossiers"):
         self._lock = threading.Lock()
