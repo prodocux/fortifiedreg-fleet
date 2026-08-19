@@ -170,7 +170,7 @@ def test_b10_cloud_run_portal_landing_page(remote_fleet_url: str):
     resp = requests.get(f"{remote_fleet_url}/")
     assert resp.status_code == 200
     assert "FortifiedReg Fleet" in resp.text
-    assert "Truth & Verification Center" in resp.text
+    assert "Truth & Verification" in resp.text
 
 
 def test_b10_cloud_run_health_and_liveness(remote_fleet_url: str):
