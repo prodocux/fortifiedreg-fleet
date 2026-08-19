@@ -839,6 +839,14 @@ async function selectPersona(persona) {{
 
   }} catch(err) {{
     console.error('selectPersona error:', err);
+    const bar = document.getElementById('session-bar');
+    if (bar) {{
+      bar.className = 'session-bar visible';
+      bar.style.background = 'rgba(244,63,94,.15)';
+      bar.style.borderColor = 'rgba(244,63,94,.4)';
+      bar.style.color = 'var(--accent-rose)';
+      bar.innerHTML = '[Error] Persona selection failed: ' + err.message + '. Open DevTools console for details.';
+    }}
   }}
 }}
 
@@ -1368,36 +1376,44 @@ async function loadProvenance() {{
     const r = await safeGet('/v1/version');
     if (r.parsed) {{
       const d = r.parsed;
-      const set = (id, val) => {{ const el = document.getElementById(id); if (el) el.textContent = val || '—'; }};
-      set('pv-version', d.version || d.fleet_version);
-      set('pv-revision', d.cloud_run_revision || d.revision);
-      set('pv-commit', d.git_commit || d.commit_sha);
-      set('pv-pdx', d.pdx_core_pin || d.pdx_pin);
-      set('pv-prodocux', d.prodocux_pin || d.prodocux_version);
-      set('pv-manifest', d.compatibility_manifest_sha256 || d.manifest_digest);
-      set('pv-artifact', d.artifact_store_mode || d.store_mode_artifact);
-      set('pv-audit', d.audit_store_mode || d.store_mode_audit);
-      set('pv-memory', d.memory_adapter || d.memory_mode);
-      set('pv-intake', d.intake_adapter || d.intake_mode);
-      set('pv-orchestrator', d.orchestrator_adapter || d.orchestrator_mode);
+      const sm = d.store_modes || {{}};
+      const am = d.adapter_modes || {{}};
+      const set = (id, val) => {{ const el = document.getElementById(id); if (el) el.textContent = val || 'unknown'; }};
+      set('pv-version',       d.fleet_version || d.version);
+      set('pv-revision',      d.cloud_run_revision || d.revision);
+      set('pv-commit',        d.fleet_commit || d.git_commit || d.commit_sha);
+      set('pv-pdx',           d.pdx_core_pin || d.pdx_pin);
+      set('pv-prodocux',      d.prodocux_pin || d.prodocux_version);
+      set('pv-manifest',      d.compatibility_manifest_sha256 || d.manifest_digest);
+      set('pv-artifact',      sm.artifact || d.artifact_store_mode);
+      set('pv-audit',         sm.audit || d.audit_store_mode);
+      set('pv-memory',        sm.memory || d.memory_adapter);
+      set('pv-intake',        am.intake || d.intake_adapter);
+      set('pv-orchestrator',  am.orchestrator || d.orchestrator_adapter);
+    }} else {{
+      document.querySelectorAll('[id^="pv-"]').forEach(el => {{ el.textContent = 'fetch error (HTTP ' + r.status + ')'; }});
     }}
-  }} catch(e) {{ console.warn('loadProvenance error:', e); }}
+  }} catch(e) {{
+    console.warn('loadProvenance error:', e);
+    document.querySelectorAll('[id^="pv-"]').forEach(el => {{ el.textContent = 'network error'; }});
+  }}
 
   try {{
     const r2 = await safeGet('/v1/verification/manifest');
     if (r2.parsed) {{
       const d = r2.parsed;
-      const set = (id, val) => {{ const el = document.getElementById(id); if (el && el.textContent === '—') el.textContent = val || '—'; }};
-      set('pv-manifest', d.manifest_sha256 || d.sha256 || d.digest);
+      const el = document.getElementById('pv-manifest');
+      if (el && el.textContent === 'unknown') el.textContent = d.manifest_sha256 || d.sha256 || 'unknown';
     }}
   }} catch(e) {{}}
 }}
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', function() {{
-  prefillSccsCase();
+  try {{ prefillSccsCase(); }} catch(e) {{ console.warn('prefillSccsCase failed:', e); }}
   loadProvenance();
 }});
+
 </script>
 </body>
 </html>
