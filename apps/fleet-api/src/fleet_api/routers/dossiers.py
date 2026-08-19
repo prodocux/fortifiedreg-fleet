@@ -376,7 +376,13 @@ def compile_and_run_dossier(
         )
     )
 
-    exec_result = orch.execute_plan(plan, case_payload=case_payload)
+    try:
+        exec_result = orch.execute_plan(plan, case_payload=case_payload)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Workflow execution halted: {str(exc)}",
+        )
 
     if exec_result.get("status") == "awaiting_approval":
         chk_dict = exec_result["checkpoint"]

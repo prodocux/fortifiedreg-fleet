@@ -144,6 +144,21 @@ async def intake_payload_error_handler(request: Request, exc: IntakePayloadError
     )
 
 
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    req_id = getattr(request.state, "request_id", "unknown")
+    msg = f"Server processing error: {str(exc)}"
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": msg,
+            "detail": msg,
+            "request_id": req_id,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Liveness Probe
 # ---------------------------------------------------------------------------
