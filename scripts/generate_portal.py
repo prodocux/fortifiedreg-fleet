@@ -770,8 +770,8 @@ async function selectPersona(persona) {{
       sub = result.parsed.sub || PERSONA_SUBS[persona];
       expires_at = result.parsed.expires_at || (Date.now()/1000 + 900);
     }} else {{
-      // Session call failed — show error and abort
-      alert('Failed to obtain demo session: ' + (result.raw || 'Unknown error') + '\n\nPlease refresh the page and try again.');
+      // Session call failed — show error and abort (no \n in string — breaks JS)
+      alert('Demo session failed (HTTP ' + result.status + '). Please refresh and try again.');
       return;
     }}
 
