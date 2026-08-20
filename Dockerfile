@@ -33,7 +33,7 @@ FROM python:3.12-slim AS runner
 
 ARG GIT_COMMIT=unknown
 LABEL org.opencontainers.image.title="fortifiedreg-fleet"
-LABEL org.opencontainers.image.version="0.3.1"
+LABEL org.opencontainers.image.version="0.3.2"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
 LABEL org.opencontainers.image.vendor="ProDocuX FortifiedReg"
 LABEL org.opencontainers.image.description="FortifiedReg Fleet - Governed dossier production for regulated products"

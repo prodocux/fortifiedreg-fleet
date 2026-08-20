@@ -83,6 +83,13 @@ def wait_for_server(base_url: str, timeout_seconds: float = 20.0) -> bool:
 @pytest.fixture(scope="session")
 def docker_test_image():
     """Build a uniquely tagged test Docker image pinned to the current git HEAD commit."""
+    try:
+        check = subprocess.run(["docker", "info"], capture_output=True, text=True)
+        if check.returncode != 0:
+            pytest.skip("Docker daemon is not running locally")
+    except Exception:
+        pytest.skip("Docker CLI not available")
+
     head_commit = get_current_git_commit()
     image_tag = f"fortifiedreg-fleet:test-{head_commit[:8]}"
 

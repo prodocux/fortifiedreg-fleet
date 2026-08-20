@@ -1,6 +1,6 @@
 [project]
 name = "fleet-domain-cosmetics"
-version = "0.3.0"
+version = "0.3.2"
 description = "Cosmetics PIF regulatory compliance domain logic and verifiers, toxicological MoS calculators, and INCI verifiers"
 requires-python = ">=3.11"
 dependencies = [

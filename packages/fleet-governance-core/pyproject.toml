@@ -1,6 +1,6 @@
 [project]
 name = "fleet-governance-core"
-version = "0.3.0"
+version = "0.3.2"
 description = "Pure domain core and ports for Fortified Enterprise Fleet"
 requires-python = ">=3.11"
 dependencies = [

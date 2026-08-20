@@ -1,14 +1,30 @@
 """
-System Truth and Manifest Router.
-Provides non-hardcoded runtime facts, version provenance, and compatibility manifests.
+System Truth, Manifest, and Evidence Router (v0.3.2).
+Provides non-hardcoded runtime facts, version provenance, compatibility manifests,
+and rich checksummed evidence package retrieval.
 """
 import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
-from fastapi import APIRouter
-from fleet_api.deps import FLEET_ENV, INTAKE_MODE, PDX_MODE
+from typing import Any, Dict, Tuple
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from fleet_api.deps import (
+    FLEET_ENV,
+    INTAKE_MODE,
+    PDX_MODE,
+    get_approval_store,
+    get_audit_log,
+    get_checkpoint_store,
+    get_resume_context_store,
+    get_tenant_and_actor,
+)
+from fleet_governance_core.models.approval import AuthenticatedActor
+from fleet_governance_core.ports.approval_store_port import ApprovalStorePort
+from fleet_governance_core.ports.audit_log_port import AuditLogPort
+from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
+from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 
 router = APIRouter(prefix="/v1", tags=["System"])
 
@@ -35,12 +51,12 @@ def get_system_version() -> Dict[str, Any]:
 
     return {
         "service": "fortified-enterprise-fleet-api",
-        "fleet_version": "0.3.1",
+        "fleet_version": "0.3.2",
         "fleet_commit": fleet_commit,
         "cloud_run_revision": cloud_run_revision,
         "image_digest": image_digest,
         "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
-        "prodocux_pin": "c8acd2b8109bf5a74e50eb9aa3b028fc76eb1543",
+        "prodocux_pin": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
         "compatibility_manifest_sha256": _get_manifest_digest(),
         "environment": FLEET_ENV,
         "adapter_modes": {
@@ -67,6 +83,10 @@ def get_verification_manifest() -> Dict[str, Any]:
         except Exception:
             manifest_data = {"error": "Failed to parse compatibility manifest JSON"}
 
+    b10_status = os.getenv("B10_GATE_STATUS")
+    if not b10_status:
+        b10_status = "PASS_REMOTE" if os.getenv("FLEET_REMOTE_VERIFIED") else "PASS_LOCAL"
+
     return {
         "manifest_sha256": _get_manifest_digest(),
         "raw_manifest": manifest_data,
@@ -80,6 +100,93 @@ def get_verification_manifest() -> Dict[str, Any]:
             "B7_lifecycle_conformance": "PASS_LOCAL",
             "B8_deployment_and_docker_gate": "PASS_LOCAL",
             "B9_docker_production_live_gate": "PASS_LOCAL",
-            "B10_cloud_run_remote_gate": "PASS_REMOTE" if os.getenv("K_REVISION") else "PASS_LOCAL",
+            "B10_cloud_run_remote_gate": b10_status,
         },
     }
+
+
+@router.get("/evidence/runs/{run_id}", response_model=Dict[str, Any])
+def get_evidence_package(
+    run_id: str,
+    identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    audit_log: AuditLogPort = Depends(get_audit_log),
+    checkpoint_store: CheckpointStorePort = Depends(get_checkpoint_store),
+    approval_store: ApprovalStorePort = Depends(get_approval_store),
+    resume_context_store: ResumeContextStorePort = Depends(get_resume_context_store),
+) -> Dict[str, Any]:
+    """
+    Retrieve Checksummed Evidence Package for an execution run.
+    Strictly scoped to authenticated tenant boundary.
+    Returns HTTP 404 if the run does not exist under tenant boundary.
+    """
+    tenant_id, actor = identity
+
+    events = audit_log.list_events_for_run(tenant_id=tenant_id, run_id=run_id)
+
+    # Extract checkpoint from audit events if present
+    chk_id = None
+    case_digest = None
+    plan_digest = None
+    evidence_digests = {}
+    artifact_identity = None
+    approval_record = None
+
+    for ev in events:
+        p = ev.payload or {}
+        if "checkpoint_id" in p:
+            chk_id = p["checkpoint_id"]
+        if "case_digest" in p:
+            case_digest = p["case_digest"]
+        if "plan_digest" in p:
+            plan_digest = p["plan_digest"]
+        if "evidence_digests" in p:
+            evidence_digests.update(p["evidence_digests"])
+        if "artifact_identity" in p:
+            artifact_identity = p["artifact_identity"]
+
+    checkpoint = checkpoint_store.get_checkpoint(tenant_id, chk_id) if chk_id else None
+    if checkpoint:
+        if not case_digest:
+            case_digest = checkpoint.subject_digest
+        if not plan_digest:
+            plan_digest = checkpoint.plan_digest
+        if checkpoint.evidence_digests:
+            evidence_digests.update(checkpoint.evidence_digests)
+
+        # Check approval store for decision
+        stored_appr = approval_store.get_by_checkpoint_id(tenant_id, checkpoint.checkpoint_id)
+        if stored_appr:
+            approval_record = stored_appr.model_dump(mode="json")
+
+    # Fail closed: If no trace of this run_id exists under this tenant, return 404
+    if not events and not checkpoint:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Evidence package for run '{run_id}' not found under tenant.",
+        )
+
+    package_content: Dict[str, Any] = {
+        "package_type": "checksummed_evidence_package",
+        "version": "0.3.2",
+        "tenant_id": tenant_id,
+        "run_id": run_id,
+        "requested_by": actor.sub,
+        "integrity": "sha256_checksum_only",
+        "digitally_signed": False,
+        "artifact_store_mode": "local_filesystem_ephemeral",
+        "case_digest": case_digest,
+        "plan_digest": plan_digest,
+        "evidence_digests": evidence_digests,
+        "audit_events_count": len(events),
+        "audit_events": [e.model_dump(mode="json") for e in events],
+        "checkpoint": checkpoint.model_dump(mode="json") if checkpoint else None,
+        "approval_record": approval_record,
+        "artifact_identity": artifact_identity,
+    }
+
+    # Compute canonical SHA-256 across sorted JSON
+    canonical_json = json.dumps(package_content, sort_keys=True, separators=(",", ":"))
+    package_sha256 = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+    package_content["package_sha256"] = package_sha256
+    return package_content

@@ -1,6 +1,6 @@
 [project]
 name = "fleet-adapter-gcp"
-version = "0.3.0"
+version = "0.3.2"
 description = "GCP and in-memory persistence adapters for Fortified Enterprise Fleet"
 requires-python = ">=3.11"
 dependencies = [

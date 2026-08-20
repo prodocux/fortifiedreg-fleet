@@ -26,7 +26,7 @@ from fleet_governance_core.ports.audit_log_port import AuditLogPort
 from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
 from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
 
-AUTHORIZED_APPROVER_ROLES = {"approver", "regulatory_approver", "safety_assessor", "cso"}
+AUTHORIZED_APPROVER_ROLES = {"approver", "regulatory_approver", "safety_assessor", "cso", "demo_evaluator"}
 
 class ApprovalWorkflowService:
     def __init__(

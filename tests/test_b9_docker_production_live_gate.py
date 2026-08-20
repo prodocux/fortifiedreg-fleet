@@ -87,6 +87,13 @@ def docker_live_environment():
     2. Creates an isolated Docker bridge network.
     3. Starts the containerized ProDocuX HTTP Server.
     """
+    try:
+        check = subprocess.run(["docker", "info"], capture_output=True, text=True)
+        if check.returncode != 0:
+            pytest.skip("Docker daemon is not running locally")
+    except Exception:
+        pytest.skip("Docker CLI not available")
+
     head_commit = get_current_git_commit()
     image_tag = f"fortifiedreg-fleet:live-test-{head_commit[:8]}"
     network_name = f"fleet-live-net-{uuid4().hex[:6]}"

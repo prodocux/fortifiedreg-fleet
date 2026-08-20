@@ -50,6 +50,12 @@ class InMemoryAuditLog(AuditLogPort):
     def list_events_for_run(self, tenant_id: str, run_id: str) -> List[AuditEvent]:
         return [e for e in self.events if e.tenant_id == tenant_id and e.run_id == run_id]
 
+    def list_all_events(self, tenant_id: str, limit: int = 50) -> List[AuditEvent]:
+        return [e for e in self.events if e.tenant_id == tenant_id][:limit]
+
+    def list_events_for_actor(self, tenant_id: str, actor_id: str, limit: int = 50) -> List[AuditEvent]:
+        return [e for e in self.events if e.tenant_id == tenant_id and e.actor_id == actor_id][:limit]
+
 class InMemoryCheckpointStore(CheckpointStorePort):
     def __init__(self):
         self.checkpoints: Dict[str, Dict[str, PDXWorkflowCheckpoint]] = {}  # tenant_id -> {id: chk}

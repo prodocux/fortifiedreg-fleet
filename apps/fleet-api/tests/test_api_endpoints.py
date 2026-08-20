@@ -70,7 +70,7 @@ def test_health_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "healthy"
-    assert data["version"] == "0.3.0"
+    assert data["version"] == "0.3.2"
     assert data["runtime_mode"] == "local_memory_emulation"
     assert "adapters" in data
     assert data["adapters"]["orchestrator"]["configured_mode"] in ("fake", "live")
@@ -81,7 +81,7 @@ def test_ready_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ready"
-    assert data["version"] == "0.3.0"
+    assert data["version"] == "0.3.2"
     assert "adapters" in data
     assert data["adapters"]["intake"]["status"] == "ready"
     assert data["adapters"]["orchestrator"]["status"] == "ready"
@@ -103,11 +103,11 @@ def test_intake_error_handlers(client):
     c = TestClient(app)
     r_timeout = c.get("/v1/test-timeout")
     assert r_timeout.status_code == 504
-    assert "Gateway Timeout" in r_timeout.json()["detail"]
+    assert "timed out" in r_timeout.json()["detail"].lower()
 
     r_unavailable = c.get("/v1/test-unavailable")
     assert r_unavailable.status_code == 502
-    assert "Bad Gateway" in r_unavailable.json()["detail"]
+    assert "unavailable" in r_unavailable.json()["detail"].lower()
 
 
 
@@ -632,6 +632,42 @@ def test_five_formats_api_compile_and_run_lifecycle(client, auth_headers, fmt_ex
         assert recorded_len == len(golden_bytes)
     finally:
         app.dependency_overrides.pop(deps.get_orchestrator, None)
+
+
+def test_evidence_package_endpoint(client, auth_headers):
+    """Verify that GET /v1/evidence/runs/{run_id} returns checksummed evidence package with canonical SHA-256."""
+    from fleet_api.deps import audit_log
+    from fleet_governance_core.models.audit import AuditEvent, AuditEventTypeEnum
+
+    audit_log.append_audit_event(
+        AuditEvent(
+            tenant_id="tenant-acme-corp",
+            run_id="run-test-12345",
+            event_type=AuditEventTypeEnum.PLAN_COMPILED,
+            actor_id="usr-safety-officer-01",
+            payload={"plan_digest": "a" * 64, "case_digest": "b" * 64},
+        )
+    )
+
+    resp = client.get("/v1/evidence/runs/run-test-12345", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["package_type"] == "checksummed_evidence_package"
+    assert data["version"] == "0.3.2"
+    assert data["tenant_id"] == "tenant-acme-corp"
+    assert data["run_id"] == "run-test-12345"
+    assert data["integrity"] == "sha256_checksum_only"
+    assert data["digitally_signed"] is False
+    assert data["artifact_store_mode"] == "local_filesystem_ephemeral"
+    assert data["case_digest"] == "b" * 64
+    assert data["plan_digest"] == "a" * 64
+    assert "package_sha256" in data
+    assert len(data["package_sha256"]) == 64
+
+    # Fail closed on non-existent run
+    resp_404 = client.get("/v1/evidence/runs/unknown-run-999", headers=auth_headers)
+    assert resp_404.status_code == 404
+
 
 
 

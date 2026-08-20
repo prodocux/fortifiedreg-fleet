@@ -8,11 +8,20 @@ import base64
 import os
 from pathlib import Path
 import time
-from typing import Any, Dict, Optional
-from urllib.parse import urlparse
+import threading
+from typing import Any, Dict, Optional, Protocol
+from urllib.parse import quote, urlparse
 import requests
 from fleet_adapter_prodocux.sanitizer import sanitize_document_filename
 from fleet_governance_core.ports.intake_port import IntakePort
+
+try:
+    import google.auth
+    import google.auth.transport.requests
+    import google.oauth2.id_token
+    _GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    _GOOGLE_AUTH_AVAILABLE = False
 
 # Exact upstream format limits from ProDocuX (pin c8acd2b...)
 MAX_PDF_BYTES = 10 * 1024 * 1024           # 10 MiB (10,485,760 bytes)
@@ -53,6 +62,81 @@ class IntakeConnectionError(IntakeServiceUnavailableError):
 
 class IntakeConfigurationError(RuntimeError):
     """Configuration error: invalid or missing upstream URL."""
+
+class IntakeAuthenticationError(IntakeServiceUnavailableError):
+    """Upstream service authentication failure (401/403). Token is strictly redacted."""
+
+
+class UpstreamAuthProvider(Protocol):
+    """Interface for authenticating upstream service requests."""
+    def get_authorization_header(self, force_refresh: bool = False) -> Optional[str]:
+        ...
+
+
+class NoopAuthProvider:
+    """No-op auth provider for local testing and unauthenticated upstream servers."""
+    def get_authorization_header(self, force_refresh: bool = False) -> Optional[str]:
+        return None
+
+
+class GoogleCloudRunAuthProvider:
+    """
+    Acquires Google-signed ID tokens for private Cloud Run service-to-service calls.
+    Features: thread-safe caching, 5-minute pre-expiry buffer, token redaction in repr.
+    """
+    def __init__(self, audience: str, is_production: bool = True):
+        self._audience = audience
+        self._is_production = is_production
+        self._lock = threading.Lock()
+        self._cached_token: Optional[str] = None
+        self._cached_expiry: float = 0.0
+
+    def __repr__(self) -> str:
+        return f"<GoogleCloudRunAuthProvider audience='{self._audience}' has_cached_token={bool(self._cached_token)}>"
+
+    def get_authorization_header(self, force_refresh: bool = False) -> Optional[str]:
+        now = time.time()
+        with self._lock:
+            if not force_refresh and self._cached_token and (now < self._cached_expiry - 300):
+                return f"Bearer {self._cached_token}"
+
+            token = self._fetch_token()
+            if token:
+                self._cached_token = token
+                self._cached_expiry = now + 3600  # Google ID tokens valid 1 hour
+                return f"Bearer {self._cached_token}"
+
+            if self._is_production:
+                raise IntakeAuthenticationError(
+                    "Failed to obtain Google Cloud Run ID token for upstream service authentication."
+                )
+            return None
+
+    def _fetch_token(self) -> Optional[str]:
+        # 1. Try official google-auth library
+        if _GOOGLE_AUTH_AVAILABLE:
+            try:
+                auth_req = google.auth.transport.requests.Request()
+                token = google.oauth2.id_token.fetch_id_token(auth_req, self._audience)
+                if token:
+                    return str(token).strip()
+            except Exception:
+                pass
+
+        # 2. Try direct GCP metadata server call
+        try:
+            meta_url = (
+                f"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
+                f"?audience={quote(self._audience, safe='')}"
+            )
+            resp = requests.get(meta_url, headers={"Metadata-Flavor": "Google"}, timeout=3.0)
+            if resp.status_code == 200 and resp.text.strip():
+                return resp.text.strip()
+        except Exception:
+            pass
+
+        return None
+
 
 def validate_prodocux_url(
     url: str,
@@ -100,6 +184,7 @@ def validate_prodocux_url(
 
     return cleaned.rstrip("/")
 
+
 class ProDocuXHttpIntakeAdapter(IntakePort):
     """Production HTTP adapter communicating with upstream ProDocuX Kernel."""
 
@@ -107,6 +192,7 @@ class ProDocuXHttpIntakeAdapter(IntakePort):
         self,
         base_url: Optional[str] = None,
         http_client: Any = None,
+        auth_provider: Optional[UpstreamAuthProvider] = None,
         timeout_seconds: float = 15.0,
         max_attempts: int = 3,
         is_production: Optional[bool] = None,
@@ -128,6 +214,14 @@ class ProDocuXHttpIntakeAdapter(IntakePort):
         self._client = http_client or requests.Session()
         self._timeout = timeout_seconds
         self._max_attempts = max(1, max_attempts)
+        self._is_production = prod_mode
+
+        if auth_provider is not None:
+            self._auth_provider = auth_provider
+        elif prod_mode and self._base_url.startswith("https://"):
+            self._auth_provider = GoogleCloudRunAuthProvider(audience=self._base_url, is_production=True)
+        else:
+            self._auth_provider = NoopAuthProvider()
 
     @property
     def base_url(self) -> str:
@@ -157,25 +251,51 @@ class ProDocuXHttpIntakeAdapter(IntakePort):
         return safe_filename, ext
 
     def _execute_http(self, method: str, endpoint: str, json_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Execute HTTP request with retry on transient failures and fine-grained error mapping."""
+        """Execute HTTP request with retry on transient failures, ID token auth, and fine-grained error mapping."""
         url = f"{self._base_url}{endpoint}"
         last_error = None
+        tried_401_refresh = False
 
         for attempt in range(1, self._max_attempts + 1):
             try:
-                # Support both requests.Session and starlette.testclient.TestClient
+                headers = {}
+                auth_hdr = self._auth_provider.get_authorization_header(force_refresh=tried_401_refresh)
+                if auth_hdr:
+                    headers["Authorization"] = auth_hdr
+
+                # Support requests.Session, starlette.testclient.TestClient, and recording mocks
+                call_kwargs = {}
+                if headers:
+                    call_kwargs["headers"] = headers
+                if self._timeout is not None:
+                    call_kwargs["timeout"] = self._timeout
+
                 if hasattr(self._client, "request"):
-                    resp = self._client.request(method, url, json=json_payload, timeout=self._timeout)
+                    try:
+                        resp = self._client.request(method, url, json=json_payload, **call_kwargs)
+                    except TypeError:
+                        resp = self._client.request(method, url, json=json_payload)
                 elif method.upper() == "GET":
-                    resp = self._client.get(url, timeout=self._timeout)
+                    try:
+                        resp = self._client.get(url, **call_kwargs)
+                    except TypeError:
+                        resp = self._client.get(url)
                 elif method.upper() == "POST":
-                    resp = self._client.post(url, json=json_payload, timeout=self._timeout)
+                    try:
+                        resp = self._client.post(url, json=json_payload, **call_kwargs)
+                    except TypeError:
+                        resp = self._client.post(url, json=json_payload)
                 else:
                     raise IntakePayloadError(f"Unsupported HTTP method '{method}'")
 
                 # Successful response
                 if resp.status_code == 200:
                     return resp.json()
+
+                # Upstream 401 Unauthorized -> try force refresh token ONCE
+                if resp.status_code == 401 and not tried_401_refresh:
+                    tried_401_refresh = True
+                    continue
 
                 # Client-side 4xx errors: fail immediately without retry
                 if 400 <= resp.status_code < 500:

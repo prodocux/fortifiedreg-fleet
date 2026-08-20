@@ -23,7 +23,7 @@ import requests
 def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str) -> bool:
     base_url = base_url.rstrip("/")
     print("=" * 70)
-    print("   FortifiedReg Fleet v0.3.1 - Remote Cloud Run Verification CLI")
+    print("   FortifiedReg Fleet v0.3.2 - Remote Cloud Run Verification CLI")
     print("=" * 70)
     print(f"[*] Target Endpoint : {base_url}")
     print(f"[*] Mode            : {'Full Demo Lifecycle' if run_lifecycle else 'Read-Only Truth Discovery'}")
@@ -68,7 +68,7 @@ def run_remote_verification(base_url: str, run_lifecycle: bool, output_path: str
         r = requests.get(f"{base_url}/v1/version", timeout=10)
         assert r.status_code == 200
         ver_data = r.json()
-        assert ver_data["fleet_version"] == "0.3.1"
+        assert ver_data["fleet_version"] == "0.3.2"
         results["tests"]["version_truth"] = {"status": "PASS", "data": ver_data}
         results["build_provenance"] = {
             "fleet_commit": ver_data.get("fleet_commit"),

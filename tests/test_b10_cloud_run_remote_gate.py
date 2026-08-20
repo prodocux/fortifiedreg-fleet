@@ -127,6 +127,13 @@ def remote_fleet_url(tmp_path_factory) -> Generator[str, None, None]:
         return
 
     # Fallback to local Docker container emulator
+    try:
+        check = subprocess.run(["docker", "info"], capture_output=True, text=True)
+        if check.returncode != 0:
+            pytest.skip("FLEET_REMOTE_URL not set and Docker daemon is not running locally")
+    except Exception:
+        pytest.skip("FLEET_REMOTE_URL not set and Docker CLI not available")
+
     data_dir = tmp_path_factory.mktemp("cloudrun_data")
     artifacts_dir = tmp_path_factory.mktemp("cloudrun_artifacts")
     port = find_free_port()
@@ -181,7 +188,7 @@ def test_b10_cloud_run_health_and_liveness(remote_fleet_url: str):
     data = resp.json()
     assert data["status"] == "healthy"
     assert data["service"] == "fortified-enterprise-fleet-api"
-    assert data["version"] == "0.3.1"
+    assert data["version"] == "0.3.2"
 
 
 def test_b10_cloud_run_truth_endpoints(remote_fleet_url: str):
@@ -189,7 +196,7 @@ def test_b10_cloud_run_truth_endpoints(remote_fleet_url: str):
     resp_v = requests.get(f"{remote_fleet_url}/v1/version")
     assert resp_v.status_code == 200
     ver = resp_v.json()
-    assert ver["fleet_version"] == "0.3.1"
+    assert ver["fleet_version"] == "0.3.2"
     assert "pdx_core_pin" in ver
     assert "prodocux_pin" in ver
     assert ver["store_modes"]["artifact"] == "local_filesystem_ephemeral"

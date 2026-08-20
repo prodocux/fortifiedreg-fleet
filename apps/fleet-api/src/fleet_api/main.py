@@ -1,14 +1,16 @@
 """
-Fortified Enterprise Fleet API Application (v0.3.1).
+Fortified Enterprise Fleet API Application (v0.3.2).
 FastAPI service exposing regulatory compliance orchestration, HITL approvals,
 differentiated error handling, truth endpoints, and separated liveness/readiness probes.
 """
 import os
 import uuid
+from pathlib import Path
 from typing import Any, Dict
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from fleet_adapter_prodocux import (
@@ -25,12 +27,13 @@ from fleet_api.deps import (
     intake_adapter,
     orchestrator,
 )
-from fleet_api.portal import PORTAL_HTML
 from fleet_api.routers import approvals, audit, auth, dossiers, security, system
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="Fortified Enterprise Fleet API",
-    version="0.3.1",
+    version="0.3.2",
     description="Autonomous Multi-Agent Regulatory Fleet with Human-in-the-Loop Verification & Immutable Audit Trail",
 )
 
@@ -48,10 +51,14 @@ app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount pure static directory for CSS, JS ES modules, and Golden Samples
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Register All Sub-Routers
 app.include_router(auth.router)
@@ -62,10 +69,28 @@ app.include_router(approvals.router)
 app.include_router(audit.router)
 
 
-@app.get("/", response_class=HTMLResponse, tags=["Portal"])
-def index() -> HTMLResponse:
-    """Enterprise Web Portal & Verification Center."""
-    return HTMLResponse(content=PORTAL_HTML, status_code=200)
+@app.get("/", response_class=FileResponse, tags=["Portal"])
+def index() -> FileResponse:
+    """Enterprise Web Portal & Verification Center (v0.3.2)."""
+    portal_file = STATIC_DIR / "portal.html"
+    if not portal_file.exists():
+        return HTMLResponse(content="<!DOCTYPE html><html><body>Fleet Portal v0.3.2</body></html>", status_code=200)
+
+    return FileResponse(
+        portal_file,
+        status_code=200,
+        headers={
+            "Content-Security-Policy": (
+                "default-src 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' https://fonts.googleapis.com; "
+                "font-src https://fonts.gstatic.com; "
+                "connect-src 'self'; "
+                "object-src 'none'; "
+                "base-uri 'self';"
+            )
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +172,7 @@ async def intake_payload_error_handler(request: Request, exc: IntakePayloadError
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     req_id = getattr(request.state, "request_id", "unknown")
-    msg = f"Server processing error: {str(exc)}"
+    msg = "Internal server processing error. Check server logs."
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -169,7 +194,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "healthy",
         "service": "fortified-enterprise-fleet-api",
-        "version": "0.3.1",
+        "version": "0.3.2",
         "environment": FLEET_ENV,
         "runtime_mode": "local_memory_emulation",
         "adapters": {
@@ -235,7 +260,7 @@ def ready() -> JSONResponse:
 
     resp_payload = {
         "status": "ready" if is_ready else "degraded",
-        "version": "0.3.1",
+        "version": "0.3.2",
         "adapters": adapter_statuses,
     }
 

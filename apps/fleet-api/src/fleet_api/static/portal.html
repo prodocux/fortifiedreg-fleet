@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FortifiedReg Fleet v0.3.2 — Autonomous Compliance Fleet</title>
+    <meta name="description" content="EU Cosmetics Regulation (EC) No 1223/2009 — Autonomous Compliance Fleet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/portal.css?v=0.3.2">
+    <script type="module" src="/static/portal.js?v=0.3.2" defer></script>
+</head>
+<body>
+
+<header>
+    <div class="hdr">
+        <div class="brand">
+            <div class="brand-icon">F</div>
+            <div>
+                <div class="brand-title">FortifiedReg Fleet</div>
+                <div class="brand-sub">EU Cosmetics Regulation (EC) No 1223/2009 — Autonomous Compliance Fleet</div>
+            </div>
+            <div class="brand-badge"><span class="pulse-dot"></span>Cloud Run v0.3.2</div>
+        </div>
+        <div class="nav-area">
+            <nav class="nav-links">
+                <a href="/v1/health" target="_blank">/v1/health</a>
+                <a href="/v1/ready" target="_blank">/v1/ready</a>
+                <a href="/v1/version" target="_blank">/v1/version</a>
+                <a href="/docs" class="btn-docs" target="_blank">OpenAPI / Swagger</a>
+            </nav>
+            <div id="session-chip"></div>
+        </div>
+    </div>
+</header>
+
+<div class="view-nav-wrap">
+    <div class="view-nav">
+        <button class="tab-btn active" data-view="view-guided">1. Guided Judge Demo</button>
+        <button class="tab-btn" data-view="view-evidence">2. Evidence &amp; Verification Center</button>
+        <button class="tab-btn" data-view="view-playground">3. API Playground</button>
+    </div>
+</div>
+
+<main>
+
+<!-- ── Top Deployment Truth Bar ── -->
+<div class="truth-bar">
+    <div class="truth-item">
+        <span class="truth-label">Fleet Version</span>
+        <span class="truth-val" id="truth-version">0.3.2</span>
+    </div>
+    <div class="truth-item">
+        <span class="truth-label">Readiness</span>
+        <span class="truth-val" id="truth-ready">Checking...</span>
+    </div>
+    <div class="truth-item">
+        <span class="truth-label">Cloud Run Revision</span>
+        <span class="truth-val" id="truth-revision">—</span>
+    </div>
+    <div class="truth-item">
+        <span class="truth-label">Fleet Commit</span>
+        <span class="truth-val" id="truth-commit">—</span>
+    </div>
+    <div class="truth-item">
+        <span class="truth-label">PDX Pin</span>
+        <span class="truth-val" id="truth-pdx">—</span>
+    </div>
+    <div class="truth-item">
+        <span class="truth-label">ProDocuX Pin</span>
+        <span class="truth-val" id="truth-prodocux">—</span>
+    </div>
+</div>
+
+<div class="alert-banner" id="demo-blocked-banner"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VIEW 1: Guided Judge Demo
+══════════════════════════════════════════════════════════════════════════ -->
+<section id="view-guided" class="view-section active">
+
+    <!-- Step 1: Scenario -->
+    <div class="step-card">
+        <div class="step-header">
+            <div class="step-num">1</div>
+            <div>
+                <div class="step-title">Choose Regulatory Scenario</div>
+                <div class="step-desc">Select a formulation scenario to run through deterministic EU compliance verifiers</div>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <div class="select-card scenario-option selected" data-scenario="retinol">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <strong style="font-size:1.05rem;">Retinol Night Serum</strong>
+                    <span class="badge badge-pass">EXPECTED: PASS</span>
+                </div>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+                    Compliant formulation with Retinol (0.05%) and Phenoxyethanol (0.8%). Margin of Safety &gt; 100 for all substances.
+                </p>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">
+                    Policy: SCCS Notes of Guidance 12th Revision
+                </div>
+            </div>
+
+            <div class="select-card scenario-option" data-scenario="peptide">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <strong style="font-size:1.05rem;">Active Peptide Eye Cream</strong>
+                    <span class="badge badge-review">EXPECTED: REVIEW</span>
+                </div>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+                    Novel peptide ingredient lacking standard 90-day oral toxicity NOAEL study. Requires human safety assessor review.
+                </p>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">
+                    Policy: Fail-closed on missing toxicology studies
+                </div>
+            </div>
+
+            <div class="select-card scenario-option" data-scenario="mercury">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <strong style="font-size:1.05rem;">Mercury Bleaching Cream</strong>
+                    <span class="badge badge-fail">EXPECTED: FAIL</span>
+                </div>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+                    Contains Mercury (2.0%), strictly prohibited under EU Annex II entry #221. Direct regulatory violation.
+                </p>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">
+                    Policy: EU Regulation (EC) No 1223/2009 Annex II
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Golden Evidence Intake -->
+    <div class="step-card">
+        <div class="step-header">
+            <div class="step-num">2</div>
+            <div>
+                <div class="step-title">5-Format Golden Evidence Intake</div>
+                <div class="step-desc">Deterministic binary parsing across PDF, DOCX, CSV, XLSX, and PPTX supplier evidence</div>
+            </div>
+        </div>
+
+        <div class="grid-5" id="golden-intake-grid" style="margin-bottom:1.25rem;"></div>
+
+        <div>
+            <button class="btn btn-primary" id="btn-register-all">▶ Profile &amp; Register 5-Format Evidence</button>
+        </div>
+    </div>
+
+    <!-- Step 3: Governed Fleet Evaluation -->
+    <div class="step-card">
+        <div class="step-header">
+            <div class="step-num">3</div>
+            <div>
+                <div class="step-title">Governed Fleet Evaluation</div>
+                <div class="step-desc">Compile PDX execution plan, bind cryptographic digests, and evaluate SCCS toxicology</div>
+            </div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+            <button class="btn btn-primary" id="btn-run-eval" disabled>▶ Run Fleet Multi-Agent Evaluation</button>
+        </div>
+
+        <div id="eval-results-box" class="code-panel" style="display:none; margin-top:1rem;"></div>
+    </div>
+
+    <!-- Step 4: Human Decision Gate -->
+    <div class="step-card" id="gate-card" style="display:none;">
+        <div class="step-header">
+            <div class="step-num">4</div>
+            <div>
+                <div class="step-title">Human Regulatory Decision Gate</div>
+                <div class="step-desc">Cryptographically bound sign-off gate requiring 3-way digest verification</div>
+            </div>
+        </div>
+
+        <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:1rem; margin-bottom:1rem; font-size:0.85rem;">
+            <div style="display:grid; grid-template-columns:180px 1fr; gap:0.5rem; font-family:var(--font-mono);">
+                <span style="color:var(--text-muted);">Checkpoint ID:</span>
+                <span id="gate-checkpoint-id" style="font-weight:700;">—</span>
+                <span style="color:var(--text-muted);">Case Digest:</span>
+                <span id="gate-case-digest">—</span>
+                <span style="color:var(--text-muted);">Plan Digest:</span>
+                <span id="gate-plan-digest">—</span>
+            </div>
+            <div id="gate-blocked-reason" style="color:var(--accent-rose); font-weight:700; margin-top:0.75rem;"></div>
+        </div>
+
+        <div style="display:flex; gap:1rem;">
+            <button class="btn btn-success" id="btn-approve-gate" disabled>✓ Approve &amp; Certify Dossier</button>
+            <button class="btn btn-danger" id="btn-reject-gate" disabled>✕ Reject Dossier</button>
+        </div>
+    </div>
+
+    <!-- Step 5: Finalized Certified Artifact -->
+    <div class="step-card" id="final-evidence-card" style="display:none;">
+        <div class="step-header">
+            <div class="step-num">5</div>
+            <div>
+                <div class="step-title">Finalized Checksummed Artifact &amp; Evidence</div>
+                <div class="step-desc">Certified regulatory dossier with verified storage identity and downloadable checksummed evidence package</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:1.25rem; margin-bottom:1.25rem;">
+            <div style="font-size:1rem; font-weight:800; color:var(--accent-emerald); margin-bottom:0.75rem;">
+                ✓ Dossier Certified &amp; Checkpoint Committed
+            </div>
+            <div style="display:grid; grid-template-columns:180px 1fr; gap:0.5rem; font-size:0.85rem; font-family:var(--font-mono);">
+                <span style="color:var(--text-muted);">Storage URI:</span>
+                <span id="art-uri" style="font-weight:700; color:#93c5fd;">—</span>
+                <span style="color:var(--text-muted);">SHA-256 Fingerprint:</span>
+                <span id="art-sha">—</span>
+                <span style="color:var(--text-muted);">Artifact Size:</span>
+                <span id="art-size">—</span>
+                <span style="color:var(--text-muted);">Storage Mode:</span>
+                <span id="art-store-mode" style="color:var(--accent-amber);">local_filesystem_ephemeral</span>
+            </div>
+        </div>
+
+        <div>
+            <button class="btn btn-primary" id="btn-download-evidence">⬇ Download Checksummed Evidence Package (.json)</button>
+        </div>
+    </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VIEW 2: Evidence & Verification Center
+══════════════════════════════════════════════════════════════════════════ -->
+<section id="view-evidence" class="view-section">
+    <div class="step-card">
+        <div class="step-header">
+            <div class="step-title">Live Verification Claim Matrix</div>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+            Autonomous compliance guarantees validated against EU (EC) No 1223/2009 and SCCS 12th Revision.
+        </p>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Claim / Capability</th>
+                    <th>Runtime Mode</th>
+                    <th>Status</th>
+                    <th>Verification Evidence</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>5-Format Binary Intake</strong> (PDF, DOCX, CSV, XLSX, PPTX)</td>
+                    <td><span class="badge badge-blue">LIVE PRODOCUX</span></td>
+                    <td><span class="badge badge-pass">VERIFIED</span></td>
+                    <td>ProDocuX capabilities contract <code>prodocux_intake_capabilities_v1</code></td>
+                </tr>
+                <tr>
+                    <td><strong>SCCS 12th Notes Toxicology Engine</strong></td>
+                    <td><span class="badge badge-blue">DETERMINISTIC</span></td>
+                    <td><span class="badge badge-pass">VERIFIED</span></td>
+                    <td>Dynamic SED &amp; Margin of Safety (MoS) calculation formula</td>
+                </tr>
+                <tr>
+                    <td><strong>PDX Execution Plan &amp; Checkpoint Binding</strong></td>
+                    <td><span class="badge badge-blue">LIVE PDX CORE</span></td>
+                    <td><span class="badge badge-pass">VERIFIED</span></td>
+                    <td>3-way cryptographic hash binding (case, plan, evidence digests)</td>
+                </tr>
+                <tr>
+                    <td><strong>Digest Tampering Protection</strong></td>
+                    <td><span class="badge badge-blue">ACID FENCE</span></td>
+                    <td><span class="badge badge-pass">VERIFIED</span></td>
+                    <td>Precondition check rejects tampered digests with HTTP 412</td>
+                </tr>
+                <tr>
+                    <td><strong>Idempotent Replay Protection</strong></td>
+                    <td><span class="badge badge-blue">IDEMPOTENCY KEY</span></td>
+                    <td><span class="badge badge-pass">VERIFIED</span></td>
+                    <td>Identical approvals return cached record; conflicting return HTTP 409</td>
+                </tr>
+                <tr>
+                    <td><strong>Model Armor Security Scanner</strong></td>
+                    <td><span class="badge badge-review">LOCAL EMULATION</span></td>
+                    <td><span class="badge badge-pass">VERIFIED</span></td>
+                    <td>Regex policy blocks prompt injection and path traversal attempts</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VIEW 3: API Playground
+══════════════════════════════════════════════════════════════════════════ -->
+<section id="view-playground" class="view-section">
+    <div class="step-card">
+        <div class="step-header">
+            <div class="step-title">Interactive API Playground</div>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+            Test individual Fleet API endpoints directly with curl copy commands.
+        </p>
+
+        <div class="grid-2">
+            <div class="select-card" style="cursor:default;">
+                <div style="font-weight:700; margin-bottom:0.5rem;">1. Issue Scoped Demo Session</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">POST /v1/demo/session</div>
+                <div class="code-panel">curl -X POST "$BASE_URL/v1/demo/session" \
+  -H "Content-Type: application/json" \
+  -d '{"persona": "formulator"}'</div>
+            </div>
+
+            <div class="select-card" style="cursor:default;">
+                <div style="font-weight:700; margin-bottom:0.5rem;">2. Evaluate SCCS Formula</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">POST /v1/dossiers/evaluate-sccs</div>
+                <div class="code-panel">curl -X POST "$BASE_URL/v1/dossiers/evaluate-sccs" \
+  -H "Authorization: Bearer $DEMO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"case_id":"c1","product_name":"Test","formula":[{"inci_name":"Retinol","concentration_pct":0.05,"noael_mg_kg_day":2.0}]}'</div>
+            </div>
+
+            <div class="select-card" style="cursor:default;">
+                <div style="font-weight:700; margin-bottom:0.5rem;">3. Submit Approval Decision</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">POST /v1/approval/decide</div>
+                <div class="code-panel">curl -X POST "$BASE_URL/v1/approval/decide" \
+  -H "Authorization: Bearer $DEMO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"checkpoint_id":"chk-1","run_id":"run-1","approval_request_id":"...","idempotency_key":"k1","decision":"approve","case_digest":"...","plan_digest":"..."}'</div>
+            </div>
+
+            <div class="select-card" style="cursor:default;">
+                <div style="font-weight:700; margin-bottom:0.5rem;">4. Download Checksummed Evidence</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">GET /v1/evidence/runs/{run_id}</div>
+                <div class="code-panel">curl -X GET "$BASE_URL/v1/evidence/runs/$RUN_ID" \
+  -H "Authorization: Bearer $DEMO_TOKEN"</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    FortifiedReg Fleet v0.3.2 — Autonomous Compliance Fleet — EU Cosmetics Regulation (EC) No 1223/2009
+</footer>
+
+</body>
+</html>

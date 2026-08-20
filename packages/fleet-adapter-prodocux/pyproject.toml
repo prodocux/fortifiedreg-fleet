@@ -1,11 +1,12 @@
 [project]
 name = "fleet-adapter-prodocux"
-version = "0.3.0"
+version = "0.3.2"
 description = "ProDocuX Intake Adapter for Fortified Enterprise Fleet"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7.0",
     "requests>=2.31.0",
+    "google-auth>=2.0.0",
     "fleet-governance-core",
 ]
 

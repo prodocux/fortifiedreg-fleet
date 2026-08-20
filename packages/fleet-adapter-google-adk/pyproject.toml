@@ -1,6 +1,6 @@
 [project]
 name = "fleet-adapter-google-adk"
-version = "0.3.0"
+version = "0.3.2"
 description = "Google ADK and Model Armor Security Adapter for Fortified Enterprise Fleet"
 requires-python = ">=3.11"
 dependencies = [
