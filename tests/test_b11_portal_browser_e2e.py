@@ -188,7 +188,7 @@ def test_b11_guided_demo_full_lifecycle_hermetic():
     reason="Set RUN_PLAYWRIGHT_E2E=1 or provide BASE_URL to run live Playwright browser tests",
 )
 def test_b11_playwright_live_browser_journey():
-    """Execute live browser verification via Playwright."""
+    """Execute live browser verification via Playwright with complete 5-step Guided Demo UI interaction."""
     from playwright.sync_api import sync_playwright
 
     base_url = os.getenv("BASE_URL", "http://localhost:8000")
@@ -199,14 +199,15 @@ def test_b11_playwright_live_browser_journey():
 
         console_errors = []
         page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+        page.on("pageerror", lambda err: console_errors.append(str(err)))
 
         page.goto(base_url)
         page.wait_for_selector(".brand-title")
 
-        # Assert no JS errors on initial page load
+        # Assert no JS/CSP errors on initial page load
         assert len(console_errors) == 0, f"Browser console errors detected: {console_errors}"
 
-        # Check views
+        # 1. Check tab views
         page.click("button[data-view='view-evidence']")
         assert page.is_visible("#view-evidence.active")
 
@@ -215,5 +216,24 @@ def test_b11_playwright_live_browser_journey():
 
         page.click("button[data-view='view-guided']")
         assert page.is_visible("#view-guided.active")
+
+        # 2. Step 2: Register 5-format golden evidence
+        page.click("#btn-register-all")
+        page.wait_for_selector("#btn-run-eval:not([disabled])", timeout=15000)
+
+        # 3. Step 3: Run Governed Fleet Evaluation
+        page.click("#btn-run-eval")
+        page.wait_for_selector("#btn-approve-gate:not([disabled])", timeout=15000)
+
+        # 4. Step 4: Submit Human Approval Gate
+        page.click("#btn-approve-gate")
+        page.wait_for_selector("#final-evidence-card.visible", timeout=10000)
+
+        # 5. Step 5: Verify Certified Artifact Identity in DOM
+        art_sha = page.text_content("#art-sha")
+        assert art_sha and len(art_sha.strip()) == 64 and art_sha != "—"
+
+        # Assert zero console/CSP errors occurred during entire interactive lifecycle
+        assert len(console_errors) == 0, f"Browser console errors during full journey: {console_errors}"
 
         browser.close()

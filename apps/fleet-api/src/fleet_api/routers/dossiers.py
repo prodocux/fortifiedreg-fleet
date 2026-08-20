@@ -219,7 +219,7 @@ def evaluate_sccs_compliance(
     if case.tenant_id != tenant_id:
         raise HTTPException(
             status_code=403,
-            detail=f"Payload tenant_id '{case.tenant_id}' does not match authenticated token tenant '{tenant_id}'",
+            detail="Forbidden: Payload tenant does not match authenticated token tenant boundary.",
         )
 
     inci_res = evaluate_inci_compliance(case)
@@ -313,7 +313,7 @@ def create_dossier(
     if case.tenant_id != tenant_id:
         raise HTTPException(
             status_code=403,
-            detail=f"Payload tenant_id '{case.tenant_id}' does not match authenticated token tenant '{tenant_id}'",
+            detail="Forbidden: Payload tenant does not match authenticated token tenant boundary.",
         )
 
     case_id_str = str(case.case_id)

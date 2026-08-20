@@ -103,13 +103,25 @@ def submit_approval_decision(
             reason=body.reason,
         )
     except PreconditionFailedError as exc:
-        raise HTTPException(status_code=status.HTTP_412_PRECONDITION_FAILED, detail=f"Precondition Failed: {exc}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail="Precondition Failed: Cryptographic digest binding, checkpoint state, or approval request ID mismatch.",
+        ) from exc
     except IdempotencyConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Idempotency Conflict: {exc}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotency Conflict: Checkpoint has already been decided with a conflicting payload.",
+        ) from exc
     except CheckpointNotPendingError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Checkpoint Invalid: {exc}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Checkpoint Invalid: Checkpoint is not in a pending state.",
+        ) from exc
     except CheckpointNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Checkpoint Not Found: {exc}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Checkpoint Not Found: Specified checkpoint does not exist under tenant boundary.",
+        ) from exc
 
     # 4. Handle Rejection Path
     if body.decision == ApprovalDecisionEnum.REJECTED:

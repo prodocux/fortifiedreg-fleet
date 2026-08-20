@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir \
     passlib==1.7.4 \
     requests==2.34.2 \
     httpx==0.28.1 \
-    google-auth>=2.20.0 \
+    google-auth==2.38.0 \
     pypdf==5.1.0 \
     python-docx==1.1.2 \
     openpyxl==3.1.5 \

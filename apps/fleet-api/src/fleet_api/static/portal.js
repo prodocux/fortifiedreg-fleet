@@ -336,8 +336,8 @@ async function runEvidenceIntake() {
                 }
             });
 
-            // Fail closed: enforce genuine server-computed SHA-256 returned by API
-            if (regRes.ok && regRes.data && regRes.data.sha256) {
+            // Fail closed: enforce genuine server-computed SHA-256 returned by API matching expected sample digest
+            if (regRes.ok && regRes.data && regRes.data.sha256 && regRes.data.sha256 === sample.sha256) {
                 STATE.registeredDocs[fmt] = {
                     doc_id: docId,
                     sha256: regRes.data.sha256,
@@ -356,7 +356,8 @@ async function runEvidenceIntake() {
                 }
             } else {
                 allSucceeded = false;
-                if (st) { st.className = 'badge badge-fail'; st.textContent = 'REG FAIL'; }
+                const errLabel = (regRes.ok && regRes.data && regRes.data.sha256 !== sample.sha256) ? 'SHA MISMATCH' : 'REG FAIL';
+                if (st) { st.className = 'badge badge-fail'; st.textContent = errLabel; }
             }
         } else {
             allSucceeded = false;
