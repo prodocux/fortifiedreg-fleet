@@ -174,6 +174,9 @@ def test_b11_guided_demo_full_lifecycle_hermetic():
     assert ev_data["audit_events_count"] > 0
     assert ev_data["case_digest"] == case_digest
     assert ev_data["plan_digest"] == plan_digest
+    assert ev_data["artifact_identity"] is not None
+    assert ev_data["artifact_identity"]["sha256"] is not None
+    assert ev_data["artifact_identity"]["uri"] is not None
 
     # Step 7: Retrieve Non-existent Run (Fail-closed 404)
     ev_404_res = client.get("/v1/evidence/runs/non-existent-run-id", headers=headers)

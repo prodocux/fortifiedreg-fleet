@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --bg-primary: #0a0e17;
     --bg-surface: #111827;
     --bg-card: #1f2937;
@@ -303,3 +303,42 @@ footer {
     font-size: 0.8rem;
     margin-top: auto;
 }
+
+/* ── UTILITY & LAYOUT CLASSES (CSP COMPLIANT — ZERO INLINE STYLES) ── */
+.hidden { display: none !important; }
+.visible { display: block !important; }
+.d-flex { display: flex; }
+.d-grid { display: grid; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.gap-05 { gap: 0.5rem; }
+.gap-1 { gap: 1rem; }
+.mb-025 { margin-bottom: 0.25rem; }
+.mb-05 { margin-bottom: 0.5rem; }
+.mb-075 { margin-bottom: 0.75rem; }
+.mb-1 { margin-bottom: 1rem; }
+.mb-125 { margin-bottom: 1.25rem; }
+.mb-15 { margin-bottom: 1.5rem; }
+.mt-075 { margin-top: 0.75rem; }
+.mt-1 { margin-top: 1rem; }
+.font-mono { font-family: var(--font-mono); }
+.font-sans { font-family: var(--font-sans); }
+.text-lg { font-size: 1.05rem; }
+.text-base { font-size: 0.9rem; }
+.text-sm { font-size: 0.82rem; }
+.text-xs { font-size: 0.75rem; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-rose { color: var(--accent-rose); }
+.text-emerald { color: var(--accent-emerald); }
+.text-amber { color: var(--accent-amber); }
+.text-blue { color: #93c5fd; }
+.font-bold { font-weight: 700; }
+.font-extrabold { font-weight: 800; }
+.min-h-12 { min-height: 1.2rem; }
+.cursor-default { cursor: default; }
+.card-inner { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem; font-size: 0.85rem; }
+.card-success { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 1.25rem; }
+.gate-meta-grid { display: grid; grid-template-columns: 180px 1fr; gap: 0.5rem; font-size: 0.85rem; font-family: var(--font-mono); }
+#session-chip.visible { display: inline-flex; }
+.ready-pass { color: var(--accent-emerald) !important; }
+.ready-fail { color: var(--accent-rose) !important; }

@@ -83,9 +83,9 @@ def get_verification_manifest() -> Dict[str, Any]:
         except Exception:
             manifest_data = {"error": "Failed to parse compatibility manifest JSON"}
 
-    b10_status = os.getenv("B10_GATE_STATUS")
-    if not b10_status:
-        b10_status = "PASS_REMOTE" if os.getenv("FLEET_REMOTE_VERIFIED") else "PASS_LOCAL"
+    remote_flag = os.getenv("FLEET_REMOTE_VERIFIED", "").strip().lower()
+    is_remote_verified = remote_flag in ("1", "true", "yes") and bool(os.getenv("K_REVISION"))
+    b10_status = os.getenv("B10_GATE_STATUS", "PASS_REMOTE" if is_remote_verified else "PENDING_REMOTE")
 
     return {
         "manifest_sha256": _get_manifest_digest(),
@@ -157,6 +157,12 @@ def get_evidence_package(
         stored_appr = approval_store.get_by_checkpoint_id(tenant_id, checkpoint.checkpoint_id)
         if stored_appr:
             approval_record = stored_appr.model_dump(mode="json")
+
+        # Recover artifact_identity from resume_context_store if not found in audit events
+        if not artifact_identity and resume_context_store is not None:
+            ctx = resume_context_store.get_context(tenant_id, checkpoint.checkpoint_id)
+            if ctx and ctx.result_identity:
+                artifact_identity = ctx.result_identity.model_dump(mode="json")
 
     # Fail closed: If no trace of this run_id exists under this tenant, return 404
     if not events and not checkpoint:

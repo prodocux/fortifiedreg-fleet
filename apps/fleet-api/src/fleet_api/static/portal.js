@@ -1,6 +1,7 @@
 /**
  * FortifiedReg Fleet v0.3.2 — Portal JavaScript Client (ES Module)
  * Strictly fail-closed: zero synthetic fallbacks, zero client-side mock tokens/digests.
+ * 100% CSP compliant: zero inline style mutations, zero style attributes.
  */
 
 // ── Global State ──
@@ -129,15 +130,21 @@ async function checkDeploymentTruth() {
 
         const readyRes = await fetchApi('/v1/ready');
         const alertBanner = document.getElementById('demo-blocked-banner');
+        const elReady = document.getElementById('truth-ready');
+
         if (readyRes.ok && readyRes.data && readyRes.data.status === 'ready') {
             setText('truth-ready', 'READY (200)');
-            const el = document.getElementById('truth-ready');
-            if (el) el.style.color = 'var(--accent-emerald)';
+            if (elReady) {
+                elReady.classList.remove('ready-fail');
+                elReady.classList.add('ready-pass');
+            }
             if (alertBanner) alertBanner.classList.remove('visible');
         } else {
             setText('truth-ready', 'DEGRADED (' + readyRes.status + ')');
-            const el = document.getElementById('truth-ready');
-            if (el) el.style.color = 'var(--accent-rose)';
+            if (elReady) {
+                elReady.classList.remove('ready-pass');
+                elReady.classList.add('ready-fail');
+            }
             if (alertBanner) {
                 alertBanner.textContent = 'DEMO BLOCKED: Upstream dependencies are unavailable (HTTP ' + readyRes.status + ').';
                 alertBanner.classList.add('visible');
@@ -172,15 +179,15 @@ function renderSampleCards() {
         card.className = 'select-card';
         card.id = 'intake-card-' + fmt;
         card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <div class="flex-between mb-05">
                 <span class="badge badge-blue">${fmt.toUpperCase()}</span>
                 <span id="status-${fmt}" class="badge badge-review">PENDING</span>
             </div>
-            <div style="font-weight:700; font-size:0.9rem; margin-bottom:0.25rem;">${escapeHtml(sample.fn || fmt)}</div>
-            <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.5rem;">
+            <div class="font-bold text-base mb-025">${escapeHtml(sample.fn || fmt)}</div>
+            <div class="text-xs text-muted font-mono mb-05">
                 SHA: ${sample.sha256 ? sample.sha256.substring(0, 12) + '...' : '—'}
             </div>
-            <div id="profile-${fmt}" style="font-size:0.75rem; color:var(--text-secondary); min-height:1.2rem;">
+            <div id="profile-${fmt}" class="text-xs text-secondary min-h-12">
                 ${escapeHtml(sample.type || 'Document')}
             </div>
         `;
@@ -204,7 +211,7 @@ async function acquireDemoSession(persona = 'formulator') {
             };
             const chip = document.getElementById('session-chip');
             if (chip) {
-                chip.style.display = 'inline-flex';
+                chip.classList.add('visible');
                 chip.textContent = '🔬 ' + (res.data.persona_label || persona) + ' · ' + res.data.sub;
             }
         }
@@ -240,13 +247,22 @@ function resetSubsequentSteps() {
     if (evalBtn) evalBtn.disabled = true;
 
     const evalOut = document.getElementById('eval-results-box');
-    if (evalOut) evalOut.style.display = 'none';
+    if (evalOut) {
+        evalOut.classList.add('hidden');
+        evalOut.classList.remove('visible');
+    }
 
     const gateCard = document.getElementById('gate-card');
-    if (gateCard) gateCard.style.display = 'none';
+    if (gateCard) {
+        gateCard.classList.add('hidden');
+        gateCard.classList.remove('visible');
+    }
 
     const finalCard = document.getElementById('final-evidence-card');
-    if (finalCard) finalCard.style.display = 'none';
+    if (finalCard) {
+        finalCard.classList.add('hidden');
+        finalCard.classList.remove('visible');
+    }
 
     if (SAMPLES) {
         for (const fmt of Object.keys(SAMPLES)) {
@@ -284,7 +300,7 @@ function setupActionButtons() {
     }
 }
 
-// ── Step 2: 5-Format Evidence Intake ──
+// ── Step 2: 5-Format Evidence Intake (Strict Fail-Closed, 0 Fallbacks) ──
 async function runEvidenceIntake() {
     if (!SAMPLES) return;
     const btn = document.getElementById('btn-register-all');
@@ -320,10 +336,11 @@ async function runEvidenceIntake() {
                 }
             });
 
-            if (regRes.ok && regRes.data) {
+            // Fail closed: enforce genuine server-computed SHA-256 returned by API
+            if (regRes.ok && regRes.data && regRes.data.sha256) {
                 STATE.registeredDocs[fmt] = {
                     doc_id: docId,
-                    sha256: regRes.data.sha256 || sample.sha256,
+                    sha256: regRes.data.sha256,
                     filename: sample.fn || (fmt + '_sample.' + fmt),
                     fmt: fmt
                 };
@@ -365,7 +382,11 @@ async function runFleetEvaluation() {
     if (evalBtn) evalBtn.disabled = true;
 
     const evalBox = document.getElementById('eval-results-box');
-    if (evalBox) { evalBox.style.display = 'block'; evalBox.innerHTML = '<div style="color:var(--text-muted);">Executing multi-agent review pipeline...</div>'; }
+    if (evalBox) {
+        evalBox.classList.remove('hidden');
+        evalBox.classList.add('visible');
+        evalBox.innerHTML = '<div class="text-muted">Executing multi-agent review pipeline...</div>';
+    }
 
     // 1. Create Dossier Case strictly conforming to canonical DossierCase schema
     const caseUuid = crypto.randomUUID();
@@ -436,7 +457,8 @@ async function runFleetEvaluation() {
     const execStatus = runRes.data.execution ? runRes.data.execution.status : null;
     const gateCard = document.getElementById('gate-card');
     if (gateCard) {
-        gateCard.style.display = 'block';
+        gateCard.classList.remove('hidden');
+        gateCard.classList.add('visible');
         if (execStatus === 'awaiting_approval') {
             const chk = runRes.data.execution.checkpoint;
             const apprReqId = runRes.data.execution.approval_request_id;
@@ -487,16 +509,16 @@ function renderEvaluationResults(container, data) {
                 <td>${sub.concentration_pct}%</td>
                 <td>${sub.sed_mg_kg_bw_day ? sub.sed_mg_kg_bw_day.toFixed(6) : '—'}</td>
                 <td>${sub.noael_mg_kg_day || '—'}</td>
-                <td style="font-family:var(--font-mono); font-weight:700;">${mosVal}</td>
+                <td class="font-mono font-bold">${mosVal}</td>
                 <td>${verdictBadge}</td>
             </tr>
         `;
     }
 
     container.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-            <div style="font-size:1.1rem; font-weight:800;">Fleet Review Verdict: <span class="badge ${badgeClass}">${statusLabel}</span></div>
-            <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">Plan SHA: ${escapeHtml(data.plan_digest ? data.plan_digest.substring(0, 16) : '—')}...</div>
+        <div class="flex-between mb-1">
+            <div class="text-lg font-extrabold">Fleet Review Verdict: <span class="badge ${badgeClass}">${statusLabel}</span></div>
+            <div class="text-xs text-muted font-mono">Plan SHA: ${escapeHtml(data.plan_digest ? data.plan_digest.substring(0, 16) : '—')}...</div>
         </div>
         ${details.length > 0 ? `
             <table class="data-table">
@@ -530,10 +552,6 @@ async function submitHumanDecision(decision) {
     if (!STATE.checkpoint || !STATE.caseId || !STATE.approvalRequest) return;
 
     enableGateButtons(false);
-    const evidDigests = {};
-    for (const [fmt, d] of Object.entries(STATE.registeredDocs)) {
-        evidDigests[d.doc_id] = d.sha256;
-    }
 
     const payload = {
         checkpoint_id: STATE.checkpoint.checkpoint_id,
@@ -563,7 +581,8 @@ async function submitHumanDecision(decision) {
     // ── Step 5: Finalized Certified Artifact ──
     const finalCard = document.getElementById('final-evidence-card');
     if (finalCard) {
-        finalCard.style.display = 'block';
+        finalCard.classList.remove('hidden');
+        finalCard.classList.add('visible');
         const art = res.data.artifact_identity || res.data.artifact_storage_identity;
         if (!art || !art.sha256) {
             showServerFailure(finalCard, 'Server Evidence Incomplete: artifact identity missing', res);
@@ -602,11 +621,10 @@ function showServerFailure(container, title, res) {
     const msg = (res.data && (res.data.detail || res.data.message)) || res.rawText || 'Server evidence incomplete.';
 
     const errDiv = document.createElement('div');
-    errDiv.className = 'alert-banner visible';
-    errDiv.style.marginTop = '1rem';
+    errDiv.className = 'alert-banner visible mt-1';
     errDiv.innerHTML = `
         <strong>${escapeHtml(title)} [${escapeHtml(errCode)}]:</strong> ${escapeHtml(msg)}<br>
-        <span style="font-size:0.75rem; font-family:var(--font-mono);">HTTP ${res.status} · Request ID: ${escapeHtml(reqId)}</span>
+        <span class="text-xs font-mono">HTTP ${res.status} · Request ID: ${escapeHtml(reqId)}</span>
     `;
     container.appendChild(errDiv);
 }

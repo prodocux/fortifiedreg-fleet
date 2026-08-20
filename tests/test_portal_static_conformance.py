@@ -56,3 +56,16 @@ def test_version_bumped_to_v0_3_2():
     assert 'version="0.3.2"' in main_content
     assert "v0.3.2" in html_content
     assert "v0.3.2" in js_content
+
+
+def test_portal_zero_inline_styles_for_csp_compliance():
+    """Verify that portal HTML and JS contain zero inline styles for strict CSP compliance."""
+    html_content = PORTAL_HTML_PATH.read_text(encoding="utf-8")
+    js_content = PORTAL_JS_PATH.read_text(encoding="utf-8")
+
+    assert 'style="' not in html_content, "Found inline style attribute in portal.html!"
+    assert "style='" not in html_content, "Found inline style attribute in portal.html!"
+    assert 'style="' not in js_content, "Found inline style attribute in portal.js template literals!"
+    assert ".style.display" not in js_content, "Found direct .style.display mutation in portal.js!"
+    assert ".style.color" not in js_content, "Found direct .style.color mutation in portal.js!"
+    assert "|| sample.sha256" not in js_content, "Found fallback sha256 in portal.js!"

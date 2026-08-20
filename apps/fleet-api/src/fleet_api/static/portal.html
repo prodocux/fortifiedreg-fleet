@@ -92,40 +92,40 @@
 
         <div class="grid-3">
             <div class="select-card scenario-option selected" data-scenario="retinol">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                    <strong style="font-size:1.05rem;">Retinol Night Serum</strong>
+                <div class="flex-between mb-05">
+                    <strong class="text-lg">Retinol Night Serum</strong>
                     <span class="badge badge-pass">EXPECTED: PASS</span>
                 </div>
-                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+                <p class="text-sm text-secondary mb-075">
                     Compliant formulation with Retinol (0.05%) and Phenoxyethanol (0.8%). Margin of Safety &gt; 100 for all substances.
                 </p>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">
+                <div class="text-xs text-muted font-mono">
                     Policy: SCCS Notes of Guidance 12th Revision
                 </div>
             </div>
 
             <div class="select-card scenario-option" data-scenario="peptide">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                    <strong style="font-size:1.05rem;">Active Peptide Eye Cream</strong>
+                <div class="flex-between mb-05">
+                    <strong class="text-lg">Active Peptide Eye Cream</strong>
                     <span class="badge badge-review">EXPECTED: REVIEW</span>
                 </div>
-                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+                <p class="text-sm text-secondary mb-075">
                     Novel peptide ingredient lacking standard 90-day oral toxicity NOAEL study. Requires human safety assessor review.
                 </p>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">
+                <div class="text-xs text-muted font-mono">
                     Policy: Fail-closed on missing toxicology studies
                 </div>
             </div>
 
             <div class="select-card scenario-option" data-scenario="mercury">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                    <strong style="font-size:1.05rem;">Mercury Bleaching Cream</strong>
+                <div class="flex-between mb-05">
+                    <strong class="text-lg">Mercury Bleaching Cream</strong>
                     <span class="badge badge-fail">EXPECTED: FAIL</span>
                 </div>
-                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+                <p class="text-sm text-secondary mb-075">
                     Contains Mercury (2.0%), strictly prohibited under EU Annex II entry #221. Direct regulatory violation.
                 </p>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">
+                <div class="text-xs text-muted font-mono">
                     Policy: EU Regulation (EC) No 1223/2009 Annex II
                 </div>
             </div>
@@ -142,7 +142,7 @@
             </div>
         </div>
 
-        <div class="grid-5" id="golden-intake-grid" style="margin-bottom:1.25rem;"></div>
+        <div class="grid-5 mb-125" id="golden-intake-grid"></div>
 
         <div>
             <button class="btn btn-primary" id="btn-register-all">▶ Profile &amp; Register 5-Format Evidence</button>
@@ -159,15 +159,15 @@
             </div>
         </div>
 
-        <div style="margin-bottom:1rem;">
+        <div class="mb-1">
             <button class="btn btn-primary" id="btn-run-eval" disabled>▶ Run Fleet Multi-Agent Evaluation</button>
         </div>
 
-        <div id="eval-results-box" class="code-panel" style="display:none; margin-top:1rem;"></div>
+        <div id="eval-results-box" class="code-panel hidden mt-1"></div>
     </div>
 
     <!-- Step 4: Human Decision Gate -->
-    <div class="step-card" id="gate-card" style="display:none;">
+    <div class="step-card hidden" id="gate-card">
         <div class="step-header">
             <div class="step-num">4</div>
             <div>
@@ -176,26 +176,26 @@
             </div>
         </div>
 
-        <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:1rem; margin-bottom:1rem; font-size:0.85rem;">
-            <div style="display:grid; grid-template-columns:180px 1fr; gap:0.5rem; font-family:var(--font-mono);">
-                <span style="color:var(--text-muted);">Checkpoint ID:</span>
-                <span id="gate-checkpoint-id" style="font-weight:700;">—</span>
-                <span style="color:var(--text-muted);">Case Digest:</span>
+        <div class="card-inner mb-1">
+            <div class="gate-meta-grid">
+                <span class="text-muted">Checkpoint ID:</span>
+                <span id="gate-checkpoint-id" class="font-bold">—</span>
+                <span class="text-muted">Case Digest:</span>
                 <span id="gate-case-digest">—</span>
-                <span style="color:var(--text-muted);">Plan Digest:</span>
+                <span class="text-muted">Plan Digest:</span>
                 <span id="gate-plan-digest">—</span>
             </div>
-            <div id="gate-blocked-reason" style="color:var(--accent-rose); font-weight:700; margin-top:0.75rem;"></div>
+            <div id="gate-blocked-reason" class="text-rose font-bold mt-075"></div>
         </div>
 
-        <div style="display:flex; gap:1rem;">
+        <div class="d-flex gap-1">
             <button class="btn btn-success" id="btn-approve-gate" disabled>✓ Approve &amp; Certify Dossier</button>
             <button class="btn btn-danger" id="btn-reject-gate" disabled>✕ Reject Dossier</button>
         </div>
     </div>
 
     <!-- Step 5: Finalized Certified Artifact -->
-    <div class="step-card" id="final-evidence-card" style="display:none;">
+    <div class="step-card hidden" id="final-evidence-card">
         <div class="step-header">
             <div class="step-num">5</div>
             <div>
@@ -204,19 +204,19 @@
             </div>
         </div>
 
-        <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:1.25rem; margin-bottom:1.25rem;">
-            <div style="font-size:1rem; font-weight:800; color:var(--accent-emerald); margin-bottom:0.75rem;">
+        <div class="card-success mb-125">
+            <div class="text-lg font-extrabold text-emerald mb-075">
                 ✓ Dossier Certified &amp; Checkpoint Committed
             </div>
-            <div style="display:grid; grid-template-columns:180px 1fr; gap:0.5rem; font-size:0.85rem; font-family:var(--font-mono);">
-                <span style="color:var(--text-muted);">Storage URI:</span>
-                <span id="art-uri" style="font-weight:700; color:#93c5fd;">—</span>
-                <span style="color:var(--text-muted);">SHA-256 Fingerprint:</span>
+            <div class="gate-meta-grid">
+                <span class="text-muted">Storage URI:</span>
+                <span id="art-uri" class="font-bold text-blue">—</span>
+                <span class="text-muted">SHA-256 Fingerprint:</span>
                 <span id="art-sha">—</span>
-                <span style="color:var(--text-muted);">Artifact Size:</span>
+                <span class="text-muted">Artifact Size:</span>
                 <span id="art-size">—</span>
-                <span style="color:var(--text-muted);">Storage Mode:</span>
-                <span id="art-store-mode" style="color:var(--accent-amber);">local_filesystem_ephemeral</span>
+                <span class="text-muted">Storage Mode:</span>
+                <span id="art-store-mode" class="text-amber">local_filesystem_ephemeral</span>
             </div>
         </div>
 
@@ -235,7 +235,7 @@
         <div class="step-header">
             <div class="step-title">Live Verification Claim Matrix</div>
         </div>
-        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+        <p class="text-sm text-secondary mb-15">
             Autonomous compliance guarantees validated against EU (EC) No 1223/2009 and SCCS 12th Revision.
         </p>
 
@@ -298,40 +298,40 @@
         <div class="step-header">
             <div class="step-title">Interactive API Playground</div>
         </div>
-        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+        <p class="text-sm text-secondary mb-15">
             Test individual Fleet API endpoints directly with curl copy commands.
         </p>
 
         <div class="grid-2">
-            <div class="select-card" style="cursor:default;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">1. Issue Scoped Demo Session</div>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">POST /v1/demo/session</div>
+            <div class="select-card cursor-default">
+                <div class="font-bold mb-05">1. Issue Scoped Demo Session</div>
+                <div class="text-xs text-muted font-mono mb-075">POST /v1/demo/session</div>
                 <div class="code-panel">curl -X POST "$BASE_URL/v1/demo/session" \
   -H "Content-Type: application/json" \
   -d '{"persona": "formulator"}'</div>
             </div>
 
-            <div class="select-card" style="cursor:default;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">2. Evaluate SCCS Formula</div>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">POST /v1/dossiers/evaluate-sccs</div>
+            <div class="select-card cursor-default">
+                <div class="font-bold mb-05">2. Evaluate SCCS Formula</div>
+                <div class="text-xs text-muted font-mono mb-075">POST /v1/dossiers/evaluate-sccs</div>
                 <div class="code-panel">curl -X POST "$BASE_URL/v1/dossiers/evaluate-sccs" \
   -H "Authorization: Bearer $DEMO_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"case_id":"c1","product_name":"Test","formula":[{"inci_name":"Retinol","concentration_pct":0.05,"noael_mg_kg_day":2.0}]}'</div>
             </div>
 
-            <div class="select-card" style="cursor:default;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">3. Submit Approval Decision</div>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">POST /v1/approval/decide</div>
+            <div class="select-card cursor-default">
+                <div class="font-bold mb-05">3. Submit Approval Decision</div>
+                <div class="text-xs text-muted font-mono mb-075">POST /v1/approval/decide</div>
                 <div class="code-panel">curl -X POST "$BASE_URL/v1/approval/decide" \
   -H "Authorization: Bearer $DEMO_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"checkpoint_id":"chk-1","run_id":"run-1","approval_request_id":"...","idempotency_key":"k1","decision":"approve","case_digest":"...","plan_digest":"..."}'</div>
             </div>
 
-            <div class="select-card" style="cursor:default;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">4. Download Checksummed Evidence</div>
-                <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-bottom:0.75rem;">GET /v1/evidence/runs/{run_id}</div>
+            <div class="select-card cursor-default">
+                <div class="font-bold mb-05">4. Download Checksummed Evidence</div>
+                <div class="text-xs text-muted font-mono mb-075">GET /v1/evidence/runs/{run_id}</div>
                 <div class="code-panel">curl -X GET "$BASE_URL/v1/evidence/runs/$RUN_ID" \
   -H "Authorization: Bearer $DEMO_TOKEN"</div>
             </div>

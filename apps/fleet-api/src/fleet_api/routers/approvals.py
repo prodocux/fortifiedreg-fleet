@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from fleet_api.deps import (
     get_approval_workflow_service,
     get_approver_identity,
+    get_audit_log,
     get_checkpoint_store,
     get_orchestrator,
     get_resume_context_store,
@@ -26,7 +27,9 @@ from fleet_governance_core.models.approval import (
     CheckpointStatusEnum,
     FleetExecutionStatus,
 )
+from fleet_governance_core.models.audit import AuditEvent, AuditEventTypeEnum
 from fleet_governance_core.models.storage import ArtifactStorageIdentity
+from fleet_governance_core.ports.audit_log_port import AuditLogPort
 from fleet_governance_core.ports.checkpoint_store_port import CheckpointStorePort
 from fleet_governance_core.ports.orchestrator_port import ExecutionOrchestratorPort
 from fleet_governance_core.ports.resume_context_store_port import ResumeContextStorePort
@@ -52,6 +55,7 @@ def submit_approval_decision(
     orch: ExecutionOrchestratorPort = Depends(get_orchestrator),
     resume_store: ResumeContextStorePort = Depends(get_resume_context_store),
     checkpoint_store: CheckpointStorePort = Depends(get_checkpoint_store),
+    audit_log: AuditLogPort = Depends(get_audit_log),
     approval_service: ApprovalWorkflowService = Depends(get_approval_workflow_service),
 ) -> Dict[str, Any]:
     """Submit an authorized human decision for a persisted pending checkpoint."""
@@ -148,7 +152,7 @@ def submit_approval_decision(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Failed to acquire resume lease: {exc}",
+            detail="Failed to acquire resume lease: Checkpoint lease concurrency conflict.",
         ) from exc
 
     # 6. Execute resume and artifact emission
@@ -193,5 +197,5 @@ def submit_approval_decision(
                 pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Resume execution error (state is retryable): {exc}",
+            detail="Resume execution error: Transient processing error (state is retryable).",
         ) from exc

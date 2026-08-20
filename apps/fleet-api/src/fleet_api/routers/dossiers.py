@@ -198,10 +198,10 @@ def profile_document(
 
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to parse {ext.upper()} structure: {str(exc)}",
+            detail=f"Failed to parse {ext.upper()} structure: Malformed binary content.",
         )
 
     profile_digest = hashlib.sha256(json.dumps(profile_data, sort_keys=True).encode("utf-8")).hexdigest()
@@ -378,10 +378,10 @@ def compile_and_run_dossier(
 
     try:
         exec_result = orch.execute_plan(plan, case_payload=case_payload)
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Workflow execution halted: {str(exc)}",
+            detail="Workflow execution halted: Deterministic verification policy violation.",
         )
 
     if exec_result.get("status") == "awaiting_approval":
