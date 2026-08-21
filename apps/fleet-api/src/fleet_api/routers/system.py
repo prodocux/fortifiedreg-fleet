@@ -84,11 +84,9 @@ def get_verification_manifest() -> Dict[str, Any]:
             manifest_data = {"error": "Failed to parse compatibility manifest JSON"}
 
     # Truthful gate status reflection: Local unit/integration gates are PASS_LOCAL;
-    # Docker/Production/Remote gates are PENDING until explicitly verified with runtime markers.
+    # Docker/Production/Remote gates are PENDING until explicitly verified via external attestation.
     is_docker_verified = os.getenv("FLEET_DOCKER_VERIFIED", "").strip().lower() in ("1", "true", "yes")
     is_prod_docker_verified = os.getenv("FLEET_PROD_DOCKER_VERIFIED", "").strip().lower() in ("1", "true", "yes")
-    remote_flag = os.getenv("FLEET_REMOTE_VERIFIED", "").strip().lower()
-    is_remote_verified = remote_flag in ("1", "true", "yes") and bool(os.getenv("K_REVISION"))
 
     return {
         "manifest_sha256": _get_manifest_digest(),
@@ -103,7 +101,7 @@ def get_verification_manifest() -> Dict[str, Any]:
             "B7_lifecycle_conformance": "PASS_LOCAL",
             "B8_deployment_and_docker_gate": "PASS_LOCAL" if is_docker_verified else "PENDING_DOCKER",
             "B9_docker_production_live_gate": "PASS_LOCAL" if is_prod_docker_verified else "PENDING_DOCKER",
-            "B10_cloud_run_remote_gate": "PASS_REMOTE" if is_remote_verified else "PENDING_REMOTE",
+            "B10_cloud_run_remote_gate": "PENDING_REMOTE",
         },
     }
 
