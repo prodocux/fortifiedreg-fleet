@@ -160,12 +160,13 @@ if ([string]::IsNullOrWhiteSpace($Revision)) {
 $Revision = $Revision.Trim()
 
 $rawDigest = (gcloud run revisions describe $Revision --region=$Region --project=$ProjectId --format="value(status.imageDigest)")
-$ImageDigest = ($rawDigest | Out-String).Trim().Split("`r`n") | Where-Object { $_ -match '^sha256:[0-9a-fA-F]{64}$' } | Select-Object -First 1
-if ([string]::IsNullOrWhiteSpace($ImageDigest) -or $ImageDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
-    Write-Error "Failed to resolve valid OCI Image Digest (format sha256:<64 hex>) for revision '$Revision'. Got: '$rawDigest'"
+$rawDigestText = ($rawDigest | Out-String).Trim()
+if ($rawDigestText -match '(sha256:[0-9a-fA-F]{64})') {
+    $ImageDigest = $Matches[1].ToLower()
+} else {
+    Write-Error "Failed to resolve valid OCI Image Digest (format sha256:<64 hex>) for revision '$Revision'. Got: '$rawDigestText'"
     exit 1
 }
-$ImageDigest = $ImageDigest.Trim()
 
 Write-Host "`n====================================================================" -ForegroundColor Green
 Write-Host "   [✓] DEPLOYMENT SUCCESSFUL!" -ForegroundColor Green

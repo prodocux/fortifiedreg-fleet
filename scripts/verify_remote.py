@@ -156,11 +156,13 @@ def run_remote_verification(
         if expected_revision:
             assert revision.strip() == expected_revision.strip(), f"Revision mismatch: remote '{revision}' != expected '{expected_revision}'"
         if expected_image_digest:
-            assert re.match(r"^sha256:[0-9a-fA-F]{64}$", expected_image_digest), (
-                f"Expected image digest must be 'sha256:<64 hex>'. Got: '{expected_image_digest}'"
-            )
+            match = re.search(r"sha256:[0-9a-fA-F]{64}", expected_image_digest)
+            assert match, f"Expected image digest must contain 'sha256:<64 hex>'. Got: '{expected_image_digest}'"
+            expected_digest_clean = match.group(0).lower()
             if image_digest not in ("unavailable", "unknown"):
-                assert image_digest.strip().lower() == expected_image_digest.strip().lower(), (
+                img_match = re.search(r"sha256:[0-9a-fA-F]{64}", image_digest)
+                clean_img_digest = img_match.group(0).lower() if img_match else image_digest.strip().lower()
+                assert clean_img_digest == expected_digest_clean, (
                     f"Image digest mismatch: remote '{image_digest}' != expected '{expected_image_digest}'"
                 )
 
