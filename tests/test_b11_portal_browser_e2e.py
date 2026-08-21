@@ -183,15 +183,19 @@ def test_b11_guided_demo_full_lifecycle_hermetic():
     assert ev_404_res.status_code == 404
 
 
+RUN_PLAYWRIGHT_E2E = os.getenv("RUN_PLAYWRIGHT_E2E", "").strip() in ("1", "true", "yes")
+LIVE_BASE_URL = os.getenv("BASE_URL", "").strip()
+
+
 @pytest.mark.skipif(
-    not os.getenv("RUN_PLAYWRIGHT_E2E"),
+    not (RUN_PLAYWRIGHT_E2E and LIVE_BASE_URL),
     reason="Set RUN_PLAYWRIGHT_E2E=1 and BASE_URL=<url> to run live Playwright browser tests",
 )
 def test_b11_playwright_live_browser_journey():
     """Execute live browser verification via Playwright with complete 5-step Guided Demo UI interaction."""
     from playwright.sync_api import sync_playwright
 
-    base_url = os.getenv("BASE_URL", "http://localhost:8000")
+    base_url = LIVE_BASE_URL
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
