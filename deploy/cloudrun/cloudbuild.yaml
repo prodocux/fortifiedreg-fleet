@@ -4,7 +4,7 @@
 # ===========================================================================
 
 steps:
-  # 0. Sentinel Verification: Ensure mandatory 40-character Git Commit is provided
+  # 0. Sentinel Verification: Ensure mandatory 40-character Git Commit and non-placeholder ProDocuX URL
   - name: 'bash'
     script: |
       #!/usr/bin/env bash
@@ -13,7 +13,18 @@ steps:
         echo "[✓] Verified 40-character Git Commit: $_GIT_COMMIT"
       else
         echo "[!] Error: _GIT_COMMIT must be an exact 40-character git commit SHA. Got: '$_GIT_COMMIT'" >&2
-        echo "    Usage: gcloud builds submit --substitutions=_GIT_COMMIT=\$(git rev-parse HEAD)" >&2
+        echo "    Usage: gcloud builds submit --substitutions=_GIT_COMMIT=\$(git rev-parse HEAD),_SHORT_COMMIT=\$(git rev-parse --short=12 HEAD),_PRODOCUX_URL=https://..." >&2
+        exit 1
+      fi
+
+      EXPECTED_SHORT="${_GIT_COMMIT:0:12}"
+      if [[ "$_SHORT_COMMIT" != "$EXPECTED_SHORT" ]]; then
+        echo "[!] Error: _SHORT_COMMIT '$_SHORT_COMMIT' does not match 12-char prefix of _GIT_COMMIT '$EXPECTED_SHORT'" >&2
+        exit 1
+      fi
+
+      if [[ -z "$_PRODOCUX_URL" || "$_PRODOCUX_URL" =~ example\.com ]]; then
+        echo "[!] Error: _PRODOCUX_URL must be a live deployed endpoint, not empty or placeholder ('$_PRODOCUX_URL')." >&2
         exit 1
       fi
 
@@ -60,9 +71,9 @@ substitutions:
   _REGION: 'us-central1'
   _ARTIFACT_REPO: 'fortifiedreg'
   _SERVICE_NAME: 'fortifiedreg-fleet'
-  _PRODOCUX_URL: 'https://prodocux-live.example.com'
+  _PRODOCUX_URL: 'REQUIRED_LIVE_PRODOCUX_URL'
   _GIT_COMMIT: 'REQUIRED_40_CHAR_GIT_COMMIT'
-  _SHORT_COMMIT: 'latest'
+  _SHORT_COMMIT: 'REQUIRED_12_CHAR_SHORT_COMMIT'
   _IMAGE_TAG: 'v0.3.2'
 
 images:

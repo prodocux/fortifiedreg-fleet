@@ -10,7 +10,7 @@ param (
     [string]$Region = "us-central1",
     [string]$ServiceName = "fortifiedreg-fleet",
     [string]$ArtifactRepo = "fortifiedreg",
-    [string]$ProDocuXUrl = "https://prodocux-live.example.com",
+    [string]$ProDocuXUrl = "",
     [string]$FleetEnv = "production"
 )
 
@@ -37,6 +37,20 @@ if (-not $ProjectId -or $ProjectId -eq "(unset)") {
     exit 1
 }
 
+# Resolve ProDocuX URL dynamically if not provided or placeholder
+if ([string]::IsNullOrWhiteSpace($ProDocuXUrl) -or $ProDocuXUrl -like "*example.com*") {
+    Write-Host "[*] Resolving live ProDocuX URL from Cloud Run service 'prodocux-intake'..." -ForegroundColor Yellow
+    $ProDocuXUrl = (gcloud run services describe prodocux-intake --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)' 2>$null)
+    if ($ProDocuXUrl) {
+        $ProDocuXUrl = $ProDocuXUrl.Trim()
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($ProDocuXUrl) -or $ProDocuXUrl -notmatch '^https?://.+' -or $ProDocuXUrl -like "*example.com*") {
+    Write-Error "ProDocuX URL is missing, invalid, or pointing to a placeholder ('$ProDocuXUrl'). Please deploy prodocux-intake first (via deploy/prodocux-intake/deploy.ps1) or pass -ProDocuXUrl 'https://...'."
+    exit 1
+}
+
 $GitHead = (git -C $RootDir rev-parse HEAD).Trim()
 $ShortCommit = (git -C $RootDir rev-parse --short=12 HEAD).Trim()
 $ImageTag = "v0.3.2-${ShortCommit}"
@@ -49,6 +63,7 @@ Write-Host "[*] Cloud Run Service  : $ServiceName" -ForegroundColor Green
 Write-Host "[*] Runtime Identity   : $RuntimeSA" -ForegroundColor Green
 Write-Host "[*] Git HEAD Revision  : $GitHead" -ForegroundColor Green
 Write-Host "[*] Target Image URI   : $ImageUri" -ForegroundColor Green
+Write-Host "[*] ProDocuX Intake URL: $ProDocuXUrl" -ForegroundColor Green
 
 # 2. Enable Required APIs
 Write-Host "`n[Step 1/5] Enabling Google Cloud Services APIs..." -ForegroundColor Cyan
@@ -112,9 +127,26 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 6. Verify Deployed Revision and Runtime Truth
-$ServiceUrl = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)').Trim()
-$Revision = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.latestReadyRevisionName)').Trim()
-$ImageDigest = (gcloud run revisions describe $Revision --platform="managed" --region=$Region --project=$ProjectId --format='value(status.imageDigest)').Trim()
+$ServiceUrl = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)' 2>$null)
+if ([string]::IsNullOrWhiteSpace($ServiceUrl)) {
+    Write-Error "Failed to resolve live Service URL for '$ServiceName' from Google Cloud Run."
+    exit 1
+}
+$ServiceUrl = $ServiceUrl.Trim()
+
+$Revision = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.latestReadyRevisionName)' 2>$null)
+if ([string]::IsNullOrWhiteSpace($Revision)) {
+    Write-Error "Failed to resolve Latest Ready Revision for '$ServiceName' from Google Cloud Run."
+    exit 1
+}
+$Revision = $Revision.Trim()
+
+$ImageDigest = (gcloud run revisions describe $Revision --platform="managed" --region=$Region --project=$ProjectId --format='value(status.imageDigest)' 2>$null)
+if ([string]::IsNullOrWhiteSpace($ImageDigest) -or $ImageDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
+    Write-Error "Failed to resolve valid OCI Image Digest (format sha256:<64 hex>) for revision '$Revision'. Got: '$ImageDigest'"
+    exit 1
+}
+$ImageDigest = $ImageDigest.Trim()
 
 Write-Host "`n====================================================================" -ForegroundColor Green
 Write-Host "   [✓] DEPLOYMENT SUCCESSFUL!" -ForegroundColor Green
@@ -130,13 +162,10 @@ $verifyArgs = @(
     "--base-url", $ServiceUrl,
     "--expected-fleet-commit", $GitHead,
     "--expected-revision", $Revision,
+    "--expected-image-digest", $ImageDigest,
     "--run-demo-lifecycle",
     "--output", "$RootDir\evidence\remote_smoke_result.json"
 )
-
-if ($ImageDigest) {
-    $verifyArgs += @("--expected-image-digest", $ImageDigest)
-}
 
 & python $verifyArgs
 $verifyExitCode = $LASTEXITCODE

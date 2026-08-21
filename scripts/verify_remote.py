@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Any, Dict, Optional
 import uuid
@@ -146,14 +147,20 @@ def run_remote_verification(
         assert manifest_sha == expected_manifest_sha256, f"Manifest SHA mismatch: {manifest_sha} != {expected_manifest_sha256}"
 
         if expected_fleet_commit:
-            assert commit.startswith(expected_fleet_commit) or expected_fleet_commit.startswith(commit), (
+            assert re.match(r"^[0-9a-fA-F]{40}$", expected_fleet_commit), (
+                f"Expected fleet commit must be an exact 40-character hex string. Got: '{expected_fleet_commit}'"
+            )
+            assert commit.strip().lower() == expected_fleet_commit.strip().lower(), (
                 f"Fleet commit mismatch: remote '{commit}' != expected '{expected_fleet_commit}'"
             )
         if expected_revision:
-            assert revision == expected_revision, f"Revision mismatch: remote '{revision}' != expected '{expected_revision}'"
+            assert revision.strip() == expected_revision.strip(), f"Revision mismatch: remote '{revision}' != expected '{expected_revision}'"
         if expected_image_digest:
+            assert re.match(r"^sha256:[0-9a-fA-F]{64}$", expected_image_digest), (
+                f"Expected image digest must be 'sha256:<64 hex>'. Got: '{expected_image_digest}'"
+            )
             if image_digest not in ("unavailable", "unknown"):
-                assert image_digest == expected_image_digest, (
+                assert image_digest.strip().lower() == expected_image_digest.strip().lower(), (
                     f"Image digest mismatch: remote '{image_digest}' != expected '{expected_image_digest}'"
                 )
 

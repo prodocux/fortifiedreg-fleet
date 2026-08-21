@@ -1,7 +1,7 @@
 """
 Hermetic Unit and Integration Tests for verify_remote.py CLI (v0.3.2).
 Validates that verify_remote.py fails closed on readiness degraded, commit mismatch, package checksum tampering,
-and successfully attestations produce canonical SHA-256 evidence.
+image digest mismatch, and invalid input formats.
 """
 import json
 from pathlib import Path
@@ -122,6 +122,77 @@ def test_verify_remote_fails_on_commit_mismatch():
             base_url="https://mock-service.run.app",
             run_lifecycle=False,
             expected_fleet_commit="2222222222222222222222222222222222222222",
+        )
+        assert success is False
+
+
+def test_verify_remote_fails_on_invalid_commit_format():
+    """Verify that verify_remote fails if expected git commit is not a 40-character hex string."""
+    def mock_get(url, *args, **kwargs):
+        resp = requests.Response()
+        if "/v1/health" in url:
+            resp.status_code = 200
+            resp._content = json.dumps({"status": "healthy", "version": "0.3.2"}).encode()
+        elif "/v1/ready" in url:
+            resp.status_code = 200
+            resp._content = json.dumps({"status": "ready", "adapters": {"intake": {"status": "ready"}, "orchestrator": {"status": "ready"}}}).encode()
+        elif "/v1/version" in url:
+            resp.status_code = 200
+            resp._content = json.dumps({
+                "fleet_version": "0.3.2",
+                "fleet_commit": "1111111111111111111111111111111111111111",
+                "cloud_run_revision": "fortifiedreg-fleet-00001-abc",
+                "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
+                "prodocux_pin": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
+                "compatibility_manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+            }).encode()
+        else:
+            resp.status_code = 200
+            resp._content = b"{}"
+        return resp
+
+    with mock.patch("requests.get", side_effect=mock_get):
+        # Short commit prefix must fail
+        success = run_remote_verification(
+            base_url="https://mock-service.run.app",
+            run_lifecycle=False,
+            expected_fleet_commit="11111",
+        )
+        assert success is False
+
+
+def test_verify_remote_fails_on_image_digest_mismatch():
+    """Verify that verify_remote fails if expected image digest does not match remote version."""
+    def mock_get(url, *args, **kwargs):
+        resp = requests.Response()
+        if "/v1/health" in url:
+            resp.status_code = 200
+            resp._content = json.dumps({"status": "healthy", "version": "0.3.2"}).encode()
+        elif "/v1/ready" in url:
+            resp.status_code = 200
+            resp._content = json.dumps({"status": "ready", "adapters": {"intake": {"status": "ready"}, "orchestrator": {"status": "ready"}}}).encode()
+        elif "/v1/version" in url:
+            resp.status_code = 200
+            resp._content = json.dumps({
+                "fleet_version": "0.3.2",
+                "fleet_commit": "1111111111111111111111111111111111111111",
+                "cloud_run_revision": "fortifiedreg-fleet-00001-abc",
+                "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
+                "prodocux_pin": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
+                "compatibility_manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+            }).encode()
+        else:
+            resp.status_code = 200
+            resp._content = b"{}"
+        return resp
+
+    with mock.patch("requests.get", side_effect=mock_get):
+        success = run_remote_verification(
+            base_url="https://mock-service.run.app",
+            run_lifecycle=False,
+            expected_fleet_commit="1111111111111111111111111111111111111111",
+            expected_image_digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         )
         assert success is False
 
