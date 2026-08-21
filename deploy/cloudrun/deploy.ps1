@@ -24,6 +24,23 @@ Write-Host "====================================================================
 Write-Host "   FortifiedReg Fleet v0.3.2 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
 Write-Host "====================================================================" -ForegroundColor Cyan
 
+function Test-ProDocuXProductionUrl ([string]$url) {
+    if ([string]::IsNullOrWhiteSpace($url) -or $url -like "*example.com*") {
+        return $false
+    }
+    try {
+        $uri = [System.Uri]$url
+        if ($uri.Scheme -ne "https") { return $false }
+        if (-not [string]::IsNullOrEmpty($uri.UserInfo)) { return $false }
+        if (-not [string]::IsNullOrEmpty($uri.Query)) { return $false }
+        if (-not [string]::IsNullOrEmpty($uri.Fragment)) { return $false }
+        if ([string]::IsNullOrEmpty($uri.Host)) { return $false }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 # 1. Resolve Project and Roots
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
@@ -37,17 +54,17 @@ if (-not $ProjectId -or $ProjectId -eq "(unset)") {
     exit 1
 }
 
-# Resolve ProDocuX URL dynamically if not provided or placeholder
-if ([string]::IsNullOrWhiteSpace($ProDocuXUrl) -or $ProDocuXUrl -like "*example.com*") {
+# Resolve ProDocuX URL dynamically if not provided or invalid
+if ([string]::IsNullOrWhiteSpace($ProDocuXUrl) -or -not (Test-ProDocuXProductionUrl $ProDocuXUrl)) {
     Write-Host "[*] Resolving live ProDocuX URL from Cloud Run service 'prodocux-intake'..." -ForegroundColor Yellow
-    $ProDocuXUrl = (gcloud run services describe prodocux-intake --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)' 2>$null)
-    if ($ProDocuXUrl) {
-        $ProDocuXUrl = $ProDocuXUrl.Trim()
+    $resolvedUrl = (gcloud run services describe prodocux-intake --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)' 2>$null)
+    if ($resolvedUrl) {
+        $ProDocuXUrl = $resolvedUrl.Trim()
     }
 }
 
-if ([string]::IsNullOrWhiteSpace($ProDocuXUrl) -or $ProDocuXUrl -notmatch '^https?://.+' -or $ProDocuXUrl -like "*example.com*") {
-    Write-Error "ProDocuX URL is missing, invalid, or pointing to a placeholder ('$ProDocuXUrl'). Please deploy prodocux-intake first (via deploy/prodocux-intake/deploy.ps1) or pass -ProDocuXUrl 'https://...'."
+if (-not (Test-ProDocuXProductionUrl $ProDocuXUrl)) {
+    Write-Error "ProDocuX URL is invalid ('$ProDocuXUrl'). Must be a live HTTPS URL without userinfo, query, or fragment, and cannot be a placeholder. Please deploy prodocux-intake first (via deploy/prodocux-intake/deploy.ps1) or pass -ProDocuXUrl 'https://...'."
     exit 1
 }
 
