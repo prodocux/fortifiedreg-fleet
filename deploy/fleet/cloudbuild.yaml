@@ -4,14 +4,14 @@
 # ===========================================================================
 
 steps:
-  # 1. Build Docker Image with dynamic Git Commit Build Arg
+  # 1. Build Docker Image with explicit Git Commit and Tag Build Args
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '--build-arg'
-      - 'GIT_COMMIT=$COMMIT_SHA'
+      - 'GIT_COMMIT=$_GIT_COMMIT'
       - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$SHORT_SHA'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG'
       - '-t'
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:latest'
       - '.'
@@ -30,12 +30,12 @@ steps:
       - 'run'
       - 'deploy'
       - '$_SERVICE_NAME'
-      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$SHORT_SHA'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG'
       - '--region=$_REGION'
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--service-account=fortifiedreg-fleet-runtime@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--set-env-vars=FLEET_ENV=production,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PRODOCUX_BASE_URL=$_PRODOCUX_URL'
+      - '--set-env-vars=FLEET_ENV=production,FLEET_COMMIT=$_GIT_COMMIT,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PDX_CORE_PIN=61cff57ec7938165234dd895177dccade7ac1a5f,PRODOCUX_PIN=c8acd2ba69c23458cb2589d8450246fe9b16424f,PRODOCUX_BASE_URL=$_PRODOCUX_URL'
       - '--set-secrets=FLEET_JWT_SECRET=fleet-jwt-secret:latest'
       - '--memory=1Gi'
       - '--cpu=1'
@@ -48,9 +48,11 @@ substitutions:
   _ARTIFACT_REPO: 'fortifiedreg'
   _SERVICE_NAME: 'fortifiedreg-fleet'
   _PRODOCUX_URL: 'https://prodocux-live.example.com'
+  _GIT_COMMIT: '3929674386a5b648cfd2414d750c581bacc1e1f4'
+  _IMAGE_TAG: 'v0.3.2'
 
 images:
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$SHORT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG'
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:latest'
 
 options:

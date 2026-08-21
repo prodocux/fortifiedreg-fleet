@@ -345,3 +345,108 @@ def test_b10_cloud_run_tenant_isolated_audit_stream(remote_fleet_url: str):
     assert audit_data["tenant_id"] == "tenant-demo"
     assert audit_data["store_mode"] == "in_memory"
     assert isinstance(audit_data["events"], list)
+
+
+def test_b10_cloud_run_full_5format_governed_lifecycle_and_evidence(remote_fleet_url: str):
+    """Verify full 5-format registration, dossier compile & run, approval, and evidence package extraction."""
+    session_res = requests.post(f"{remote_fleet_url}/v1/demo/session")
+    token = session_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Register 5 binary documents
+    docs = generate_valid_document_bytes()
+    registered_docs = []
+    doc_types = {"pdf": "SDS", "docx": "COA", "csv": "COA", "xlsx": "COA", "pptx": "COA"}
+
+    for fmt_name, (doc_id, filename, raw_bytes) in docs.items():
+        resp_reg = requests.post(
+            f"{remote_fleet_url}/v1/dossiers/documents/register",
+            json={
+                "doc_id": doc_id,
+                "filename": filename,
+                "content_b64": base64.b64encode(raw_bytes).decode(),
+            },
+            headers=headers,
+        )
+        assert resp_reg.status_code == 200
+        doc_sha = resp_reg.json()["sha256"]
+        registered_docs.append({
+            "doc_id": doc_id,
+            "filename": filename,
+            "doc_type": doc_types[fmt_name],
+            "sha256": doc_sha,
+            "supplier_name": "Golden Evidence Supplier",
+            "issue_date": "2025-01-10",
+            "expiry_date": "2028-01-10",
+        })
+
+    # 2. Create Dossier Case
+    case_id = str(uuid4())
+    create_resp = requests.post(
+        f"{remote_fleet_url}/v1/dossiers/create",
+        json={
+            "case_id": case_id,
+            "tenant_id": "tenant-demo",
+            "product_name": "Retinol Night Serum",
+            "jurisdiction": "EU",
+            "formula": [
+                {"inci_name": "Aqua", "concentration_pct": 78.5},
+                {"inci_name": "Glycerin", "concentration_pct": 5.0, "cas_number": "56-81-5", "noael_mg_kg_day": 10000.0},
+                {"inci_name": "Retinol", "concentration_pct": 0.05, "cas_number": "68-26-8", "noael_mg_kg_day": 2.0},
+                {"inci_name": "Phenoxyethanol", "concentration_pct": 0.8, "cas_number": "122-99-6", "noael_mg_kg_day": 500.0},
+            ],
+            "exposure_scenario": {
+                "product_type": "Face serum",
+                "daily_applied_amount_g": 1.54,
+                "retention_factor": 1.0,
+                "body_weight_kg": 60.0,
+            },
+            "supplier_documents": registered_docs,
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code == 200
+    case_data = create_resp.json()
+    case_digest = case_data["case_digest"]
+
+    # 3. Compile & Run Workflow
+    run_resp = requests.post(f"{remote_fleet_url}/v1/dossiers/{case_id}/compile-and-run", headers=headers)
+    assert run_resp.status_code == 200
+    run_data = run_resp.json()
+    assert run_data["execution"]["status"] == "awaiting_approval"
+    run_id = run_data["plan"]["request_id"]
+    plan_digest = run_data["plan_digest"]
+    checkpoint = run_data["execution"]["checkpoint"]
+    approval_request_id = run_data["execution"]["approval_request_id"]
+
+    # 4. Submit Human Approval Decision
+    appr_resp = requests.post(
+        f"{remote_fleet_url}/v1/approval/decide",
+        json={
+            "checkpoint_id": checkpoint["checkpoint_id"],
+            "run_id": run_id,
+            "approval_request_id": approval_request_id,
+            "idempotency_key": f"idem-{checkpoint['checkpoint_id']}-approved",
+            "decision": "approved",
+            "reason": "Approved by regulatory signatory in automated B10 test.",
+            "case_digest": case_digest,
+            "plan_digest": plan_digest,
+            "evidence_digests": checkpoint["evidence_digests"],
+        },
+        headers=headers,
+    )
+    assert appr_resp.status_code == 200
+    appr_data = appr_resp.json()
+    assert appr_data["status"] == "decided"
+    assert appr_data["decision"] == "approved"
+    art = appr_data.get("artifact_identity") or appr_data.get("artifact_storage_identity")
+    assert art and art["sha256"]
+
+    # 5. Fetch Checksummed Evidence Package
+    ev_resp = requests.get(f"{remote_fleet_url}/v1/evidence/runs/{run_id}", headers=headers)
+    assert ev_resp.status_code == 200
+    ev_data = ev_resp.json()
+    assert ev_data["package_type"] == "checksummed_evidence_package"
+    assert ev_data["package_sha256"] is not None
+    assert ev_data["artifact_identity"]["sha256"] == art["sha256"]
+

@@ -1,7 +1,7 @@
 # ===========================================================================
 # FortifiedReg Fleet - Google Cloud Run Automated One-Click Deployment (PowerShell)
 # Targets: Google Cloud Run + Artifact Registry + Secret Manager
-# Compliance: All Things Agentic Hackathon - Fortified Enterprise Fleet Track
+# Compliance: All Things Agentic Hackathon - Fortified Enterprise Fleet Track (v0.3.2)
 # ===========================================================================
 
 [CmdletBinding()]
@@ -21,7 +21,7 @@ if (Test-Path Variable:PSNativeCommandUseErrorActionPreference) {
 $ErrorActionPreference = "Continue"
 
 Write-Host "====================================================================" -ForegroundColor Cyan
-Write-Host "   FortifiedReg Fleet v0.3.1 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
+Write-Host "   FortifiedReg Fleet v0.3.2 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
 Write-Host "====================================================================" -ForegroundColor Cyan
 
 # 1. Resolve Project and Roots
@@ -38,12 +38,14 @@ if (-not $ProjectId -or $ProjectId -eq "(unset)") {
 }
 
 $GitHead = (git -C $RootDir rev-parse HEAD).Trim()
-$ImageTag = (git -C $RootDir rev-parse --short HEAD).Trim()
+$ImageTag = "v0.3.2"
 $ImageUri = "${Region}-docker.pkg.dev/${ProjectId}/${ArtifactRepo}/fleet:${ImageTag}"
+$RuntimeSA = "fortifiedreg-fleet-runtime@${ProjectId}.iam.gserviceaccount.com"
 
 Write-Host "[*] Target GCP Project : $ProjectId" -ForegroundColor Green
 Write-Host "[*] Target GCP Region  : $Region" -ForegroundColor Green
 Write-Host "[*] Cloud Run Service  : $ServiceName" -ForegroundColor Green
+Write-Host "[*] Runtime Identity   : $RuntimeSA" -ForegroundColor Green
 Write-Host "[*] Git HEAD Revision  : $GitHead" -ForegroundColor Green
 Write-Host "[*] Target Image URI   : $ImageUri" -ForegroundColor Green
 
@@ -71,7 +73,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "[✓] Artifact Registry repository configured / already present." -ForegroundColor Green
 }
 
-# 4. Configure Secret Manager
+# 4. Configure Secret Manager & Permissions
 Write-Host "`n[Step 3/5] Configuring Google Cloud Secret Manager..." -ForegroundColor Cyan
 $secretName = "fleet-jwt-secret"
 gcloud secrets create $secretName `
@@ -88,20 +90,19 @@ try {
     Remove-Item $tempSecretFile -Force -ErrorAction SilentlyContinue
 }
 
-# Grant Secret Manager Secret Accessor role to Cloud Run compute service account
-$projectNumber = (gcloud projects describe $ProjectId --format="value(projectNumber)" 2>$null)
-if ($projectNumber) {
-    Write-Host "[+] Granting Secret Accessor permission to Cloud Run service account..." -ForegroundColor Yellow
-    gcloud projects add-iam-policy-binding $ProjectId `
-        --member="serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com" `
-        --role="roles/secretmanager.secretAccessor" `
-        --quiet 2>$null
-}
+# Grant Secret Accessor to Dedicated Runtime Service Account
+Write-Host "[+] Granting Secret Accessor permission to $RuntimeSA..." -ForegroundColor Yellow
+gcloud secrets add-iam-policy-binding $secretName `
+    --member="serviceAccount:$RuntimeSA" `
+    --role="roles/secretmanager.secretAccessor" `
+    --project=$ProjectId `
+    --quiet 2>$null
 
-# 5. Build Container Image via Cloud Build
+# 5. Build Container Image via Cloud Build with build-arg
 Write-Host "`n[Step 4/5] Building OCI-Pinned Container Image via Cloud Build..." -ForegroundColor Cyan
 gcloud builds submit $RootDir `
-    --tag=$ImageUri `
+    --config="$ScriptDir/cloudbuild.yaml" `
+    --substitutions="_GIT_COMMIT=$GitHead,_IMAGE_TAG=$ImageTag,_REGION=$Region,_ARTIFACT_REPO=$ArtifactRepo,_SERVICE_NAME=$ServiceName,_PRODOCUX_URL=$ProDocuXUrl" `
     --project=$ProjectId
 
 if ($LASTEXITCODE -ne 0) {
@@ -109,47 +110,23 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-# 6. Deploy to Cloud Run
-Write-Host "`n[Step 5/5] Deploying Service to Google Cloud Run..." -ForegroundColor Cyan
-$envVars = "FLEET_ENV=$FleetEnv,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PRODOCUX_BASE_URL=$ProDocuXUrl,GIT_COMMIT=$GitHead"
-
-gcloud run deploy $ServiceName `
-    --image=$ImageUri `
-    --platform="managed" `
-    --region=$Region `
-    --allow-unauthenticated `
-    --set-env-vars=$envVars `
-    --set-secrets="FLEET_JWT_SECRET=${secretName}:latest" `
-    --memory="1Gi" `
-    --cpu="1" `
-    --min-instances="0" `
-    --max-instances="5" `
-    --concurrency="80" `
-    --timeout="300s" `
-    --port="8080" `
-    --project=$ProjectId
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Cloud Run deployment failed with exit code $LASTEXITCODE."
-    exit $LASTEXITCODE
-}
-
-# 7. Health Probe Verification
+# 6. Verify Deployed Revision and Runtime Truth
 $ServiceUrl = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)').Trim()
+$Revision = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.latestReadyRevisionName)').Trim()
 
 Write-Host "`n====================================================================" -ForegroundColor Green
 Write-Host "   [✓] DEPLOYMENT SUCCESSFUL!" -ForegroundColor Green
-Write-Host "   Cloud Run Live URL: $ServiceUrl" -ForegroundColor Green
+Write-Host "   Cloud Run Live URL  : $ServiceUrl" -ForegroundColor Green
+Write-Host "   Active Revision     : $Revision" -ForegroundColor Green
 Write-Host "====================================================================" -ForegroundColor Green
 
-Write-Host "`n[*] Running Live Health Probe..." -ForegroundColor Cyan
-try {
-    Invoke-RestMethod -Uri "$ServiceUrl/v1/health" -Method Get | ConvertTo-Json
-} catch {
-    Write-Host "Could not query health probe directly: $_" -ForegroundColor Yellow
-}
+# 7. Automated Remote Verification Attestation
+Write-Host "`n[*] Executing Automated Remote Verification Attestation..." -ForegroundColor Cyan
+& python "$RootDir\scripts\verify_remote.py" `
+    --base-url $ServiceUrl `
+    --expected-fleet-commit $GitHead `
+    --expected-revision $Revision `
+    --run-demo-lifecycle `
+    --output "$RootDir\evidence\remote_smoke_result.json"
 
-Write-Host "`n[*] To run full remote compliance tests against this deployment:" -ForegroundColor Green
-Write-Host "    `$env:FLEET_REMOTE_URL=""$ServiceUrl""; pytest -v tests/test_b10_cloud_run_remote_gate.py"
-Write-Host "`n[*] When done recording demo, teardown resources to ensure ZERO cost:" -ForegroundColor Yellow
-Write-Host "    & '$ScriptDir\destroy.ps1'"
+Write-Host "`n[*] Remote smoke verification finished. Evidence saved to evidence/remote_smoke_result.json." -ForegroundColor Green
