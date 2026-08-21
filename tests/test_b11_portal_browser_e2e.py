@@ -185,7 +185,7 @@ def test_b11_guided_demo_full_lifecycle_hermetic():
 
 @pytest.mark.skipif(
     not os.getenv("RUN_PLAYWRIGHT_E2E"),
-    reason="Set RUN_PLAYWRIGHT_E2E=1 or provide BASE_URL to run live Playwright browser tests",
+    reason="Set RUN_PLAYWRIGHT_E2E=1 and BASE_URL=<url> to run live Playwright browser tests",
 )
 def test_b11_playwright_live_browser_journey():
     """Execute live browser verification via Playwright with complete 5-step Guided Demo UI interaction."""
