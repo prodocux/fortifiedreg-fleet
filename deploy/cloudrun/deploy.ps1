@@ -6,7 +6,7 @@
 
 [CmdletBinding()]
 param (
-    [string]$ProjectId = $env:GCP_PROJECT_ID,
+    [string]$ProjectId = $(if ($env:GCP_PROJECT_ID) { $env:GCP_PROJECT_ID } else { "fortifiedreg-fleet" }),
     [string]$Region = "us-central1",
     [string]$ServiceName = "fortifiedreg-fleet",
     [string]$ArtifactRepo = "fortifiedreg",
@@ -44,10 +44,6 @@ function Test-ProDocuXProductionUrl ([string]$url) {
 # 1. Resolve Project and Roots
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
-
-if (-not $ProjectId) {
-    $ProjectId = (gcloud config get-value project 2>$null)
-}
 
 if (-not $ProjectId -or $ProjectId -eq "(unset)") {
     $ProjectId = "fortifiedreg-fleet"
