@@ -17,7 +17,7 @@ steps:
         echo "[✓] Verified 40-character Git Commit: $$FULL_COMMIT"
       else
         echo "[!] Error: _GIT_COMMIT must be an exact 40-character git commit SHA. Got: '$$FULL_COMMIT'" >&2
-        echo "    Usage: gcloud builds submit --substitutions=_GIT_COMMIT=$$(git rev-parse HEAD),_SHORT_COMMIT=$$(git rev-parse --short=12 HEAD),_PRODOCUX_URL=https://..." >&2
+        echo "    Usage: gcloud builds submit --substitutions=_GIT_COMMIT=\$$(git rev-parse HEAD),_SHORT_COMMIT=\$$(git rev-parse --short=12 HEAD),_PRODOCUX_URL=https://..." >&2
         exit 1
       fi
 
