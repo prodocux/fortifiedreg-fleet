@@ -42,9 +42,9 @@ def _get_manifest_digest() -> str:
 @router.get("/version", response_model=Dict[str, Any])
 def get_system_version() -> Dict[str, Any]:
     """Return runtime truth discovery: versions, git commit, pins, adapter and store modes."""
-    fleet_commit = os.getenv("GIT_COMMIT", os.getenv("K_REVISION_COMMIT", "unknown"))
+    fleet_commit = os.getenv("FLEET_COMMIT") or os.getenv("GIT_COMMIT") or os.getenv("K_REVISION_COMMIT") or "unknown"
     cloud_run_revision = os.getenv("K_REVISION", "local_development")
-    image_digest = os.getenv("IMAGE_DIGEST", "unavailable")
+    image_digest = os.getenv("IMAGE_DIGEST") or os.getenv("OCI_IMAGE_DIGEST") or "unavailable"
 
     db_path = os.getenv("FLEET_DB_PATH", "")
     has_sqlite = bool(db_path and (os.path.exists(db_path) or db_path.endswith(".db")))

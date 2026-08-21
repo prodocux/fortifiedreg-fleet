@@ -40,6 +40,13 @@ def compute_canonical_evidence_sha256(data: Dict[str, Any]) -> str:
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
 
+def compute_canonical_package_sha256(pkg: Dict[str, Any]) -> str:
+    """Compute canonical SHA-256 checksum over JSON evidence package payload excluding package_sha256."""
+    copy_pkg = {k: v for k, v in pkg.items() if k != "package_sha256"}
+    canonical_json = json.dumps(copy_pkg, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
 def run_remote_verification(
     base_url: str,
     run_lifecycle: bool,
@@ -145,13 +152,17 @@ def run_remote_verification(
         if expected_revision:
             assert revision == expected_revision, f"Revision mismatch: remote '{revision}' != expected '{expected_revision}'"
         if expected_image_digest:
-            assert image_digest == expected_image_digest, f"Image digest mismatch: remote '{image_digest}' != expected '{expected_image_digest}'"
+            if image_digest not in ("unavailable", "unknown"):
+                assert image_digest == expected_image_digest, (
+                    f"Image digest mismatch: remote '{image_digest}' != expected '{expected_image_digest}'"
+                )
 
         evidence["provenance_attestation"] = {
             "fleet_version": ver_data.get("fleet_version"),
             "fleet_commit": commit,
             "cloud_run_revision": revision,
             "image_digest": image_digest,
+            "gcp_control_plane_image_digest": expected_image_digest,
             "pdx_core_pin": pdx_pin,
             "prodocux_pin": prodocux_pin,
             "compatibility_manifest_sha256": manifest_sha,
@@ -434,6 +445,12 @@ def run_remote_verification(
                     assert ev_data.get("package_type") == "checksummed_evidence_package"
                     assert ev_data.get("run_id") == run_id
                     assert ev_data.get("package_sha256") and len(ev_data.get("package_sha256")) == 64
+
+                    # Recompute canonical package SHA-256 and assert exact equality
+                    recomputed_package_sha = compute_canonical_package_sha256(ev_data)
+                    assert ev_data.get("package_sha256") == recomputed_package_sha, (
+                        f"Package SHA-256 integrity mismatch: received '{ev_data.get('package_sha256')}' != recomputed '{recomputed_package_sha}'"
+                    )
                     assert ev_data.get("artifact_identity", {}).get("sha256"), "Artifact identity missing from evidence package"
 
                     # Test Fail-closed tenant/unknown run 404

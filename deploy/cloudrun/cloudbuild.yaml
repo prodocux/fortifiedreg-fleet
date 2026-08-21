@@ -4,6 +4,19 @@
 # ===========================================================================
 
 steps:
+  # 0. Sentinel Verification: Ensure mandatory 40-character Git Commit is provided
+  - name: 'bash'
+    script: |
+      #!/usr/bin/env bash
+      set -e
+      if [[ "$_GIT_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]; then
+        echo "[✓] Verified 40-character Git Commit: $_GIT_COMMIT"
+      else
+        echo "[!] Error: _GIT_COMMIT must be an exact 40-character git commit SHA. Got: '$_GIT_COMMIT'" >&2
+        echo "    Usage: gcloud builds submit --substitutions=_GIT_COMMIT=\$(git rev-parse HEAD)" >&2
+        exit 1
+      fi
+
   # 1. Build Docker Image with explicit Git Commit and Tag Build Args
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -11,7 +24,7 @@ steps:
       - '--build-arg'
       - 'GIT_COMMIT=$_GIT_COMMIT'
       - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG-$_SHORT_COMMIT'
       - '-t'
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:latest'
       - '.'
@@ -30,12 +43,12 @@ steps:
       - 'run'
       - 'deploy'
       - '$_SERVICE_NAME'
-      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG-$_SHORT_COMMIT'
       - '--region=$_REGION'
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--service-account=fortifiedreg-fleet-runtime@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--set-env-vars=FLEET_ENV=production,FLEET_COMMIT=$_GIT_COMMIT,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PDX_CORE_PIN=61cff57ec7938165234dd895177dccade7ac1a5f,PRODOCUX_PIN=c8acd2ba69c23458cb2589d8450246fe9b16424f,PRODOCUX_BASE_URL=$_PRODOCUX_URL'
+      - '--set-env-vars=FLEET_ENV=production,FLEET_COMMIT=$_GIT_COMMIT,GIT_COMMIT=$_GIT_COMMIT,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PDX_CORE_PIN=61cff57ec7938165234dd895177dccade7ac1a5f,PRODOCUX_PIN=c8acd2ba69c23458cb2589d8450246fe9b16424f,PRODOCUX_BASE_URL=$_PRODOCUX_URL'
       - '--set-secrets=FLEET_JWT_SECRET=fleet-jwt-secret:latest'
       - '--memory=1Gi'
       - '--cpu=1'
@@ -48,11 +61,12 @@ substitutions:
   _ARTIFACT_REPO: 'fortifiedreg'
   _SERVICE_NAME: 'fortifiedreg-fleet'
   _PRODOCUX_URL: 'https://prodocux-live.example.com'
-  _GIT_COMMIT: '3929674386a5b648cfd2414d750c581bacc1e1f4'
+  _GIT_COMMIT: 'REQUIRED_40_CHAR_GIT_COMMIT'
+  _SHORT_COMMIT: 'latest'
   _IMAGE_TAG: 'v0.3.2'
 
 images:
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG-$_SHORT_COMMIT'
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:latest'
 
 options:

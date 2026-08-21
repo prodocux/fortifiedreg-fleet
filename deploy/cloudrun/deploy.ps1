@@ -38,7 +38,8 @@ if (-not $ProjectId -or $ProjectId -eq "(unset)") {
 }
 
 $GitHead = (git -C $RootDir rev-parse HEAD).Trim()
-$ImageTag = "v0.3.2"
+$ShortCommit = (git -C $RootDir rev-parse --short=12 HEAD).Trim()
+$ImageTag = "v0.3.2-${ShortCommit}"
 $ImageUri = "${Region}-docker.pkg.dev/${ProjectId}/${ArtifactRepo}/fleet:${ImageTag}"
 $RuntimeSA = "fortifiedreg-fleet-runtime@${ProjectId}.iam.gserviceaccount.com"
 
@@ -102,7 +103,7 @@ gcloud secrets add-iam-policy-binding $secretName `
 Write-Host "`n[Step 4/5] Building OCI-Pinned Container Image via Cloud Build..." -ForegroundColor Cyan
 gcloud builds submit $RootDir `
     --config="$ScriptDir/cloudbuild.yaml" `
-    --substitutions="_GIT_COMMIT=$GitHead,_IMAGE_TAG=$ImageTag,_REGION=$Region,_ARTIFACT_REPO=$ArtifactRepo,_SERVICE_NAME=$ServiceName,_PRODOCUX_URL=$ProDocuXUrl" `
+    --substitutions="_GIT_COMMIT=$GitHead,_SHORT_COMMIT=$ShortCommit,_IMAGE_TAG=v0.3.2,_REGION=$Region,_ARTIFACT_REPO=$ArtifactRepo,_SERVICE_NAME=$ServiceName,_PRODOCUX_URL=$ProDocuXUrl" `
     --project=$ProjectId
 
 if ($LASTEXITCODE -ne 0) {
@@ -113,20 +114,36 @@ if ($LASTEXITCODE -ne 0) {
 # 6. Verify Deployed Revision and Runtime Truth
 $ServiceUrl = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)').Trim()
 $Revision = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.latestReadyRevisionName)').Trim()
+$ImageDigest = (gcloud run revisions describe $Revision --platform="managed" --region=$Region --project=$ProjectId --format='value(status.imageDigest)').Trim()
 
 Write-Host "`n====================================================================" -ForegroundColor Green
 Write-Host "   [✓] DEPLOYMENT SUCCESSFUL!" -ForegroundColor Green
 Write-Host "   Cloud Run Live URL  : $ServiceUrl" -ForegroundColor Green
 Write-Host "   Active Revision     : $Revision" -ForegroundColor Green
+Write-Host "   Deployed Image SHA  : $ImageDigest" -ForegroundColor Green
 Write-Host "====================================================================" -ForegroundColor Green
 
-# 7. Automated Remote Verification Attestation
+# 7. Automated Remote Verification Attestation (Fail-Closed)
 Write-Host "`n[*] Executing Automated Remote Verification Attestation..." -ForegroundColor Cyan
-& python "$RootDir\scripts\verify_remote.py" `
-    --base-url $ServiceUrl `
-    --expected-fleet-commit $GitHead `
-    --expected-revision $Revision `
-    --run-demo-lifecycle `
-    --output "$RootDir\evidence\remote_smoke_result.json"
+$verifyArgs = @(
+    "$RootDir\scripts\verify_remote.py",
+    "--base-url", $ServiceUrl,
+    "--expected-fleet-commit", $GitHead,
+    "--expected-revision", $Revision,
+    "--run-demo-lifecycle",
+    "--output", "$RootDir\evidence\remote_smoke_result.json"
+)
 
-Write-Host "`n[*] Remote smoke verification finished. Evidence saved to evidence/remote_smoke_result.json." -ForegroundColor Green
+if ($ImageDigest) {
+    $verifyArgs += @("--expected-image-digest", $ImageDigest)
+}
+
+& python $verifyArgs
+$verifyExitCode = $LASTEXITCODE
+
+if ($verifyExitCode -ne 0) {
+    Write-Error "[!] Remote verification attestation FAILED with exit code $verifyExitCode."
+    exit $verifyExitCode
+}
+
+Write-Host "`n[✓] Remote smoke verification PASSED. Cryptographic evidence saved to evidence/remote_smoke_result.json." -ForegroundColor Green
