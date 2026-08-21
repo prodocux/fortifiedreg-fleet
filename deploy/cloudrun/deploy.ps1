@@ -50,16 +50,22 @@ if (-not $ProjectId) {
 }
 
 if (-not $ProjectId -or $ProjectId -eq "(unset)") {
-    Write-Error "GCP Project ID is not specified. Please set `$env:GCP_PROJECT_ID or run 'gcloud config set project YOUR_PROJECT_ID'."
-    exit 1
+    $ProjectId = "fortifiedreg-fleet"
 }
+
+Write-Host "[*] Target GCP Project : $ProjectId" -ForegroundColor Green
+Write-Host "[*] Target GCP Region  : $Region" -ForegroundColor Green
+Write-Host "[*] Cloud Run Service  : $ServiceName" -ForegroundColor Green
 
 # Resolve ProDocuX URL dynamically if not provided or invalid
 if ([string]::IsNullOrWhiteSpace($ProDocuXUrl) -or -not (Test-ProDocuXProductionUrl $ProDocuXUrl)) {
     Write-Host "[*] Resolving live ProDocuX URL from Cloud Run service 'prodocux-intake'..." -ForegroundColor Yellow
-    $resolvedUrl = (gcloud run services describe prodocux-intake --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)' 2>$null)
-    if ($resolvedUrl) {
-        $ProDocuXUrl = $resolvedUrl.Trim()
+    $rawOutput = (gcloud run services describe prodocux-intake --region=$Region --project=$ProjectId --format="value(status.url)")
+    if ($rawOutput) {
+        $resolvedUrl = ($rawOutput | Out-String).Trim().Split("`r`n") | Where-Object { $_ -match '^https://' } | Select-Object -First 1
+        if ($resolvedUrl) {
+            $ProDocuXUrl = $resolvedUrl.Trim()
+        }
     }
 }
 
@@ -74,9 +80,6 @@ $ImageTag = "v0.3.2-${ShortCommit}"
 $ImageUri = "${Region}-docker.pkg.dev/${ProjectId}/${ArtifactRepo}/fleet:${ImageTag}"
 $RuntimeSA = "fortifiedreg-fleet-runtime@${ProjectId}.iam.gserviceaccount.com"
 
-Write-Host "[*] Target GCP Project : $ProjectId" -ForegroundColor Green
-Write-Host "[*] Target GCP Region  : $Region" -ForegroundColor Green
-Write-Host "[*] Cloud Run Service  : $ServiceName" -ForegroundColor Green
 Write-Host "[*] Runtime Identity   : $RuntimeSA" -ForegroundColor Green
 Write-Host "[*] Git HEAD Revision  : $GitHead" -ForegroundColor Green
 Write-Host "[*] Target Image URI   : $ImageUri" -ForegroundColor Green
@@ -144,23 +147,26 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 6. Verify Deployed Revision and Runtime Truth
-$ServiceUrl = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.url)' 2>$null)
+$rawServiceUrl = (gcloud run services describe $ServiceName --region=$Region --project=$ProjectId --format="value(status.url)")
+$ServiceUrl = ($rawServiceUrl | Out-String).Trim().Split("`r`n") | Where-Object { $_ -match '^https://' } | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($ServiceUrl)) {
     Write-Error "Failed to resolve live Service URL for '$ServiceName' from Google Cloud Run."
     exit 1
 }
 $ServiceUrl = $ServiceUrl.Trim()
 
-$Revision = (gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format='value(status.latestReadyRevisionName)' 2>$null)
+$rawRevision = (gcloud run services describe $ServiceName --region=$Region --project=$ProjectId --format="value(status.latestReadyRevisionName)")
+$Revision = ($rawRevision | Out-String).Trim().Split("`r`n") | Where-Object { $_ -match '^[a-zA-Z0-9-]+$' } | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($Revision)) {
     Write-Error "Failed to resolve Latest Ready Revision for '$ServiceName' from Google Cloud Run."
     exit 1
 }
 $Revision = $Revision.Trim()
 
-$ImageDigest = (gcloud run revisions describe $Revision --platform="managed" --region=$Region --project=$ProjectId --format='value(status.imageDigest)' 2>$null)
+$rawDigest = (gcloud run revisions describe $Revision --region=$Region --project=$ProjectId --format="value(status.imageDigest)")
+$ImageDigest = ($rawDigest | Out-String).Trim().Split("`r`n") | Where-Object { $_ -match '^sha256:[0-9a-fA-F]{64}$' } | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($ImageDigest) -or $ImageDigest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
-    Write-Error "Failed to resolve valid OCI Image Digest (format sha256:<64 hex>) for revision '$Revision'. Got: '$ImageDigest'"
+    Write-Error "Failed to resolve valid OCI Image Digest (format sha256:<64 hex>) for revision '$Revision'. Got: '$rawDigest'"
     exit 1
 }
 $ImageDigest = $ImageDigest.Trim()
