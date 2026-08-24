@@ -95,15 +95,11 @@ try {
     }
 }
 
-# 2. Authenticated probe: Acquire GCP Identity Token and verify health
+# 2. Authenticated probe: Strictly require GCP Identity Token for $RUNTIME_SA (No fallback allowed)
 $idToken = (gcloud auth print-identity-token --audiences=$PRODOCUX_URL --impersonate-service-account=$RUNTIME_SA 2>$null)
-if (-not $idToken) {
-    # Fallback to current authenticated principal if SA impersonation is not enabled locally
-    $idToken = (gcloud auth print-identity-token --audiences=$PRODOCUX_URL 2>$null)
-}
 
 if ([string]::IsNullOrWhiteSpace($idToken)) {
-    Write-Error "FAIL-CLOSED: Unable to acquire GCP identity token for audience '$PRODOCUX_URL'."
+    Write-Error "FAIL-CLOSED: Unable to acquire GCP identity token via service account impersonation for '$RUNTIME_SA'."
     exit 1
 }
 

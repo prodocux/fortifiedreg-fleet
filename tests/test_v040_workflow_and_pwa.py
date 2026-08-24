@@ -386,10 +386,11 @@ def test_finalized_product_artifact_stored_and_verified(client):
 
 
 def test_artifact_store_conflict_fails_closed(client):
-    """Verify that conflicting digest in ArtifactStore causes 409 Conflict without creating product."""
+    """Verify that conflicting digest in ArtifactStore causes 409 Conflict, preserves pending checkpoint, and records retryable failure without resumed outbox."""
     import hashlib
-    from fleet_api.deps import get_artifact_store
+    from fleet_api.deps import get_artifact_store, get_checkpoint_store, get_resume_context_store
     from fleet_governance_core.models.storage import ArtifactStorageIdentity
+    from fleet_governance_core.models.approval import CheckpointStatusEnum, FleetExecutionStatus
     from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
 
     sess_res = client.post("/v1/demo/session")
@@ -398,6 +399,7 @@ def test_artifact_store_conflict_fails_closed(client):
 
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
     proposal_id = prop_res.json()["proposal_id"]
+    checkpoint_id = prop_res.json()["proposal"]["checkpoint_id"]
 
     # Pre-populate a conflicting artifact at the target URI
     store = get_artifact_store()
@@ -422,7 +424,8 @@ def test_artifact_store_conflict_fails_closed(client):
         json={"decision": "approved", "rationale": "Finalized PIF approved."},
     )
     assert decide_res.status_code == 409, f"Expected 409 Conflict, got {decide_res.status_code}"
-    assert "Artifact storage conflict" in decide_res.json()["detail"]
+    # Assert sanitized error message (no raw URI leakage)
+    assert decide_res.json()["detail"] == "Artifact storage conflict: an artifact with a conflicting digest already exists."
 
     # Verify no new ApprovedProductRecord was added
     assert len(_APPROVED_PRODUCTS_STORE) == initial_product_count
@@ -431,10 +434,23 @@ def test_artifact_store_conflict_fails_closed(client):
     persisted_path = store._uri_to_path(target_uri)
     assert persisted_path.read_bytes() == conflicting_bytes
 
+    # Verify checkpoint remains PENDING (NOT RESUMED)
+    checkpoint_store = get_checkpoint_store()
+    chk = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk.status == CheckpointStatusEnum.PENDING
+
+    # Verify resume context status is marked failed/retryable with safe error code
+    resume_store = get_resume_context_store()
+    ctx = resume_store.get_context("tenant-demo", checkpoint_id)
+    if ctx:
+        assert ctx.status == FleetExecutionStatus.RESUME_FAILED_RETRYABLE
+        assert ctx.last_error.get("safe_error_code") == "ARTIFACT_CONFLICT"
+
 
 def test_pdx_resume_failure_fails_closed(client, monkeypatch):
-    """Verify that if PDX plan resume fails, decision fails closed with 500 without creating product."""
-    from fleet_api.deps import get_orchestrator
+    """Verify that if PDX plan resume fails, decision fails closed with sanitized 500, checkpoint remains pending, and context is retryable."""
+    from fleet_api.deps import get_orchestrator, get_checkpoint_store, get_resume_context_store
+    from fleet_governance_core.models.approval import CheckpointStatusEnum, FleetExecutionStatus
     from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
 
     sess_res = client.post("/v1/demo/session")
@@ -443,6 +459,7 @@ def test_pdx_resume_failure_fails_closed(client, monkeypatch):
 
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
     proposal_id = prop_res.json()["proposal_id"]
+    checkpoint_id = prop_res.json()["proposal"]["checkpoint_id"]
 
     # Mock orchestrator resume_with_decision to simulate plan execution failure
     orchestrator = get_orchestrator()
@@ -454,14 +471,102 @@ def test_pdx_resume_failure_fails_closed(client, monkeypatch):
 
     initial_product_count = len(_APPROVED_PRODUCTS_STORE)
 
-    # Attempt decision -> must fail with 500
+    # Attempt decision -> must fail with sanitized 500 (no str(e) leakage)
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
         json={"decision": "approved", "rationale": "Finalized PIF approved."},
     )
     assert decide_res.status_code == 500, f"Expected 500 Internal Server Error, got {decide_res.status_code}"
-    assert "PDX execution resume failed" in decide_res.json()["detail"]
+    assert decide_res.json()["detail"] == "Resume execution error: Transient processing error (state is retryable)."
 
     # Verify no approved product was created
     assert len(_APPROVED_PRODUCTS_STORE) == initial_product_count
+
+    # Verify checkpoint status remains PENDING
+    checkpoint_store = get_checkpoint_store()
+    chk = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk.status == CheckpointStatusEnum.PENDING
+
+    # Verify resume context status is marked RESUME_FAILED_RETRYABLE
+    resume_store = get_resume_context_store()
+    ctx = resume_store.get_context("tenant-demo", checkpoint_id)
+    if ctx:
+        assert ctx.status == FleetExecutionStatus.RESUME_FAILED_RETRYABLE
+        assert ctx.last_error.get("safe_error_code") == "RESUME_EXECUTION_ERROR"
+
+
+def test_live_pdx_adapter_proposal_approve_resume_lifecycle(client, monkeypatch):
+    """Verify end-to-end proposal submission, approval, and resume lifecycle with LivePDXCoreOrchestrator."""
+    from fleet_adapter_pdx.orchestrator import LivePDXCoreOrchestrator
+    from fleet_api.deps import (
+        get_artifact_store,
+        get_checkpoint_store,
+        get_resume_context_store,
+        get_document_resolver,
+        intake_adapter,
+    )
+    from fleet_governance_core.models.approval import CheckpointStatusEnum
+    from fleet_adapter_pdx.verifier_bridge import PDXVerifierBridge
+    from pdx_artifact_core.approval import ApprovalLedger
+
+    # Instantiate LivePDXCoreOrchestrator with dependencies
+    live_orch = LivePDXCoreOrchestrator(
+        approval_ledger=ApprovalLedger(),
+        intake_adapter=intake_adapter,
+        document_resolver=get_document_resolver(),
+        verifier_bridge=PDXVerifierBridge(),
+        artifact_store=get_artifact_store(),
+        resume_context_store=get_resume_context_store(),
+    )
+
+    import fleet_api.routers.workflow_v4 as wv4
+    monkeypatch.setattr(wv4, "get_orchestrator", lambda: live_orch)
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Submit proposal -> compiles & executes plan via LivePDXCoreOrchestrator
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    assert prop_res.status_code == 200, f"Failed proposal submission: {prop_res.text}"
+    proposal_data = prop_res.json()
+    proposal_id = proposal_data["proposal_id"]
+    checkpoint_id = proposal_data["proposal"]["checkpoint_id"]
+
+    # Verify checkpoint exists in checkpoint_store
+    checkpoint_store = get_checkpoint_store()
+    chk = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk is not None
+    assert chk.status == CheckpointStatusEnum.PENDING
+
+    # Decide/Approve proposal -> executes LivePDXCoreOrchestrator.resume_with_decision
+    decide_res = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Live PDX Adapter PIF approved."},
+    )
+    assert decide_res.status_code == 200, f"Failed decision: {decide_res.text}"
+    decide_data = decide_res.json()
+    assert decide_data["status"] == "finalized"
+    assert "prod-" in decide_data["product_id"]
+
+    # Verify checkpoint transitioned to RESUMED
+    chk_resumed = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk_resumed.status == CheckpointStatusEnum.RESUMED
+
+
+def test_deploy_script_strict_impersonation_requirement():
+    """Verify that deploy.ps1 strictly requires impersonation and contains no fallback to current user."""
+    from pathlib import Path
+
+    deploy_script = Path("D:/ProDocuX/fortifiedreg-fleet/deploy/prodocux-intake/deploy.ps1")
+    assert deploy_script.exists()
+    content = deploy_script.read_text(encoding="utf-8")
+
+    # Assert strictly requires impersonated token
+    assert "--impersonate-service-account=$RUNTIME_SA" in content
+    # Assert no fallback to current user token
+    assert "Fallback to current authenticated principal" not in content
+    # Assert fail-closed error message on missing impersonated token
+    assert "Unable to acquire GCP identity token via service account impersonation" in content
