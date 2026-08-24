@@ -6,6 +6,7 @@ from fleet_adapter_local.local_artifact_resolver import LocalVerifiedArtifactRes
 from fleet_adapter_local.local_artifact_store import LocalArtifactStore
 from fleet_adapter_local.sqlite_store import SQLiteResumeContextStore
 
+__version__ = "0.4.0"
 __all__ = [
     "InMemoryResumeContextStore",
     "SQLiteResumeContextStore",

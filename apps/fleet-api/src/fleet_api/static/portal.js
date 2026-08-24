@@ -805,7 +805,7 @@ async function showExportCenter(productId) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${data.bundle_spec.product_name.replace(/\s+/g, '_')}_certified.${fmt}`;
+            a.download = `${data.bundle_spec.product_name.replace(/\s+/g, '_')}_finalized.${fmt}`;
             a.click();
             URL.revokeObjectURL(url);
           } else {

@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fleet-adapter-local"
-version = "0.3.2"
+version = "0.4.0"
 description = "Local storage, SQLite ACID persistence, and crash-safe artifact storage for FortifiedReg Fleet"
 authors = [{ name = "ProDocuX Team", email = "info@prodocux.com" }]
 requires-python = ">=3.10"
 dependencies = [
-    "fleet-governance-core>=0.3.2",
+    "fleet-governance-core>=0.4.0",
     "pydantic>=2.0.0",
 ]
 

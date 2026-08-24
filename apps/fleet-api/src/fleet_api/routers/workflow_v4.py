@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from fleet_api.deps import (
     FLEET_ENV,
     get_approval_store,
+    get_approval_workflow_service,
+    get_artifact_store,
     get_audit_log,
     get_checkpoint_store,
     get_resume_context_store,
@@ -427,11 +429,12 @@ async def submit_product_proposal(
             },
         )
 
-    # 2. Compile PDX Plan
+    # 2. Compile PDX Plan & Checkpoint with Approval Request
     case_digest = draft.compute_case_digest()
     plan_digest = compute_data_sha256(f"pdx-plan-{draft.draft_id}-rev{draft.revision}-{case_digest}".encode("utf-8"))
     checkpoint_id = f"chk-{uuid.uuid4().hex[:12]}"
     proposal_id = f"prop-{uuid.uuid4().hex[:8]}"
+    approval_request_id = str(uuid.uuid4())
 
     checkpoint_store = get_checkpoint_store()
     checkpoint = PDXWorkflowCheckpoint(
@@ -444,6 +447,18 @@ async def submit_product_proposal(
     )
     checkpoint_store.save_checkpoint(tenant_id, checkpoint)
 
+    req_uuid = uuid.uuid4()
+    approval_request = PDXApprovalRequest(
+        approval_request_id=req_uuid,
+        checkpoint_id=checkpoint_id,
+        run_id=session_id,
+        subject_digest=case_digest,
+        plan_digest=plan_digest,
+        evidence_digests={"sccs_digest": sccs_res.rule_digest},
+        summary="Regulatory safety dossier PIF approval request",
+    )
+    checkpoint_store.save_approval_request(tenant_id, approval_request)
+
     # Create Proposal Record
     proposal = ProductProposal(
         proposal_id=proposal_id,
@@ -455,6 +470,7 @@ async def submit_product_proposal(
         case_digest=case_digest,
         plan_digest=plan_digest,
         checkpoint_id=checkpoint_id,
+        approval_request_id=str(req_uuid),
         gate_decision=gate_decision,
         gate_reasons=reasons,
         ingredients_summary=[item.model_dump(mode="json") for item in draft.ingredients],
@@ -477,6 +493,7 @@ async def submit_product_proposal(
                 "revision": draft.revision,
                 "gate_decision": gate_decision.value,
                 "checkpoint_id": checkpoint_id,
+                "approval_request_id": approval_request_id,
             },
         )
     )
@@ -499,7 +516,12 @@ async def list_proposals_inbox(
     auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
 ) -> List[Dict[str, Any]]:
     """List pending and historical proposals for Product Manager review."""
-    return [p.model_dump(mode="json") for p in reversed(list(_PROPOSALS_STORE.values()))]
+    tenant_id, _ = auth_context
+    return [
+        p.model_dump(mode="json")
+        for p in reversed(list(_PROPOSALS_STORE.values()))
+        if p.tenant_id == tenant_id
+    ]
 
 
 class ManagerDecisionRequest(BaseModel):
@@ -515,19 +537,42 @@ async def manager_decide_proposal(
     auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
 ) -> Dict[str, Any]:
     """
-    Product Manager decisions:
-    - 'approved': Commits HitL checkpoint, records SHA-256 checksum, creates immutable ApprovedProductRecord.
+    Product Manager decisions via formal ApprovalWorkflowService:
+    - 'approved': Validates 3-way digests, commits HitL checkpoint via ApprovalWorkflowService,
+                  atomically publishes canonical PIF to ArtifactStore, and returns immutable ApprovedProductRecord.
     - 'returned': Returns proposal with comments to Formulator for Revision N+1.
     """
     tenant_id, actor = auth_context
     proposal = _PROPOSALS_STORE.get(proposal_id)
-    if not proposal:
+    if not proposal or proposal.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found.")
 
     if proposal.status != ProposalStatusEnum.PENDING_REVIEW:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Proposal already decided ({proposal.status}).")
 
+    checkpoint_store = get_checkpoint_store()
+    approval_service = get_approval_workflow_service()
+    artifact_store = get_artifact_store()
+
+    checkpoint = checkpoint_store.get_checkpoint(tenant_id, proposal.checkpoint_id)
+    if not checkpoint:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Checkpoint '{proposal.checkpoint_id}' not found.")
+
     if req.decision == "returned":
+        # Process decision through governance service
+        appr_record, pdx_decision = approval_service.process_approval_decision(
+            tenant_id=tenant_id,
+            checkpoint=checkpoint,
+            approval_request_id=proposal.approval_request_id or "",
+            actor=actor,
+            decision=ApprovalDecisionEnum.REJECTED,
+            idempotency_key=f"proposal-{proposal.proposal_id}-returned",
+            case_digest=proposal.case_digest,
+            plan_digest=proposal.plan_digest,
+            evidence_digests=checkpoint.evidence_digests,
+            reason=req.return_comments or "Returned by Product Manager for formula optimization.",
+        )
+
         proposal.status = ProposalStatusEnum.RETURNED
         proposal.return_comments = req.return_comments or "Returned by Product Manager for formula optimization."
         proposal.decided_at = datetime.now(timezone.utc).isoformat()
@@ -537,15 +582,6 @@ async def manager_decide_proposal(
         if draft:
             draft.status = FormulationStatusEnum.CHANGES_REQUIRED
 
-        get_audit_log().append_audit_event(
-            AuditEvent(
-                tenant_id=tenant_id,
-                run_id=proposal.session_id,
-                actor_id=actor.sub,
-                event_type=AuditEventTypeEnum.APPROVAL_DECIDED,
-                payload={"action": "proposal_returned", "proposal_id": proposal_id, "comments": proposal.return_comments},
-            )
-        )
         return {"status": "returned", "proposal": proposal.model_dump(mode="json")}
 
     elif req.decision == "approved":
@@ -555,13 +591,19 @@ async def manager_decide_proposal(
                 detail="Manager rationale is required when approving a proposal with REVIEW status.",
             )
 
-        # Commit checkpoint in Governance Core
-        checkpoint_store = get_checkpoint_store()
-        approval_store = get_approval_store()
-        checkpoint = checkpoint_store.get_checkpoint(tenant_id, proposal.checkpoint_id)
-        if checkpoint:
-            checkpoint.status = CheckpointStatusEnum.RESUMED
-            checkpoint_store.save_checkpoint(tenant_id, checkpoint)
+        # Process approval decision through governance service (verifies 3-way digest and idempotency)
+        appr_record, pdx_decision = approval_service.process_approval_decision(
+            tenant_id=tenant_id,
+            checkpoint=checkpoint,
+            approval_request_id=proposal.approval_request_id or "",
+            actor=actor,
+            decision=ApprovalDecisionEnum.APPROVED,
+            idempotency_key=f"proposal-{proposal.proposal_id}-approved",
+            case_digest=proposal.case_digest,
+            plan_digest=proposal.plan_digest,
+            evidence_digests=checkpoint.evidence_digests,
+            reason=req.rationale or "Approved by Product Manager.",
+        )
 
         approved_at_iso = datetime.now(timezone.utc).isoformat()
         canonical_pif = {
@@ -581,25 +623,14 @@ async def manager_decide_proposal(
         art_sha = hashlib.sha256(canonical_pif_bytes).hexdigest()
         art_storage = ArtifactStorageIdentity(
             artifact_id=f"art-prod-{proposal.proposal_id}",
-            uri=f"artifact://fleet-compliance-artifacts/{tenant_id}/dossiers/{proposal.proposal_id}/certified_pif.json",
+            uri=f"artifact://{tenant_id}/dossiers/{proposal.proposal_id}/finalized_pif_record.json",
             sha256=art_sha,
             size_bytes=len(canonical_pif_bytes),
             media_type="application/json",
         )
 
-        appr_record = FleetApprovalRecord(
-            tenant_id=tenant_id,
-            run_id=proposal.session_id,
-            checkpoint_id=proposal.checkpoint_id,
-            canonical_idempotency_key=f"{proposal.session_id}:{proposal.checkpoint_id}:approved",
-            authenticated_actor=actor,
-            decision=ApprovalDecisionEnum.APPROVED,
-            reason=req.rationale or "Approved by Product Manager.",
-            subject_case_digest=proposal.case_digest,
-            plan_digest=proposal.plan_digest,
-            evidence_digests={"pif_digest": art_sha, "case_digest": proposal.case_digest, "plan_digest": proposal.plan_digest},
-        )
-        approval_store.save_approval_record(appr_record)
+        # Atomically write canonical PIF record to host-injected ArtifactStore
+        artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
 
         product_id = f"prod-{uuid.uuid4().hex[:8]}"
         approved_product = ApprovedProductRecord(
@@ -630,21 +661,6 @@ async def manager_decide_proposal(
         draft = _DRAFTS_STORE.get(proposal.session_id)
         if draft:
             draft.status = FormulationStatusEnum.DRAFT
-
-        get_audit_log().append_audit_event(
-            AuditEvent(
-                tenant_id=tenant_id,
-                run_id=proposal.session_id,
-                actor_id=actor.sub,
-                event_type=AuditEventTypeEnum.APPROVAL_DECIDED,
-                payload={
-                    "action": "product_finalized",
-                    "product_id": product_id,
-                    "proposal_id": proposal_id,
-                    "sha256_checksum": art_sha,
-                },
-            )
-        )
 
         return {
             "status": "finalized",
@@ -681,14 +697,12 @@ async def get_product_export_bundle(
 ) -> Dict[str, Any]:
     """
     Generate the neutral 5-format render bundle spec for an ApprovedProductRecord.
-    Enforces strict tenant isolation and returns prodocux_render_requests.
+    Enforces strict tenant isolation (fail-closed 404) and returns prodocux_render_requests.
     """
     tenant_id, _ = auth_context
     product = _APPROVED_PRODUCTS_STORE.get(product_id)
-    if not product:
+    if not product or product.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approved product not found.")
-    if product.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-tenant product export forbidden.")
 
     proposal = _PROPOSALS_STORE.get(product.proposal_id)
     ingredients = proposal.ingredients_summary if proposal else []
@@ -716,14 +730,12 @@ async def render_product_artifact(
     auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
 ) -> Dict[str, Any]:
     """
-    Render a specific format binary artifact via ProDocuX POST /v1/render/artifact with tenant validation.
+    Render a specific format binary artifact via ProDocuX POST /v1/render/artifact with tenant validation (fail-closed 404).
     """
     tenant_id, _ = auth_context
     product = _APPROVED_PRODUCTS_STORE.get(product_id)
-    if not product:
+    if not product or product.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approved product not found.")
-    if product.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-tenant product rendering forbidden.")
 
     fmt = req.format.lower().lstrip(".")
     proposal = _PROPOSALS_STORE.get(product.proposal_id)

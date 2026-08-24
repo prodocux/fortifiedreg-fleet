@@ -363,7 +363,7 @@ def run_remote_verification(
                         "product_id": product_id,
                         "pdf_rendered": True,
                     }
-                    print(" [PASS] 11. Export Bundle & Live ProDocuX Rendering    : PASS (PDF certified)")
+                    print(" [PASS] 11. Export Bundle & Live ProDocuX Rendering    : PASS (PDF rendered and checksummed)")
                 except Exception as e:
                     lifecycle_results["export_and_render"] = {"status": "FAIL", "error": str(e)}
                     print(f" [FAIL] 11. Export Bundle & Live ProDocuX Rendering    : FAIL ({e})")

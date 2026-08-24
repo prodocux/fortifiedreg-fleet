@@ -1,0 +1,180 @@
+{
+  "evidence_type": "checksummed_remote_verification_evidence",
+  "verified_at": "2026-08-21T03:30:48.196279+00:00",
+  "target_url": "https://fortifiedreg-fleet-bhqx5rtmma-uc.a.run.app",
+  "version": "0.3.2",
+  "mode": "full_demo_lifecycle",
+  "provenance_attestation": {
+    "fleet_version": "0.3.2",
+    "fleet_commit": "f86a79a3541a1bf349a8f9e20b0c02292de536e7",
+    "cloud_run_revision": "fortifiedreg-fleet-00014-brm",
+    "image_digest": "unavailable",
+    "gcp_control_plane_image_digest": "sha256:ede671cb275033fdeee78a0b4b7d955828611eb63264fe77c6aa114b0c5c7cfb",
+    "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
+    "prodocux_pin": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
+    "compatibility_manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+    "adapter_modes": {
+      "intake": "live",
+      "orchestrator": "live"
+    },
+    "store_modes": {
+      "resume_context": "sqlite",
+      "artifact": "local_filesystem_ephemeral",
+      "audit": "in_memory",
+      "memory": "in_memory"
+    }
+  },
+  "probes": {
+    "health_probe": {
+      "status": "PASS",
+      "data": {
+        "status": "healthy",
+        "service": "fortified-enterprise-fleet-api",
+        "version": "0.3.2",
+        "environment": "production",
+        "runtime_mode": "local_memory_emulation",
+        "adapters": {
+          "intake": {
+            "configured_mode": "live"
+          },
+          "orchestrator": {
+            "configured_mode": "live"
+          },
+          "stores": {
+            "configured_mode": "in_memory"
+          }
+        },
+        "security_scanner": "regex_prompt_scanner (local_emulation)",
+        "auth_provider": "jwt_bearer_rbac"
+      }
+    },
+    "readiness_probe": {
+      "status": "PASS",
+      "data": {
+        "status": "ready",
+        "version": "0.3.2",
+        "adapters": {
+          "intake": {
+            "mode": "live",
+            "status": "ready",
+            "schema_version": "prodocux_intake_capabilities_v1",
+            "kernel_version": "0.2.0"
+          },
+          "orchestrator": {
+            "mode": "live",
+            "status": "ready",
+            "pdx_core_version": "0.2.0a2"
+          },
+          "stores": {
+            "mode": "in_memory",
+            "status": "ready"
+          }
+        }
+      }
+    },
+    "version_truth": {
+      "status": "PASS",
+      "data": {
+        "service": "fortified-enterprise-fleet-api",
+        "fleet_version": "0.3.2",
+        "fleet_commit": "f86a79a3541a1bf349a8f9e20b0c02292de536e7",
+        "cloud_run_revision": "fortifiedreg-fleet-00014-brm",
+        "image_digest": "unavailable",
+        "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
+        "prodocux_pin": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
+        "compatibility_manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+        "environment": "production",
+        "adapter_modes": {
+          "intake": "live",
+          "orchestrator": "live"
+        },
+        "store_modes": {
+          "resume_context": "sqlite",
+          "artifact": "local_filesystem_ephemeral",
+          "audit": "in_memory",
+          "memory": "in_memory"
+        },
+        "security_scanner": "regex_prompt_scanner (local_emulation)"
+      }
+    },
+    "manifest_gates": {
+      "status": "PASS",
+      "data": {
+        "manifest_sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303",
+        "raw_manifest": {},
+        "verification_gates": {
+          "B1_schema_contract": "PASS_LOCAL",
+          "B2_domain_cosmetics": "PASS_LOCAL",
+          "B3_pdx_adapter": "PASS_LOCAL",
+          "B4_prodocux_adapter": "PASS_LOCAL",
+          "B5_google_adk_adapter": "PASS_LOCAL",
+          "B6_fleet_api": "PASS_LOCAL",
+          "B7_lifecycle_conformance": "PASS_LOCAL",
+          "B8_deployment_and_docker_gate": "PENDING_DOCKER",
+          "B9_docker_production_live_gate": "PENDING_DOCKER",
+          "B10_cloud_run_remote_gate": "PENDING_REMOTE"
+        }
+      }
+    },
+    "security_scanner": {
+      "status": "PASS",
+      "prompt_decision": "BLOCK",
+      "path_decision": "BLOCK"
+    },
+    "demo_session": {
+      "status": "PASS",
+      "tenant_id": "tenant-demo",
+      "roles": [
+        "demo_evaluator"
+      ],
+      "sub": "demo-formulator-88f4dbef5bdf"
+    },
+    "full_lifecycle": {
+      "samples_loaded": {
+        "status": "PASS",
+        "formats": [
+          "pdf",
+          "docx",
+          "csv",
+          "xlsx",
+          "pptx"
+        ]
+      },
+      "evidence_intake": {
+        "status": "PASS",
+        "registered_count": 5
+      },
+      "dossier_creation": {
+        "status": "PASS",
+        "case_id": "b5d295d3-70f3-43c4-9d94-883e7d99cd02",
+        "case_digest": "6cbc841a622f00b0b0cb09386a313a14b6d04a834e25b0eed0c654aefd47c648"
+      },
+      "compile_and_run": {
+        "status": "PASS",
+        "run_id": "run-pif-b5d295d3-70f3-43c4-9d94-883e7d99cd02",
+        "plan_digest": "025070383589f9dc742f189814827e7203d9e716c6330b5cecd37c6e1da0387b",
+        "checkpoint_id": "chk-run-pif-b5d295d3-70f3-43c4-9d94-883e7d99cd02-step_human_regulatory_approval"
+      },
+      "human_approval": {
+        "status": "PASS",
+        "decision": "approved",
+        "artifact_identity": {
+          "artifact_id": "art-pif-chk-run-pif-b5d295d3-70f3-43c4-9d94-883e7d99cd02-step_human_regulatory_approval",
+          "uri": "artifact://t-a4e9d5f5028a047456eaf37b/checkpoints/chk-run-pif-b5d295d3-70f3-43c4-9d94-883e7d99cd02-step_human_regulatory_approval/pif_final_manifest.json",
+          "sha256": "1e47f65415531ec9c9f381b2f3cf8d681204f72aca28c089a9918f194573f1e2",
+          "size_bytes": 429,
+          "media_type": "application/json",
+          "created_at": "2026-08-21T03:31:06.423918+00:00"
+        }
+      },
+      "evidence_package": {
+        "status": "PASS",
+        "package_sha256": "a9e70c4f47aa13c1684b8c34d92f1bfccf63f6f0a32c4139fc7a81e689444316",
+        "artifact_uri": "artifact://t-a4e9d5f5028a047456eaf37b/checkpoints/chk-run-pif-b5d295d3-70f3-43c4-9d94-883e7d99cd02-step_human_regulatory_approval/pif_final_manifest.json",
+        "artifact_sha256": "1e47f65415531ec9c9f381b2f3cf8d681204f72aca28c089a9918f194573f1e2"
+      }
+    }
+  },
+  "summary": "ALL_CHECKS_PASSED",
+  "evidence_sha256": "576f74ad7e3c7a8ad54780e77bcc2e9db80c18e752e2c919f54c1836b88b6802"
+}

@@ -12,7 +12,7 @@ from fleet_adapter_gcp.in_memory_stores import (
     InMemoryMemoryStore,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     "InMemoryApprovalStore",
     "InMemoryAuditLog",

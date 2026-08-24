@@ -100,6 +100,7 @@ class ProductProposal(BaseModel):
     case_digest: str
     plan_digest: str
     checkpoint_id: Optional[str] = None
+    approval_request_id: Optional[str] = None
     gate_decision: GateDecisionEnum
     gate_reasons: List[str] = Field(default_factory=list)
     ingredients_summary: List[Dict[str, Any]] = Field(default_factory=list)
@@ -112,7 +113,7 @@ class ProductProposal(BaseModel):
 
 
 class ApprovedProductRecord(BaseModel):
-    """Immutable finalized product record certified by Product Manager HitL decision."""
+    """Immutable finalized product record approved by Product Manager HitL decision."""
     product_id: str
     tenant_id: str = "tenant-demo"
     session_id: str

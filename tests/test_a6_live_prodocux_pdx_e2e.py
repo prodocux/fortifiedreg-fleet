@@ -125,7 +125,7 @@ def test_a6_live_five_formats_render_artifact_and_sha256_fingerprint(prodocux_ap
         checkpoint_id="chk-a6-live",
         artifact_identity=ArtifactStorageIdentity(
             artifact_id="art-a6-live",
-            uri="artifact://fleet-compliance-artifacts/dossiers/prop-a6-live/certified_pif.json",
+            uri="artifact://fleet-compliance-artifacts/dossiers/prop-a6-live/finalized_pif_record.json",
             sha256="c" * 64,
             size_bytes=2048,
             media_type="application/json",

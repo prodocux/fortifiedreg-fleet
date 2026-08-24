@@ -10,7 +10,7 @@ from fleet_adapter_google_adk.toxicology_agent import (
     GeminiToxicologyAgent,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.4.0"
 __all__ = [
     "RegexPromptScanner",
     "GoogleModelArmorAdapter",

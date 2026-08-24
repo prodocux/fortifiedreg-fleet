@@ -147,4 +147,3 @@ class FakeProDocuXIntakeAdapter(IntakePort):
             "size_bytes": len(dummy_content),
             "content_b64": base64.b64encode(dummy_content).decode("ascii"),
         }
-

@@ -32,7 +32,7 @@ RESTRICTED_PRESERVATIVES: Dict[str, float] = {
 def evaluate_inci_compliance(case: Any) -> VerifierResult:
     """Verify formulation ingredients against Annex II and Annex V restrictions."""
     rule_digest = hashlib.sha256(f"{INCI_RULE_SET_ID}:{INCI_RULE_SET_VERSION}".encode("utf-8")).hexdigest()
-    
+
     if isinstance(case, list):
         formula_items = case
         evidence_ids = []
@@ -41,7 +41,7 @@ def evaluate_inci_compliance(case: Any) -> VerifierResult:
         evidence_ids = [doc.doc_id for doc in getattr(case, "supplier_documents", [])]
 
     violations: List[str] = []
-    
+
     for item in formula_items:
         name_upper = item.inci_name.upper().strip()
 

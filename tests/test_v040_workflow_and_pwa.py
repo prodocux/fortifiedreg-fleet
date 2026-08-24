@@ -314,7 +314,7 @@ def test_export_adapter_prodocux_render_requests_and_artifact_render_api(client)
 
 
 def test_cross_tenant_product_export_and_render_rejected(client):
-    """Verify that export-bundle and render-artifact reject requests from mismatched tenants."""
+    """Verify that export-bundle and render-artifact fail-closed with 404 for mismatched tenants."""
     from fleet_api.security import create_access_token
 
     # 1. Create session as tenant A and produce an approved product
@@ -327,7 +327,7 @@ def test_cross_tenant_product_export_and_render_rejected(client):
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers_a,
-        json={"decision": "approved", "rationale": "Certified PASS."},
+        json={"decision": "approved", "rationale": "Approved PASS."},
     )
     product_id = decide_res.json()["product_id"]
 
@@ -339,15 +339,47 @@ def test_cross_tenant_product_export_and_render_rejected(client):
     )
     headers_b = {"Authorization": f"Bearer {token_tenant_b}"}
 
-    # 3. Attempt export-bundle as tenant B -> Expect 403 Forbidden
+    # 3. Attempt export-bundle as tenant B -> Expect 404 Not Found (fail-closed, no information leakage)
     exp_res = client.get(f"/v1/products/{product_id}/export-bundle", headers=headers_b)
-    assert exp_res.status_code == 403, f"Expected 403 for cross-tenant export, got {exp_res.status_code}"
+    assert exp_res.status_code == 404, f"Expected 404 for cross-tenant export, got {exp_res.status_code}"
 
-    # 4. Attempt render-artifact as tenant B -> Expect 403 Forbidden
+    # 4. Attempt render-artifact as tenant B -> Expect 404 Not Found (fail-closed)
     render_res = client.post(
         f"/v1/products/{product_id}/render-artifact",
         headers=headers_b,
         json={"format": "pdf"},
     )
-    assert render_res.status_code == 403, f"Expected 403 for cross-tenant render, got {render_res.status_code}"
+    assert render_res.status_code == 404, f"Expected 404 for cross-tenant render, got {render_res.status_code}"
 
+
+def test_finalized_product_artifact_stored_and_verified(client):
+    """Verify that finalized product canonical PIF is persisted in ArtifactStore and matches SHA-256."""
+    import hashlib
+    from fleet_api.deps import get_artifact_store
+    from fleet_governance_core.models.storage import ArtifactStorageIdentity
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+
+    decide_res = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Finalized PIF approved."},
+    )
+    assert decide_res.status_code == 200
+    art_meta = decide_res.json()["artifact_identity"]
+    identity = ArtifactStorageIdentity.model_validate(art_meta)
+
+    # Resolve from ArtifactStore
+    store = get_artifact_store()
+    target_path = store._uri_to_path(identity.uri)
+    assert target_path.exists(), f"Stored artifact must exist at path: {target_path}"
+
+    raw_bytes = target_path.read_bytes()
+    assert len(raw_bytes) == identity.size_bytes
+    calc_sha = hashlib.sha256(raw_bytes).hexdigest()
+    assert calc_sha == identity.sha256, f"Artifact SHA-256 mismatch: {calc_sha} != {identity.sha256}"
