@@ -383,3 +383,85 @@ def test_finalized_product_artifact_stored_and_verified(client):
     assert len(raw_bytes) == identity.size_bytes
     calc_sha = hashlib.sha256(raw_bytes).hexdigest()
     assert calc_sha == identity.sha256, f"Artifact SHA-256 mismatch: {calc_sha} != {identity.sha256}"
+
+
+def test_artifact_store_conflict_fails_closed(client):
+    """Verify that conflicting digest in ArtifactStore causes 409 Conflict without creating product."""
+    import hashlib
+    from fleet_api.deps import get_artifact_store
+    from fleet_governance_core.models.storage import ArtifactStorageIdentity
+    from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+
+    # Pre-populate a conflicting artifact at the target URI
+    store = get_artifact_store()
+    target_uri = f"artifact://tenant-demo/dossiers/{proposal_id}/finalized_pif_record.json"
+    conflicting_bytes = b'{"conflicting": "pre-existing payload"}'
+    conflicting_sha = hashlib.sha256(conflicting_bytes).hexdigest()
+    conflict_ident = ArtifactStorageIdentity(
+        artifact_id=f"art-conflict-{proposal_id}",
+        uri=target_uri,
+        sha256=conflicting_sha,
+        size_bytes=len(conflicting_bytes),
+        media_type="application/json",
+    )
+    store.put_if_absent(conflict_ident, conflicting_bytes, conflicting_sha)
+
+    initial_product_count = len(_APPROVED_PRODUCTS_STORE)
+
+    # Attempt to decide/approve proposal -> must fail-closed with 409 Conflict
+    decide_res = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Finalized PIF approved."},
+    )
+    assert decide_res.status_code == 409, f"Expected 409 Conflict, got {decide_res.status_code}"
+    assert "Artifact storage conflict" in decide_res.json()["detail"]
+
+    # Verify no new ApprovedProductRecord was added
+    assert len(_APPROVED_PRODUCTS_STORE) == initial_product_count
+
+    # Verify the conflicting content in storage was not overwritten
+    persisted_path = store._uri_to_path(target_uri)
+    assert persisted_path.read_bytes() == conflicting_bytes
+
+
+def test_pdx_resume_failure_fails_closed(client, monkeypatch):
+    """Verify that if PDX plan resume fails, decision fails closed with 500 without creating product."""
+    from fleet_api.deps import get_orchestrator
+    from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+
+    # Mock orchestrator resume_with_decision to simulate plan execution failure
+    orchestrator = get_orchestrator()
+
+    def mock_resume_fail(chk, dec):
+        raise RuntimeError("Simulated PDX core plan resume network/schema fault")
+
+    monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_fail)
+
+    initial_product_count = len(_APPROVED_PRODUCTS_STORE)
+
+    # Attempt decision -> must fail with 500
+    decide_res = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Finalized PIF approved."},
+    )
+    assert decide_res.status_code == 500, f"Expected 500 Internal Server Error, got {decide_res.status_code}"
+    assert "PDX execution resume failed" in decide_res.json()["detail"]
+
+    # Verify no approved product was created
+    assert len(_APPROVED_PRODUCTS_STORE) == initial_product_count

@@ -1,5 +1,5 @@
 # Deploy Private ProDocuX Intake Service on Cloud Run with Dedicated Service Account Binding
-# Enforces native command exit code validation, private IAM gating, and authenticated live probing.
+# Enforces native command exit code validation, strictly fail-closed anonymous blocking, and authenticated health attestation.
 $ErrorActionPreference = "Continue"
 
 $PROJECT_ID = "fortifiedreg-fleet"
@@ -77,35 +77,47 @@ if ([string]::IsNullOrWhiteSpace($LATEST_REV)) {
 Write-Host " [✓] ProDocuX Service URL: $PRODOCUX_URL" -ForegroundColor Green
 Write-Host " [✓] Latest Ready Revision: $LATEST_REV" -ForegroundColor Green
 
-# 1. Anonymous probe: Must be rejected with HTTP 401/403 (Fail-closed private IAM protection)
+# 1. Anonymous probe: Must be rejected with exact HTTP 401 or 403 (Fail-closed)
 try {
-    $anonRes = Invoke-WebRequest -Uri "$PRODOCUX_URL/v1/health" -Method Get -SkipHttpErrorCheck -TimeoutSec 10
+    $anonRes = Invoke-WebRequest -Uri "$PRODOCUX_URL/v1/health" -Method Get -SkipHttpErrorCheck -TimeoutSec 15
     if ($anonRes.StatusCode -notin 401, 403) {
-        Write-Error "Anonymous access to private service returned unexpected status $($anonRes.StatusCode). Expected 401/403."
+        Write-Error "FAIL-CLOSED VIOLATION: Anonymous access returned HTTP $($anonRes.StatusCode). Service is not properly protected by private IAM (expected 401/403)."
         exit 1
     }
     Write-Host " [✓] Anonymous Access Probe : BLOCKED (HTTP $($anonRes.StatusCode), strictly private)" -ForegroundColor Green
 } catch {
-    # If connection fails or returns 401/403 in exception
-    Write-Host " [✓] Anonymous Access Probe : BLOCKED (Strictly private IAM protection verified)" -ForegroundColor Green
+    # Check if the exception response is HTTP 401/403
+    if ($_.Exception.Response -and ($_.Exception.Response.StatusCode.value__ -in 401, 403)) {
+        Write-Host " [✓] Anonymous Access Probe : BLOCKED (HTTP $($_.Exception.Response.StatusCode.value__), strictly private)" -ForegroundColor Green
+    } else {
+        Write-Error "Anonymous access check failed with non-IAM error: $_"
+        exit 1
+    }
 }
 
-# 2. Authenticated probe: Call with GCP Identity Token
-try {
+# 2. Authenticated probe: Acquire GCP Identity Token and verify health
+$idToken = (gcloud auth print-identity-token --audiences=$PRODOCUX_URL --impersonate-service-account=$RUNTIME_SA 2>$null)
+if (-not $idToken) {
+    # Fallback to current authenticated principal if SA impersonation is not enabled locally
     $idToken = (gcloud auth print-identity-token --audiences=$PRODOCUX_URL 2>$null)
-    if ($idToken) {
-        $authHeaders = @{ Authorization = "Bearer $($idToken.Trim())" }
-        $authRes = Invoke-RestMethod -Uri "$PRODOCUX_URL/v1/health" -Method Get -Headers $authHeaders -TimeoutSec 15
-        if ($authRes.status -ne "healthy" -and $authRes.status -ne "ok") {
-            Write-Error "Authenticated health check failed. Response: $($authRes | ConvertTo-Json)"
-            exit 1
-        }
-        Write-Host " [✓] Authenticated Probe    : PASS (status '$($authRes.status)', service ready)" -ForegroundColor Green
-    } else {
-        Write-Host " [i] Note: gcloud identity token not generated locally; skipping authenticated probe." -ForegroundColor Yellow
+}
+
+if ([string]::IsNullOrWhiteSpace($idToken)) {
+    Write-Error "FAIL-CLOSED: Unable to acquire GCP identity token for audience '$PRODOCUX_URL'."
+    exit 1
+}
+
+try {
+    $authHeaders = @{ Authorization = "Bearer $($idToken.Trim())" }
+    $authRes = Invoke-RestMethod -Uri "$PRODOCUX_URL/v1/health" -Method Get -Headers $authHeaders -TimeoutSec 15
+    if ($authRes.status -ne "healthy" -and $authRes.status -ne "ok") {
+        Write-Error "Authenticated health check returned unexpected status. Response: $($authRes | ConvertTo-Json)"
+        exit 1
     }
+    Write-Host " [✓] Authenticated Probe    : PASS (status '$($authRes.status)', service ready)" -ForegroundColor Green
 } catch {
-    Write-Host " [!] Authenticated probe warning: $_" -ForegroundColor Yellow
+    Write-Error "Authenticated health probe failed: $_"
+    exit 1
 }
 
 Write-Host "`n====================================================================" -ForegroundColor Green
