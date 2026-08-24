@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Production Containerfile for FortifiedReg Fleet (v0.3.0)
+# Production Containerfile for FortifiedReg Fleet (v0.4.0)
 # Multi-stage minimal footprint, non-root user, fail-closed runtime.
 
 FROM python:3.12-slim AS builder
@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install pinned upstream dependencies from GitHub RC sealing pins with exact pinned dependencies
 RUN pip install --no-cache-dir \
-    "git+https://github.com/prodocux/pdx-artifact-engine.git@61cff57ec7938165234dd895177dccade7ac1a5f#subdirectory=packages/pdx_artifact_core" \
-    "git+https://github.com/prodocux/prodocux.git@c8acd2ba69c23458cb2589d8450246fe9b16424f" \
+    "git+https://github.com/prodocux/pdx-artifact-engine.git@e93ab4d607dc1a98354677da624a11d681f5fbd4#subdirectory=packages/pdx_artifact_core" \
+    "git+https://github.com/prodocux/prodocux.git@bcbe39cd095b06238a836268fab7092466d20ab0" \
     uvicorn==0.34.0 \
     fastapi==0.115.6 \
     pydantic==2.10.4 \
@@ -34,7 +34,7 @@ FROM python:3.12-slim AS runner
 
 ARG GIT_COMMIT=unknown
 LABEL org.opencontainers.image.title="fortifiedreg-fleet"
-LABEL org.opencontainers.image.version="0.3.2"
+LABEL org.opencontainers.image.version="0.4.0"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
 LABEL org.opencontainers.image.vendor="ProDocuX FortifiedReg"
 LABEL org.opencontainers.image.description="FortifiedReg Fleet - Governed dossier production for regulated products"

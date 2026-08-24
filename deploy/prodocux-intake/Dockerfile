@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # Stage 1: Builder — compile wheel from public GitHub pin
 # =============================================================================
 FROM python:3.12-slim AS builder
@@ -11,7 +11,7 @@ WORKDIR /build
 
 # Build wheels directly from the pinned public release of ProDocuX
 RUN pip wheel --no-cache-dir \
-    "git+https://github.com/prodocux/prodocux.git@c8acd2ba69c23458cb2589d8450246fe9b16424f" \
+    "git+https://github.com/prodocux/prodocux.git@bcbe39cd095b06238a836268fab7092466d20ab0" \
     -w /wheels
 
 # =============================================================================
@@ -22,8 +22,8 @@ FROM python:3.12-slim AS runner
 LABEL org.opencontainers.image.title="prodocux-intake"
 LABEL org.opencontainers.image.description="ProDocuX Kernel — Deterministic Document Intake & Profiling Service"
 LABEL org.opencontainers.image.source="https://github.com/prodocux/prodocux"
-LABEL org.opencontainers.image.revision="c8acd2ba69c23458cb2589d8450246fe9b16424f"
-LABEL org.opencontainers.image.version="0.2.0"
+LABEL org.opencontainers.image.revision="bcbe39cd095b06238a836268fab7092466d20ab0"
+LABEL org.opencontainers.image.version="0.3.0rc1"
 LABEL org.opencontainers.image.vendor="ProDocuX"
 
 WORKDIR /app

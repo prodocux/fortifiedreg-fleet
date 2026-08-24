@@ -3,7 +3,7 @@ INCI Inventory & Annex Restriction Verifier.
 Checks ingredients against Annex II (Prohibited) and Annex V (Preservative Limits) of Regulation (EC) No 1223/2009.
 """
 import hashlib
-from typing import Dict, List
+from typing import Any, Dict, List
 from fleet_governance_core.models.case import DossierCase
 from fleet_governance_core.models.verifier import VerifierResult, VerifierStatusEnum
 
@@ -29,14 +29,20 @@ RESTRICTED_PRESERVATIVES: Dict[str, float] = {
     "SALICYLIC ACID": 0.5,
 }
 
-def evaluate_inci_compliance(case: DossierCase) -> VerifierResult:
+def evaluate_inci_compliance(case: Any) -> VerifierResult:
     """Verify formulation ingredients against Annex II and Annex V restrictions."""
     rule_digest = hashlib.sha256(f"{INCI_RULE_SET_ID}:{INCI_RULE_SET_VERSION}".encode("utf-8")).hexdigest()
-    evidence_ids = [doc.doc_id for doc in case.supplier_documents]
+    
+    if isinstance(case, list):
+        formula_items = case
+        evidence_ids = []
+    else:
+        formula_items = getattr(case, "formula", []) or []
+        evidence_ids = [doc.doc_id for doc in getattr(case, "supplier_documents", [])]
 
     violations: List[str] = []
     
-    for item in case.formula:
+    for item in formula_items:
         name_upper = item.inci_name.upper().strip()
 
         # 1. Annex II Prohibited Check

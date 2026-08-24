@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $PROJECT_ID = "fortifiedreg-fleet"
 $REGION = "us-central1"
 $SERVICE_NAME = "prodocux-intake"
-$IMAGE_TAG = "us-central1-docker.pkg.dev/$PROJECT_ID/fortifiedreg/prodocux-intake:c8acd2b"
+$IMAGE_TAG = "us-central1-docker.pkg.dev/$PROJECT_ID/fortifiedreg/prodocux-intake:bcbe39c"
 $RUNTIME_SA = "fortifiedreg-fleet-runtime@$PROJECT_ID.iam.gserviceaccount.com"
 
 Write-Host "==> 1. Ensuring Service Account exists: $RUNTIME_SA"

@@ -1,349 +1,370 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FortifiedReg Fleet v0.3.2 — Autonomous Compliance Fleet</title>
-    <meta name="description" content="EU Cosmetics Regulation (EC) No 1223/2009 — Autonomous Compliance Fleet">
+    <title>FortifiedReg Fleet v0.4.0 — Autonomous Compliance Suite</title>
+    <meta name="description" content="EU Cosmetics Regulation (EC) No 1223/2009 — Governed Dossier Workflow & AI Compliance Fleet">
+    <meta name="theme-color" content="#0a0e17">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon-192.svg">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/portal.css?v=0.3.2">
-    <script type="module" src="/static/portal.js?v=0.3.2" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/portal.css?v=0.4.0">
+    <script type="module" src="/static/portal.js?v=0.4.0" defer></script>
 </head>
 <body>
 
-<header>
-    <div class="hdr">
+<header class="app-header">
+    <div class="header-inner">
         <div class="brand">
             <div class="brand-icon">F</div>
             <div>
-                <div class="brand-title">FortifiedReg Fleet</div>
-                <div class="brand-sub">EU Cosmetics Regulation (EC) No 1223/2009 — Autonomous Compliance Fleet</div>
+                <div class="brand-title">FortifiedReg Fleet <span class="badge badge-version">v0.4.0</span></div>
+                <div class="brand-sub">EU Cosmetics Regulation (EC) No 1223/2009 — Autonomous Compliance Suite</div>
             </div>
-            <div class="brand-badge"><span class="pulse-dot"></span>Cloud Run v0.3.2</div>
         </div>
-        <div class="nav-area">
-            <nav class="nav-links">
-                <a href="/v1/health" target="_blank">/v1/health</a>
-                <a href="/v1/ready" target="_blank">/v1/ready</a>
-                <a href="/v1/version" target="_blank">/v1/version</a>
-                <a href="/docs" class="btn-docs" target="_blank">OpenAPI / Swagger</a>
-            </nav>
-            <div id="session-chip"></div>
+
+        <div class="header-controls">
+            <div id="session-chip" class="session-chip">
+                <span class="pulse-dot"></span>
+                <span id="session-label">Session 初始化中...</span>
+                <span id="session-timer" class="session-timer">15:00</span>
+            </div>
+
+            <div class="role-switch-container">
+                <button type="button" class="btn-role active" id="btn-role-formulator" data-role="formulator">🔬 配方師 (Formulator)</button>
+                <button type="button" class="btn-role" id="btn-role-manager" data-role="product_manager">👔 產品主管 (Manager)</button>
+            </div>
+
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-restart-demo">🔄 重新開始 Demo</button>
+            <button type="button" class="btn btn-primary btn-sm hidden" id="btn-install-pwa">📲 安裝 App</button>
         </div>
     </div>
 </header>
 
-<div class="view-nav-wrap">
-    <div class="view-nav">
-        <button class="tab-btn active" data-view="view-guided">1. Guided Judge Demo</button>
-        <button class="tab-btn" data-view="view-evidence">2. Evidence &amp; Verification Center</button>
-        <button class="tab-btn" data-view="view-playground">3. API Playground</button>
-    </div>
+<div class="disclaimer-banner">
+    <span>💡 <strong>Demo Role Simulation:</strong> 目前由單一評審於同一 Session 中模擬配方師與產品主管雙重視角。生產環境由企業 IdP / SSO 提供獨立 RBAC 與職責分離。</span>
 </div>
 
-<main>
-
-<!-- ── Top Deployment Truth Bar ── -->
-<div class="truth-bar">
-    <div class="truth-item">
-        <span class="truth-label">Fleet Version</span>
-        <span class="truth-val" id="truth-version">0.3.2</span>
-    </div>
-    <div class="truth-item">
-        <span class="truth-label">Readiness</span>
-        <span class="truth-val" id="truth-ready">Checking...</span>
-    </div>
-    <div class="truth-item">
-        <span class="truth-label">Cloud Run Revision</span>
-        <span class="truth-val" id="truth-revision">—</span>
-    </div>
-    <div class="truth-item">
-        <span class="truth-label">Fleet Commit</span>
-        <span class="truth-val" id="truth-commit">—</span>
-    </div>
-    <div class="truth-item">
-        <span class="truth-label">PDX Pin</span>
-        <span class="truth-val" id="truth-pdx">—</span>
-    </div>
-    <div class="truth-item">
-        <span class="truth-label">ProDocuX Pin</span>
-        <span class="truth-val" id="truth-prodocux">—</span>
-    </div>
+<div id="offline-banner" class="alert-banner alert-warning hidden">
+    ⚠️ <strong>後端服務連線中斷 / 處於離線狀態。</strong> 系統已啟動 Fail-Closed 安全防護，停止所有即時分析與簽核操作。
 </div>
 
-<div class="alert-banner" id="demo-blocked-banner"></div>
+<main class="app-container">
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     VIEW 1: Guided Judge Demo
-══════════════════════════════════════════════════════════════════════════ -->
-<section id="view-guided" class="view-section active">
-
-    <!-- Step 1: Scenario -->
-    <div class="step-card">
-        <div class="step-header">
-            <div class="step-num">1</div>
-            <div>
-                <div class="step-title">Choose Regulatory Scenario</div>
-                <div class="step-desc">Select a formulation scenario to run through deterministic EU compliance verifiers</div>
+    <!-- ── Live Event-Driven Component Telemetry Trace ── -->
+    <div class="telemetry-card">
+        <div class="telemetry-title">⚡ Live Component Telemetry &amp; Provenance Trace</div>
+        <div class="telemetry-flow">
+            <div class="telemetry-node" id="node-prodocux-intake">
+                <div class="node-icon">📦</div>
+                <div class="node-name">ProDocuX Intake</div>
+                <div class="node-status badge badge-idle" id="status-prodocux-intake">IDLE</div>
+            </div>
+            <div class="telemetry-arrow">➔</div>
+            <div class="telemetry-node" id="node-cosmetics-engine">
+                <div class="node-icon">⚖️</div>
+                <div class="node-name">SCCS 12th Notes</div>
+                <div class="node-status badge badge-idle" id="status-cosmetics-engine">IDLE</div>
+            </div>
+            <div class="telemetry-arrow">➔</div>
+            <div class="telemetry-node" id="node-gemini-assistant">
+                <div class="node-icon">✨</div>
+                <div class="node-name">Gemini Advisor</div>
+                <div class="node-status badge badge-idle" id="status-gemini-assistant">IDLE</div>
+            </div>
+            <div class="telemetry-arrow">➔</div>
+            <div class="telemetry-node" id="node-pdx-orchestrator">
+                <div class="node-icon">⚙️</div>
+                <div class="node-name">PDX Engine</div>
+                <div class="node-status badge badge-idle" id="status-pdx-orchestrator">IDLE</div>
+            </div>
+            <div class="telemetry-arrow">➔</div>
+            <div class="telemetry-node" id="node-manager-gate">
+                <div class="node-icon">✍️</div>
+                <div class="node-name">HitL Gate</div>
+                <div class="node-status badge badge-idle" id="status-manager-gate">IDLE</div>
+            </div>
+            <div class="telemetry-arrow">➔</div>
+            <div class="telemetry-node" id="node-prodocux-render">
+                <div class="node-icon">📑</div>
+                <div class="node-name">ProDocuX Render</div>
+                <div class="node-status badge badge-idle" id="status-prodocux-render">IDLE</div>
             </div>
         </div>
+    </div>
 
-        <div class="grid-3">
-            <div class="select-card scenario-option selected" data-scenario="retinol">
-                <div class="flex-between mb-05">
-                    <strong class="text-lg">Retinol Night Serum</strong>
-                    <span class="badge badge-pass">EXPECTED: PASS</span>
+    <!-- ══════════════════════════════════════════════════════════════════════════
+         VIEW 1: Formulator Workspace (配方師工作區)
+    ══════════════════════════════════════════════════════════════════════════ -->
+    <section id="view-formulator" class="role-workspace active">
+        <div class="workspace-layout">
+
+            <!-- Left & Center: Formulation Management Panel -->
+            <div class="panel-main">
+
+                <!-- Step 1: 5-Format Preset Scenario Import -->
+                <div class="card mb-15">
+                    <div class="card-header">
+                        <div class="card-num">1</div>
+                        <div>
+                            <div class="card-title">5 格式檔案匯入與情境載入 (5-Format File Intake)</div>
+                            <div class="card-subtitle">點擊預設格式檔案，由 ProDocuX 二進位解析器提取文字／表格區塊並預覽確認</div>
+                        </div>
+                    </div>
+
+                    <div class="preset-grid">
+                        <button type="button" class="preset-chip" data-scenario="retinol">
+                            <span class="chip-fmt fmt-pdf">PDF</span>
+                            <span class="chip-title">視黃醇精華液 SDS</span>
+                            <span class="badge badge-pass">預期: PASS</span>
+                        </button>
+                        <button type="button" class="preset-chip" data-scenario="peptide">
+                            <span class="chip-fmt fmt-docx">DOCX</span>
+                            <span class="chip-title">胜肽眼霜規格書</span>
+                            <span class="badge badge-review">預期: REVIEW</span>
+                        </button>
+                        <button type="button" class="preset-chip" data-scenario="day_cream">
+                            <span class="chip-fmt fmt-csv">CSV</span>
+                            <span class="chip-title">合規日霜配方表</span>
+                            <span class="badge badge-pass">預期: PASS</span>
+                        </button>
+                        <button type="button" class="preset-chip" data-scenario="phenoxy_excess">
+                            <span class="chip-fmt fmt-xlsx">XLSX</span>
+                            <span class="chip-title">防腐劑超標試算表</span>
+                            <span class="badge badge-fail">預期: FAIL</span>
+                        </button>
+                        <button type="button" class="preset-chip" data-scenario="mercury">
+                            <span class="chip-fmt fmt-pptx">PPTX</span>
+                            <span class="chip-title">汞斑霜審計簡報</span>
+                            <span class="badge badge-fail">預期: FAIL</span>
+                        </button>
+                    </div>
                 </div>
-                <p class="text-sm text-secondary mb-075">
-                    Compliant formulation with Retinol (0.05%) and Phenoxyethanol (0.8%). Margin of Safety &gt; 100 for all substances.
-                </p>
-                <div class="text-xs text-muted font-mono">
-                    Policy: SCCS Notes of Guidance 12th Revision
+
+                <!-- Step 2: Formulation Ingredients Panel -->
+                <div class="card mb-15">
+                    <div class="card-header flex-between">
+                        <div class="d-flex align-center gap-075">
+                            <div class="card-num">2</div>
+                            <div>
+                                <div class="card-title">配方成分管理面板 (Formulation Management Panel)</div>
+                                <div class="card-subtitle">自由新增、修改、刪除成分，任何異動皆即刻遞增 Revision 並重算摘要</div>
+                            </div>
+                        </div>
+                        <div class="meta-tags">
+                            <span class="badge badge-info" id="draft-revision-badge">Revision: 1</span>
+                            <span class="badge badge-neutral font-mono" id="draft-digest-badge">Case SHA: —</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-1">
+                        <label class="form-label" for="input-product-name">產品名稱 (Product Name):</label>
+                        <input type="text" id="input-product-name" class="form-control" value="Retinol Night Renewal Serum">
+                    </div>
+
+                    <!-- Ingredients Table -->
+                    <div class="table-wrap mb-1">
+                        <table class="data-table" id="table-ingredients">
+                            <thead>
+                                <tr>
+                                    <th>INCI 名稱</th>
+                                    <th>濃度 (%)</th>
+                                    <th>CAS 編號</th>
+                                    <th>NOAEL (mg/kg/day)</th>
+                                    <th class="text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-ingredients">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex-between">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-ingredient">➕ 新增成分列</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-save-draft">💾 儲存並重整分析</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Exposure Scenario & Submission Gate -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-num">3</div>
+                        <div>
+                            <div class="card-title">向主管提交提案 (Submit Proposal to Manager Gate)</div>
+                            <div class="card-subtitle">經過 SCCS 毒理與 Annex 規則門禁檢驗；硬阻斷違規，通過者生成產品提案</div>
+                        </div>
+                    </div>
+
+                    <div class="gate-action-area">
+                        <div class="gate-status-box" id="gate-status-box">
+                            <div class="gate-status-indicator" id="gate-indicator">READY</div>
+                            <div class="gate-status-desc" id="gate-desc">目前配方可提交正式門禁檢驗。</div>
+                        </div>
+
+                        <button type="button" class="btn btn-success btn-lg" id="btn-submit-proposal">
+                            🚀 提交產品提案至主管審查 (Submit Proposal)
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: AI Copilot & Compliance Advisor -->
+            <div class="panel-sidebar">
+                <div class="card card-sidebar">
+                    <div class="sidebar-header">
+                        <div class="ai-badge">✨ Gemini AI Copilot</div>
+                        <div class="text-xs text-muted" id="guardrail-badge">Local Guardrail / Model Armor-Compatible</div>
+                    </div>
+
+                    <!-- Live SCCS Score Card -->
+                    <div class="score-card mb-125">
+                        <div class="score-num" id="compliance-score">100</div>
+                        <div class="score-label">法規毒理合規指數 (SCCS Compliance Index)</div>
+                    </div>
+
+                    <!-- Toxicology SED/MoS Diagnostic -->
+                    <div class="sidebar-section mb-125">
+                        <div class="sidebar-section-title">📊 毒理安全邊際診斷 (MoS Matrix)</div>
+                        <div class="mos-list" id="sidebar-mos-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Actionable Suggestions -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">💡 智慧配方建議與法規引用</div>
+                        <div class="suggestions-list" id="sidebar-suggestions-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="select-card scenario-option" data-scenario="peptide">
-                <div class="flex-between mb-05">
-                    <strong class="text-lg">Active Peptide Eye Cream</strong>
-                    <span class="badge badge-review">EXPECTED: REVIEW</span>
-                </div>
-                <p class="text-sm text-secondary mb-075">
-                    Novel peptide ingredient lacking standard 90-day oral toxicity NOAEL study. Requires human safety assessor review.
-                </p>
-                <div class="text-xs text-muted font-mono">
-                    Policy: Fail-closed on missing toxicology studies
-                </div>
-            </div>
+        </div>
+    </section>
 
-            <div class="select-card scenario-option" data-scenario="mercury">
-                <div class="flex-between mb-05">
-                    <strong class="text-lg">Mercury Bleaching Cream</strong>
-                    <span class="badge badge-fail">EXPECTED: FAIL</span>
-                </div>
-                <p class="text-sm text-secondary mb-075">
-                    Contains Mercury (2.0%), strictly prohibited under EU Annex II entry #221. Direct regulatory violation.
-                </p>
-                <div class="text-xs text-muted font-mono">
-                    Policy: EU Regulation (EC) No 1223/2009 Annex II
+
+    <!-- ══════════════════════════════════════════════════════════════════════════
+         VIEW 2: Product Manager Workspace (產品主管工作區)
+    ══════════════════════════════════════════════════════════════════════════ -->
+    <section id="view-manager" class="role-workspace">
+        <div class="manager-layout">
+
+            <!-- Proposals Inbox -->
+            <div class="manager-inbox">
+                <div class="card card-inbox">
+                    <div class="card-header">
+                        <div class="card-title">提案審查收件匣 (Proposals Inbox)</div>
+                    </div>
+                    <div class="inbox-list" id="inbox-list">
+                        <!-- Populated dynamically -->
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Step 2: Golden Evidence Intake -->
-    <div class="step-card">
-        <div class="step-header">
-            <div class="step-num">2</div>
-            <div>
-                <div class="step-title">5-Format Golden Evidence Intake</div>
-                <div class="step-desc">Deterministic binary parsing across PDF, DOCX, CSV, XLSX, and PPTX supplier evidence</div>
-            </div>
-        </div>
+            <!-- Proposal Deep Dive & Decision -->
+            <div class="manager-detail">
+                <div class="card" id="card-proposal-detail">
+                    <div class="card-header flex-between">
+                        <div>
+                            <div class="card-title" id="detail-product-name">請選擇左側提案進行審查</div>
+                            <div class="card-subtitle" id="detail-proposal-meta">Proposal ID: —</div>
+                        </div>
+                        <div id="detail-gate-badge"></div>
+                    </div>
 
-        <div class="grid-5 mb-125" id="golden-intake-grid"></div>
+                    <!-- Proposal Content Summary -->
+                    <div class="detail-body" id="detail-body">
+                        <p class="text-muted text-center py-2">尚未選擇提案。請由左側收件匣選擇一筆待審案件。</p>
+                    </div>
 
-        <div>
-            <button class="btn btn-primary" id="btn-register-all">▶ Profile &amp; Register 5-Format Evidence</button>
-        </div>
-    </div>
+                    <!-- Manager Decision Actions -->
+                    <div class="manager-actions-box hidden" id="manager-actions-box">
+                        <div class="form-group mb-1" id="group-rationale">
+                            <label class="form-label" for="input-manager-rationale">核准理由 / 審核說明 (Manager Rationale):</label>
+                            <input type="text" id="input-manager-rationale" class="form-control" placeholder="若為 REVIEW 狀態必須填寫核准依據...">
+                        </div>
 
-    <!-- Step 3: Governed Fleet Evaluation -->
-    <div class="step-card">
-        <div class="step-header">
-            <div class="step-num">3</div>
-            <div>
-                <div class="step-title">Governed Fleet Evaluation</div>
-                <div class="step-desc">Compile PDX execution plan, bind cryptographic digests, and evaluate SCCS toxicology</div>
-            </div>
-        </div>
+                        <div class="form-group mb-1" id="group-return-comment">
+                            <label class="form-label" for="input-return-comment">退回修改建議 (Return Comments):</label>
+                            <input type="text" id="input-return-comment" class="form-control" placeholder="請說明需請配方師調整之項目...">
+                        </div>
 
-        <div class="mb-1">
-            <button class="btn btn-primary" id="btn-run-eval" disabled>▶ Run Fleet Multi-Agent Evaluation</button>
-        </div>
-
-        <div id="eval-results-box" class="code-panel hidden mt-1"></div>
-    </div>
-
-    <!-- Step 4: Human Decision Gate -->
-    <div class="step-card hidden" id="gate-card">
-        <div class="step-header">
-            <div class="step-num">4</div>
-            <div>
-                <div class="step-title">Human Regulatory Decision Gate</div>
-                <div class="step-desc">Cryptographically bound sign-off gate requiring 3-way digest verification</div>
-            </div>
-        </div>
-
-        <div class="card-inner mb-1">
-            <div class="gate-meta-grid">
-                <span class="text-muted">Checkpoint ID:</span>
-                <span id="gate-checkpoint-id" class="font-bold">—</span>
-                <span class="text-muted">Case Digest:</span>
-                <span id="gate-case-digest">—</span>
-                <span class="text-muted">Plan Digest:</span>
-                <span id="gate-plan-digest">—</span>
-            </div>
-            <div id="gate-blocked-reason" class="text-rose font-bold mt-075"></div>
-        </div>
-
-        <div class="d-flex gap-1">
-            <button class="btn btn-success" id="btn-approve-gate" disabled>✓ Approve &amp; Certify Dossier</button>
-            <button class="btn btn-danger" id="btn-reject-gate" disabled>✕ Reject Dossier</button>
-        </div>
-    </div>
-
-    <!-- Step 5: Finalized Certified Artifact -->
-    <div class="step-card hidden" id="final-evidence-card">
-        <div class="step-header">
-            <div class="step-num">5</div>
-            <div>
-                <div class="step-title">Finalized Checksummed Artifact &amp; Evidence</div>
-                <div class="step-desc">Certified regulatory dossier with verified storage identity and downloadable checksummed evidence package</div>
-            </div>
-        </div>
-
-        <div class="card-success mb-125">
-            <div class="text-lg font-extrabold text-emerald mb-075">
-                ✓ Dossier Certified &amp; Checkpoint Committed
-            </div>
-            <div class="gate-meta-grid">
-                <span class="text-muted">Storage URI:</span>
-                <span id="art-uri" class="font-bold text-blue">—</span>
-                <span class="text-muted">SHA-256 Fingerprint:</span>
-                <span id="art-sha">—</span>
-                <span class="text-muted">Artifact Size:</span>
-                <span id="art-size">—</span>
-                <span class="text-muted">Storage Mode:</span>
-                <span id="art-store-mode" class="text-amber">local_filesystem_ephemeral</span>
-            </div>
-        </div>
-
-        <div>
-            <button class="btn btn-primary" id="btn-download-evidence">⬇ Download Checksummed Evidence Package (.json)</button>
-        </div>
-    </div>
-
-</section>
-
-<!-- ══════════════════════════════════════════════════════════════════════════
-     VIEW 2: Evidence & Verification Center
-══════════════════════════════════════════════════════════════════════════ -->
-<section id="view-evidence" class="view-section">
-    <div class="step-card">
-        <div class="step-header">
-            <div class="step-title">Live Verification Claim Matrix</div>
-        </div>
-        <p class="text-sm text-secondary mb-15">
-            Autonomous compliance guarantees validated against EU (EC) No 1223/2009 and SCCS 12th Revision.
-        </p>
-
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Claim / Capability</th>
-                    <th>Runtime Mode</th>
-                    <th>Status</th>
-                    <th>Verification Evidence</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>5-Format Binary Intake</strong> (PDF, DOCX, CSV, XLSX, PPTX)</td>
-                    <td><span class="badge badge-blue">LIVE PRODOCUX</span></td>
-                    <td><span class="badge badge-pass">VERIFIED</span></td>
-                    <td>ProDocuX capabilities contract <code>prodocux_intake_capabilities_v1</code></td>
-                </tr>
-                <tr>
-                    <td><strong>SCCS 12th Notes Toxicology Engine</strong></td>
-                    <td><span class="badge badge-blue">DETERMINISTIC</span></td>
-                    <td><span class="badge badge-pass">VERIFIED</span></td>
-                    <td>Dynamic SED &amp; Margin of Safety (MoS) calculation formula</td>
-                </tr>
-                <tr>
-                    <td><strong>PDX Execution Plan &amp; Checkpoint Binding</strong></td>
-                    <td><span class="badge badge-blue">LIVE PDX CORE</span></td>
-                    <td><span class="badge badge-pass">VERIFIED</span></td>
-                    <td>3-way cryptographic hash binding (case, plan, evidence digests)</td>
-                </tr>
-                <tr>
-                    <td><strong>Digest Tampering Protection</strong></td>
-                    <td><span class="badge badge-blue">ACID FENCE</span></td>
-                    <td><span class="badge badge-pass">VERIFIED</span></td>
-                    <td>Precondition check rejects tampered digests with HTTP 412</td>
-                </tr>
-                <tr>
-                    <td><strong>Idempotent Replay Protection</strong></td>
-                    <td><span class="badge badge-blue">IDEMPOTENCY KEY</span></td>
-                    <td><span class="badge badge-pass">VERIFIED</span></td>
-                    <td>Identical approvals return cached record; conflicting return HTTP 409</td>
-                </tr>
-                <tr>
-                    <td><strong>Model Armor Security Scanner</strong></td>
-                    <td><span class="badge badge-review">LOCAL EMULATION</span></td>
-                    <td><span class="badge badge-pass">VERIFIED</span></td>
-                    <td>Regex policy blocks prompt injection and path traversal attempts</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<!-- ══════════════════════════════════════════════════════════════════════════
-     VIEW 3: API Playground
-══════════════════════════════════════════════════════════════════════════ -->
-<section id="view-playground" class="view-section">
-    <div class="step-card">
-        <div class="step-header">
-            <div class="step-title">Interactive API Playground</div>
-        </div>
-        <p class="text-sm text-secondary mb-15">
-            Test individual Fleet API endpoints directly with curl copy commands.
-        </p>
-
-        <div class="grid-2">
-            <div class="select-card cursor-default">
-                <div class="font-bold mb-05">1. Issue Scoped Demo Session</div>
-                <div class="text-xs text-muted font-mono mb-075">POST /v1/demo/session</div>
-                <div class="code-panel">curl -X POST "$BASE_URL/v1/demo/session" \
-  -H "Content-Type: application/json" \
-  -d '{"persona": "formulator"}'</div>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-success" id="btn-manager-accept">✓ 接受提案並定稿 (Accept &amp; Finalize)</button>
+                            <button type="button" class="btn btn-danger" id="btn-manager-return">✕ 退回提案 (Return to Formulator)</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="select-card cursor-default">
-                <div class="font-bold mb-05">2. Evaluate SCCS Formula</div>
-                <div class="text-xs text-muted font-mono mb-075">POST /v1/dossiers/evaluate-sccs</div>
-                <div class="code-panel">curl -X POST "$BASE_URL/v1/dossiers/evaluate-sccs" \
-  -H "Authorization: Bearer $DEMO_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"case_id":"c1","product_name":"Test","formula":[{"inci_name":"Retinol","concentration_pct":0.05,"noael_mg_kg_day":2.0}]}'</div>
+        </div>
+    </section>
+
+
+    <!-- ══════════════════════════════════════════════════════════════════════════
+         VIEW 3: Approved Product Record & 5-Format Export Center
+    ══════════════════════════════════════════════════════════════════════════ -->
+    <section id="view-export" class="role-workspace">
+        <div class="card">
+            <div class="card-header flex-between">
+                <div>
+                    <div class="card-title text-emerald">✓ 定稿產品監管檔案庫 (Approved Product Records)</div>
+                    <div class="card-subtitle">不可竄改之正式產品紀錄，包含 64 位元 SHA-256 存證與 5 格式 ProDocuX 渲染規格</div>
+                </div>
             </div>
 
-            <div class="select-card cursor-default">
-                <div class="font-bold mb-05">3. Submit Approval Decision</div>
-                <div class="text-xs text-muted font-mono mb-075">POST /v1/approval/decide</div>
-                <div class="code-panel">curl -X POST "$BASE_URL/v1/approval/decide" \
-  -H "Authorization: Bearer $DEMO_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"checkpoint_id":"chk-1","run_id":"run-1","approval_request_id":"...","idempotency_key":"k1","decision":"approve","case_digest":"...","plan_digest":"..."}'</div>
-            </div>
-
-            <div class="select-card cursor-default">
-                <div class="font-bold mb-05">4. Download Checksummed Evidence</div>
-                <div class="text-xs text-muted font-mono mb-075">GET /v1/evidence/runs/{run_id}</div>
-                <div class="code-panel">curl -X GET "$BASE_URL/v1/evidence/runs/$RUN_ID" \
-  -H "Authorization: Bearer $DEMO_TOKEN"</div>
+            <div id="approved-products-list">
+                <!-- Populated dynamically -->
             </div>
         </div>
-    </div>
-</section>
+    </section>
 
 </main>
 
-<footer>
-    FortifiedReg Fleet v0.3.2 — Autonomous Compliance Fleet — EU Cosmetics Regulation (EC) No 1223/2009
-</footer>
+
+<!-- ── Two-Tier Import Confirmation Modal ── -->
+<div class="modal-overlay hidden" id="modal-import-preview">
+    <div class="modal-card">
+        <div class="modal-header">
+            <div class="modal-title">📄 ProDocuX 內容解析與配方預覽確認</div>
+            <button type="button" class="btn-close" id="btn-modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <p class="text-sm text-secondary mb-1">
+                ProDocuX 已成功自來源文件提取通用區塊，並由 Fleet Cosmetics 正規化為以下成分候選列。請確認後再套用至權威配方：
+            </p>
+            <div class="table-wrap mb-1">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>INCI 名稱</th>
+                            <th>濃度 (%)</th>
+                            <th>CAS</th>
+                            <th>NOAEL</th>
+                            <th>來源位置</th>
+                            <th>信心度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-tbody-candidates">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="modal-warnings" class="text-sm text-rose font-bold mb-1"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="btn-modal-cancel">取消 (Cancel)</button>
+            <button type="button" class="btn btn-primary" id="btn-modal-apply">套用至配方 (Apply to Formulation)</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

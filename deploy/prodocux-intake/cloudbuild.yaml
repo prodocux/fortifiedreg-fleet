@@ -3,11 +3,11 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/fortifiedreg/prodocux-intake:c8acd2b'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/fortifiedreg/prodocux-intake:bcbe39c'
       - '-f'
       - 'Dockerfile'
       - '.'
 images:
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/fortifiedreg/prodocux-intake:c8acd2b'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/fortifiedreg/prodocux-intake:bcbe39c'
 options:
   logging: CLOUD_LOGGING_ONLY

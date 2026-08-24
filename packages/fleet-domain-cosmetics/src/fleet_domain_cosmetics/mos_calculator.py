@@ -3,8 +3,8 @@ Toxicological Margin of Safety (MoS) Calculator.
 Pure domain logic implementing EU SCCS Notes of Guidance (12th Revision).
 """
 import hashlib
-from typing import Dict, List, Optional
-from fleet_governance_core.models.case import DossierCase
+from typing import Any, Dict, List, Optional
+from fleet_governance_core.models.case import DossierCase, ExposureScenario
 from fleet_governance_core.models.verifier import VerifierResult, VerifierStatusEnum
 
 MOS_RULE_SET_ID = "EU_COSMETICS_REG_1223_2009"
@@ -30,7 +30,7 @@ def calculate_mos(noael_mg_kg_day: float, sed: float) -> float:
         return float("inf")
     return round(noael_mg_kg_day / sed, 2)
 
-def evaluate_toxicology_mos(case: DossierCase) -> VerifierResult:
+def evaluate_toxicology_mos(case: Any, exposure_scenario: Optional[Any] = None) -> VerifierResult:
     """Evaluate full formulation toxicological Margin of Safety."""
     rule_digest = hashlib.sha256(f"{MOS_RULE_SET_ID}:{MOS_RULE_SET_VERSION}".encode("utf-8")).hexdigest()
     
@@ -39,9 +39,24 @@ def evaluate_toxicology_mos(case: DossierCase) -> VerifierResult:
     missing_noael_ingredients: List[str] = []
     failed_ingredients: List[str] = []
     
-    exp = case.exposure_scenario
+    if isinstance(case, list):
+        formula_items = case
+        exp = exposure_scenario or ExposureScenario(
+            product_type="face_serum",
+            daily_applied_amount_g=0.8,
+            retention_factor=1.0,
+            body_weight_kg=60.0,
+        )
+    else:
+        formula_items = getattr(case, "formula", []) or []
+        exp = getattr(case, "exposure_scenario", exposure_scenario) or ExposureScenario(
+            product_type="face_serum",
+            daily_applied_amount_g=0.8,
+            retention_factor=1.0,
+            body_weight_kg=60.0,
+        )
     
-    for item in case.formula:
+    for item in formula_items:
         # Solvent / Aqua is exempt from toxicology threshold
         if item.inci_name.upper() == "AQUA":
             continue
@@ -64,7 +79,7 @@ def evaluate_toxicology_mos(case: DossierCase) -> VerifierResult:
         if mos < MOS_THRESHOLD:
             failed_ingredients.append(f"{item.inci_name} (MoS={mos} < 100)")
 
-    evidence_ids = [doc.doc_id for doc in case.supplier_documents]
+    evidence_ids = [] if isinstance(case, list) else [doc.doc_id for doc in getattr(case, "supplier_documents", [])]
 
     # Status Determination according to G0 rules:
     # 1. Any clear violation (MoS < 100) -> FAIL

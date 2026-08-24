@@ -47,15 +47,15 @@ def test_no_arbitrary_auth_token_endpoint():
     assert "/v1/demo/session" in js_content, "Portal should use /v1/demo/session!"
 
 
-def test_version_bumped_to_v0_3_2():
-    """Verify that version 0.3.2 is consistently declared."""
+def test_version_bumped_to_v0_4_0():
+    """Verify that version 0.4.0 is consistently declared."""
     main_content = MAIN_PATH.read_text(encoding="utf-8")
     html_content = PORTAL_HTML_PATH.read_text(encoding="utf-8")
     js_content = PORTAL_JS_PATH.read_text(encoding="utf-8")
 
-    assert 'version="0.3.2"' in main_content
-    assert "v0.3.2" in html_content
-    assert "v0.3.2" in js_content
+    assert 'version="0.4.0"' in main_content
+    assert "v0.4.0" in html_content
+    assert "v0.4.0" in js_content
 
 
 def test_portal_zero_inline_styles_for_csp_compliance():

@@ -21,7 +21,7 @@ if (Test-Path Variable:PSNativeCommandUseErrorActionPreference) {
 $ErrorActionPreference = "Continue"
 
 Write-Host "====================================================================" -ForegroundColor Cyan
-Write-Host "   FortifiedReg Fleet v0.3.2 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
+Write-Host "   FortifiedReg Fleet v0.4.0 - Google Cloud Run Deployment Suite   " -ForegroundColor Cyan
 Write-Host "====================================================================" -ForegroundColor Cyan
 
 function Test-ProDocuXProductionUrl ([string]$url) {
@@ -72,7 +72,7 @@ if (-not (Test-ProDocuXProductionUrl $ProDocuXUrl)) {
 
 $GitHead = (git -C $RootDir rev-parse HEAD).Trim()
 $ShortCommit = (git -C $RootDir rev-parse --short=12 HEAD).Trim()
-$ImageTag = "v0.3.2-${ShortCommit}"
+$ImageTag = "v0.4.0-${ShortCommit}"
 $ImageUri = "${Region}-docker.pkg.dev/${ProjectId}/${ArtifactRepo}/fleet:${ImageTag}"
 $RuntimeSA = "fortifiedreg-fleet-runtime@${ProjectId}.iam.gserviceaccount.com"
 
@@ -134,7 +134,7 @@ gcloud secrets add-iam-policy-binding $secretName `
 Write-Host "`n[Step 4/5] Building OCI-Pinned Container Image via Cloud Build..." -ForegroundColor Cyan
 gcloud builds submit $RootDir `
     --config="$ScriptDir/cloudbuild.yaml" `
-    --substitutions="_GIT_COMMIT=$GitHead,_SHORT_COMMIT=$ShortCommit,_IMAGE_TAG=v0.3.2,_REGION=$Region,_ARTIFACT_REPO=$ArtifactRepo,_SERVICE_NAME=$ServiceName,_PRODOCUX_URL=$ProDocuXUrl" `
+    --substitutions="_GIT_COMMIT=$GitHead,_SHORT_COMMIT=$ShortCommit,_IMAGE_TAG=v0.4.0,_REGION=$Region,_ARTIFACT_REPO=$ArtifactRepo,_SERVICE_NAME=$ServiceName,_PRODOCUX_URL=$ProDocuXUrl" `
     --project=$ProjectId
 
 if ($LASTEXITCODE -ne 0) {

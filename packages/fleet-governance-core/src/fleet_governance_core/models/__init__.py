@@ -28,6 +28,19 @@ from fleet_governance_core.models.capabilities import (
     CapabilityCatalog,
 )
 
+from fleet_governance_core.models.workflow_v4 import (
+    ActingRoleEnum,
+    FormulationStatusEnum,
+    ProposalStatusEnum,
+    GateDecisionEnum,
+    DemoSession,
+    FormulationDraft,
+    ProductProposal,
+    ApprovedProductRecord,
+    ContentBlockItem,
+    ProDocuXContentBlocksContract,
+)
+
 __all__ = [
     "canonical_json_dumps",
     "compute_data_sha256",
@@ -52,4 +65,14 @@ __all__ = [
     "ToolPolicy",
     "AgentCapability",
     "CapabilityCatalog",
+    "ActingRoleEnum",
+    "FormulationStatusEnum",
+    "ProposalStatusEnum",
+    "GateDecisionEnum",
+    "DemoSession",
+    "FormulationDraft",
+    "ProductProposal",
+    "ApprovedProductRecord",
+    "ContentBlockItem",
+    "ProDocuXContentBlocksContract",
 ]

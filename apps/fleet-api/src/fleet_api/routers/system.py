@@ -30,7 +30,11 @@ router = APIRouter(prefix="/v1", tags=["System"])
 
 COMPATIBILITY_MANIFEST_PATH = Path("/app/compatibility/compatibility_manifest.json")
 if not COMPATIBILITY_MANIFEST_PATH.exists():
-    COMPATIBILITY_MANIFEST_PATH = Path(__file__).resolve().parents[4] / "compatibility" / "compatibility_manifest.json"
+    for p in Path(__file__).resolve().parents:
+        cand = p / "compatibility" / "compatibility_manifest.json"
+        if cand.exists():
+            COMPATIBILITY_MANIFEST_PATH = cand
+            break
 
 
 def _get_manifest_digest() -> str:
@@ -51,12 +55,12 @@ def get_system_version() -> Dict[str, Any]:
 
     return {
         "service": "fortified-enterprise-fleet-api",
-        "fleet_version": "0.3.2",
+        "fleet_version": "0.4.0",
         "fleet_commit": fleet_commit,
         "cloud_run_revision": cloud_run_revision,
         "image_digest": image_digest,
-        "pdx_core_pin": "61cff57ec7938165234dd895177dccade7ac1a5f",
-        "prodocux_pin": "c8acd2ba69c23458cb2589d8450246fe9b16424f",
+        "pdx_core_pin": "37e89752560b22dc8724d470dce96187f19e3f98",
+        "prodocux_pin": "53c4784d4b2bae4437252a287193e897973e8474",
         "compatibility_manifest_sha256": _get_manifest_digest(),
         "environment": FLEET_ENV,
         "adapter_modes": {
@@ -174,7 +178,7 @@ def get_evidence_package(
 
     package_content: Dict[str, Any] = {
         "package_type": "checksummed_evidence_package",
-        "version": "0.3.2",
+        "version": "0.4.0",
         "tenant_id": tenant_id,
         "run_id": run_id,
         "requested_by": actor.sub,

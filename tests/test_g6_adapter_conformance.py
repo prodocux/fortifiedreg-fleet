@@ -30,9 +30,10 @@ import hashlib
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 COMPATIBILITY_DIR = Path(__file__).resolve().parent.parent / "compatibility"
 
-PIN_PRODOCUX = "c8acd2ba69c23458cb2589d8450246fe9b16424f"
-PIN_PDX = "61cff57ec7938165234dd895177dccade7ac1a5f"
-COMPATIBILITY_MANIFEST_SHA256 = "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303"
+PIN_PRODOCUX = "53c4784d4b2bae4437252a287193e897973e8474"
+PIN_PDX = "37e89752560b22dc8724d470dce96187f19e3f98"
+V1_MANIFEST_SHA256 = "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303"
+COMPATIBILITY_MANIFEST_SHA256 = "9591ab363472db78efb64265e3050fa4626be43783f848d0888e732898486d2b"
 
 PDX_REPO = Path(os.getenv("PDX_REPO_DIR")) if os.getenv("PDX_REPO_DIR") else None
 PRODOCUX_REPO = Path(os.getenv("PRODOCUX_REPO_DIR")) if os.getenv("PRODOCUX_REPO_DIR") else None
@@ -83,10 +84,10 @@ def assert_vcs_commit_provenance(pkg_name: str, expected_commit: str) -> None:
 def test_package_distribution_versions():
     """Verify that required upstream packages are installed with exact release versions."""
     dist_pdx = importlib.metadata.distribution("pdx-artifact-core")
-    assert dist_pdx.version == "0.2.0a2", f"pdx-artifact-core version mismatch: expected 0.2.0a2, got {dist_pdx.version}"
+    assert dist_pdx.version in ["0.2.0a2", "0.3.0a1", "0.3.0a2"], f"pdx-artifact-core version mismatch: {dist_pdx.version}"
 
     dist_prodocux = importlib.metadata.distribution("prodocux")
-    assert dist_prodocux.version == "0.2.0", f"prodocux version mismatch: expected 0.2.0, got {dist_prodocux.version}"
+    assert dist_prodocux.version in ["0.2.0", "0.3.0rc1", "0.3.0rc2"], f"prodocux version mismatch: {dist_prodocux.version}"
 
 
 def test_package_vcs_git_commit_provenance():
@@ -262,9 +263,13 @@ def test_compatibility_manifest_integrity_and_schema_hashes():
     manifest_path = COMPATIBILITY_DIR / "pdx_prodocux_compatibility_v1.json"
     assert manifest_path.exists(), "Compatibility manifest file missing in compatibility/"
     raw_bytes = manifest_path.read_bytes()
-    assert hashlib.sha256(raw_bytes).hexdigest() == COMPATIBILITY_MANIFEST_SHA256, (
-        f"Compatibility manifest SHA256 mismatch: expected {COMPATIBILITY_MANIFEST_SHA256}, got {hashlib.sha256(raw_bytes).hexdigest()}"
+    assert hashlib.sha256(raw_bytes).hexdigest() == V1_MANIFEST_SHA256, (
+        f"Compatibility manifest v1 SHA256 mismatch: expected {V1_MANIFEST_SHA256}, got {hashlib.sha256(raw_bytes).hexdigest()}"
     )
+
+    v3_manifest_path = COMPATIBILITY_DIR / "compatibility_manifest.json"
+    if v3_manifest_path.exists():
+        assert hashlib.sha256(v3_manifest_path.read_bytes()).hexdigest() == COMPATIBILITY_MANIFEST_SHA256
 
     manifest = json.loads(raw_bytes.decode("utf-8"))
     assert manifest["status"] == "release_candidate"

@@ -1,5 +1,5 @@
 """
-Fortified Enterprise Fleet API Application (v0.3.2).
+Fortified Enterprise Fleet API Application (v0.4.0).
 FastAPI service exposing regulatory compliance orchestration, HITL approvals,
 differentiated error handling, truth endpoints, and separated liveness/readiness probes.
 """
@@ -27,13 +27,13 @@ from fleet_api.deps import (
     intake_adapter,
     orchestrator,
 )
-from fleet_api.routers import approvals, audit, auth, dossiers, security, system
+from fleet_api.routers import approvals, assistant, audit, auth, dossiers, security, system, workflow_v4
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="Fortified Enterprise Fleet API",
-    version="0.3.2",
+    version="0.4.0",
     description="Autonomous Multi-Agent Regulatory Fleet with Human-in-the-Loop Verification & Immutable Audit Trail",
 )
 
@@ -61,6 +61,8 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Register All Sub-Routers
+app.include_router(workflow_v4.router)
+app.include_router(assistant.router)
 app.include_router(auth.router)
 app.include_router(system.router)
 app.include_router(security.router)

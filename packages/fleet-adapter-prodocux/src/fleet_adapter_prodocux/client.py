@@ -461,5 +461,30 @@ class ProDocuXHttpIntakeAdapter(IntakePort):
             "formats": formats,
         }
 
+    def extract_content_blocks(
+        self, document_filename: str, document_bytes: bytes, max_pages: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Extract neutral universal content blocks (prodocux_content_blocks_v1 with text_items)
+        via ProDocuX POST /v1/intake/extract-blocks across all 5 formats.
+        """
+        safe_filename, ext = self.validate_and_check_size(document_filename, document_bytes)
+        b64_content = base64.b64encode(document_bytes).decode("ascii")
+        payload = {
+            "document_filename": safe_filename,
+            "document_b64": b64_content,
+        }
+        return self._execute_http("POST", "/v1/intake/extract-blocks", payload)
+
+    def render_artifact(
+        self, render_request: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Request deterministic artifact rendering via ProDocuX POST /v1/render/artifact
+        using prodocux_render_request_v1 schema.
+        """
+        return self._execute_http("POST", "/v1/render/artifact", render_request)
+
+
 # Backward-compatible alias
 ProDocuXIntakeClient = ProDocuXHttpIntakeAdapter

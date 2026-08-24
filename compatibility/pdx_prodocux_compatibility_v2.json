@@ -1,0 +1,72 @@
+{
+  "schema_version": "pdx_prodocux_compatibility_v2",
+  "status": "release_candidate",
+  "compatibility_base": {
+    "manifest": "pdx_prodocux_compatibility_v1.json",
+    "sha256": "0b860fc0a5693a96083de1560ff030398e762c9f0c9dc4c0975eceb1d6ca1303"
+  },
+  "prodocux": {
+    "distribution": "prodocux",
+    "version": "0.3.0rc1",
+    "api_version": "v1",
+    "additive_operations": [
+      "POST /v1/verify/evidence-bundle",
+      "POST /v1/intake/profile-image",
+      "POST /v1/compare/normalized-profiles"
+    ],
+    "schemas": {
+      "intake_request_v1.json": "f3870a7b2dd9418303cfec8c3fc3fa053edd4591861bbd80807eedd49e50b341",
+      "intake_response_v1.json": "2993ac05e31157b0566f18b28a218a8628837eb1f4f703dde9955f00c8d6355f",
+      "prodocux_evidence_bundle_request_v1.json": "22aa4e3544f37f08d5fb1ec52640c5e8464c47f631741465c41e98d8921250c5",
+      "prodocux_evidence_bundle_result_v1.json": "5681b2af657ad05d7cac42257b78144a00aadce0e66ec9525ef13d783b69bce3",
+      "prodocux_image_profile_v1.json": "e2c36311c5e5ada75b0fcbb9a0fe8d57196d20243bd7dbd81c99c579f9da8480",
+      "prodocux_intake_capabilities_v1.json": "a2ea1f98e9bf21a39feebd11d70d8c992fb36c4ac35e26f2e24d0108833e23f3",
+      "prodocux_normalized_diff_request_v1.json": "1189b92fc456491e51e6b8bfdd91dc326824aa7589f11f143612db93e279b4bb",
+      "prodocux_normalized_diff_result_v1.json": "bbcd541da3d8c5607ca5a2d76b964a3e63cf9e493a0688fa2b2569918e7e4edd",
+      "prodocux_opaque_artifact_v1.json": "b0cbc2ca393cf1244bb3f3a617df9c006cbf0fc1fbbf5a369be00cfa9c93d742",
+      "prodocux_source_reference_v1.json": "664deddc5e5116ed26ab84c755562adde5dcfa46903232486ccceb8a014cce8f"
+    }
+  },
+  "pdx_artifact_core": {
+    "distribution": "pdx-artifact-engine",
+    "component": "pdx-artifact-core",
+    "version": "0.3.0a1",
+    "additive_exports": [
+      "CancellationSignal",
+      "CheckpointRepository",
+      "DecisionRepository",
+      "InMemoryCheckpointRepository",
+      "InMemoryDecisionRepository",
+      "ManualCancellationSignal",
+      "create_execution_context",
+      "create_external_operation",
+      "create_publication_receipt",
+      "create_run_snapshot",
+      "decode_run_snapshot",
+      "encode_run_snapshot",
+      "run_event_v1",
+      "validate_ordered_run_events"
+    ],
+    "schemas": {
+      "approval_decision.v1.schema.json": "3d3f04861e178442ddc05da112e14153629cb55934e39fb2c337725c3274eec3",
+      "approval_request.v1.schema.json": "ac78ca29be02439d7914606c21a668e134fff5af61b30b89cfde9ef8b5b13c70",
+      "artifact_storage_identity.v1.schema.json": "157a2038824d7daa747069d829348719665d40eb2d6900d11f9fdadf8962371e",
+      "execution_context.v1.schema.json": "0e47a95118be26cd78cf2668524bade16b34f6adcb8385f8754a211fb992b7e8",
+      "execution_plan.v1.schema.json": "fff3e94c92a69e64987e29db7a9e18d215895c05a882caf3691c7987c0a4b37d",
+      "external_operation.v1.schema.json": "2f7550a5000bb5e53afd04fef95de7a4957b2849869cf9469fa5f41a9a8893e9",
+      "publication_receipt.v1.schema.json": "8818fe6f738337f1ae2af4ee8f52c6f781609396278fdad8c98cebacf9c79ee6",
+      "run_event.v1.schema.json": "09c07160a3070c648f3e3cbf576ab3e3e4184e6a1ad4e705381ce21f8f1fa4ac",
+      "run_snapshot.v1.schema.json": "ae3d380d83183e3fade91ffe8e0b2a0a179a965d85aaf1ef997590a39eba9c59",
+      "step_receipt.v1.schema.json": "69ca5dac98c05fcc910e557f91f4449f8f04d2a007861c88110a9dadd7619d58",
+      "tool_request.v1.schema.json": "3130e692ece08b18f418f0cffca267232d4ed4418c20cf278f4f72178bd432d9",
+      "tool_result.v1.schema.json": "4860ea4fc6dc92888659d70282764286771f4773e480d9011364a0b4123dc945",
+      "verifier_result.v1.schema.json": "6bab93bef4c3f1ee604e99bc3b3abe3037c25db8252f090dd3394439ea42e2cd",
+      "workflow_checkpoint.v1.schema.json": "9a4a90f459fd2f5dfb48eb6f8aec4a03a41c3e77952938dc087f7ed367b2cccc"
+    }
+  },
+  "integration": {
+    "transport": "ProDocuX HTTP API v1 and packaged PDX Core",
+    "compatibility_policy": "Schemas, operations, and exports are additive to the frozen compatibility v1 surface.",
+    "publication_gate": "No public pin exists until commits and release review are approved."
+  }
+}

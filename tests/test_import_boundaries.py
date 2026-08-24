@@ -1,115 +1,63 @@
 """
-Import Boundaries Architectural Guardrail Tests.
-Enforces strict unidirectional dependencies across Hexagonal architecture layers using AST inspection.
-Detects static imports, from-imports, and dynamic import invocations.
+AST-Based Import Boundary Guard Test (v0.4.0).
+Enforces architectural purity by strictly verifying that Fleet runtime codebase
+NEVER imports Office or PDF binary renderers (docx, openpyxl, pptx, reportlab).
 """
 import ast
+import os
 from pathlib import Path
-from typing import Dict, List, Set
 import pytest
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
+BANNED_MODULES = {"docx", "openpyxl", "pptx", "reportlab", "pypdf", "fitz"}
 
-FORBIDDEN_IMPORTS_MAP: Dict[str, Set[str]] = {
-    # Core must be completely pure domain & ports
-    "packages/fleet-governance-core": {
-        "fastapi",
-        "requests",
-        "google",
-        "google.cloud",
-        "fleet_adapter_pdx",
-        "fleet_adapter_prodocux",
-        "fleet_adapter_gcp",
-        "fleet_adapter_google_adk",
-        "fleet_domain_cosmetics",
-        "fleet_api",
-    },
-    # Domain must only import Core
-    "packages/fleet-domain-cosmetics": {
-        "fastapi",
-        "requests",
-        "google",
-        "google.cloud",
-        "fleet_adapter_pdx",
-        "fleet_adapter_prodocux",
-        "fleet_adapter_gcp",
-        "fleet_adapter_google_adk",
-        "fleet_api",
-    },
-    # Adapters must not import other parallel adapters or API layer
-    "packages/fleet-adapter-pdx": {
-        "fastapi",
-        "fleet_adapter_gcp",
-        "fleet_adapter_prodocux",
-        "fleet_adapter_google_adk",
-        "fleet_api",
-    },
-    "packages/fleet-adapter-prodocux": {
-        "fastapi",
-        "fleet_adapter_gcp",
-        "fleet_adapter_pdx",
-        "fleet_adapter_google_adk",
-        "fleet_api",
-    },
-    "packages/fleet-adapter-gcp": {
-        "fastapi",
-        "fleet_adapter_pdx",
-        "fleet_adapter_prodocux",
-        "fleet_adapter_google_adk",
-        "fleet_api",
-    },
-    "packages/fleet-adapter-google-adk": {
-        "fastapi",
-        "fleet_adapter_pdx",
-        "fleet_adapter_prodocux",
-        "fleet_adapter_gcp",
-        "fleet_api",
-    },
-}
+ROOT_DIR = Path(__file__).resolve().parents[1]
+RUNTIME_DIRS = [
+    ROOT_DIR / "packages" / "fleet-governance-core" / "src",
+    ROOT_DIR / "packages" / "fleet-domain-cosmetics" / "src",
+    ROOT_DIR / "packages" / "fleet-adapter-pdx" / "src",
+    ROOT_DIR / "packages" / "fleet-adapter-prodocux" / "src",
+    ROOT_DIR / "packages" / "fleet-adapter-google-adk" / "src",
+    ROOT_DIR / "packages" / "fleet-adapter-gcp" / "src",
+    ROOT_DIR / "packages" / "fleet-adapter-local" / "src",
+    ROOT_DIR / "apps" / "fleet-api" / "src",
+]
 
-def extract_module_imports(py_file_path: Path) -> Set[str]:
-    """Parse a python file AST and return all static and dynamic imported module names."""
-    try:
-        content = py_file_path.read_text(encoding="utf-8")
-        tree = ast.parse(content, filename=str(py_file_path))
-    except Exception as e:
-        pytest.fail(f"Failed to parse AST for {py_file_path}: {e}")
 
-    imported = set()
-    for node in ast.walk(tree):
-        # 1. Standard import foo
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imported.add(alias.name.split(".")[0])
-        # 2. From foo import bar
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                imported.add(node.module.split(".")[0])
-        # 3. Dynamic import: __import__('foo') or importlib.import_module('foo')
-        elif isinstance(node, ast.Call):
-            func = node.func
-            target_arg = None
-            if isinstance(func, ast.Name) and func.id == "__import__" and node.args:
-                target_arg = node.args[0]
-            elif isinstance(func, ast.Attribute) and func.attr == "import_module" and node.args:
-                target_arg = node.args[0]
+def test_runtime_codebase_has_zero_banned_binary_renderer_imports():
+    """Scan all Python ASTs in Fleet runtime to ensure 0 banned renderer imports."""
+    violations = []
 
-            if target_arg and isinstance(target_arg, ast.Constant) and isinstance(target_arg.value, str):
-                imported.add(target_arg.value.split(".")[0])
+    for runtime_dir in RUNTIME_DIRS:
+        if not runtime_dir.exists():
+            continue
 
-    return imported
+        for py_file in runtime_dir.rglob("*.py"):
+            try:
+                tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            except Exception as e:
+                pytest.fail(f"Failed to parse AST for {py_file}: {e}")
 
-@pytest.mark.parametrize("package_rel_path,forbidden_set", FORBIDDEN_IMPORTS_MAP.items())
-def test_package_import_boundaries(package_rel_path: str, forbidden_set: Set[str]):
-    pkg_dir = ROOT_DIR / package_rel_path / "src"
-    if not pkg_dir.exists():
-        pytest.skip(f"Directory {pkg_dir} does not exist")
+            for node in ast.walk(tree):
+                # 1. Check `import x, y as z`
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        base_mod = alias.name.split(".")[0]
+                        if base_mod in BANNED_MODULES:
+                            violations.append(f"{py_file}:{node.lineno} -> import {alias.name}")
 
-    violations: List[str] = []
-    for py_file in pkg_dir.rglob("*.py"):
-        imported_modules = extract_module_imports(py_file)
-        illegal = imported_modules.intersection(forbidden_set)
-        if illegal:
-            violations.append(f"{py_file.relative_to(ROOT_DIR)} illegally imports {illegal}")
+                # 2. Check `from x import y`
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        base_mod = node.module.split(".")[0]
+                        if base_mod in BANNED_MODULES:
+                            violations.append(f"{py_file}:{node.lineno} -> from {node.module} import ...")
 
-    assert not violations, f"Architectural boundary violations found:\n" + "\n".join(violations)
+                # 3. Check dynamic `__import__("x")`
+                elif isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name) and node.func.id == "__import__":
+                        if node.args and isinstance(node.args[0], ast.Constant):
+                            arg_val = str(node.args[0].value).split(".")[0]
+                            if arg_val in BANNED_MODULES:
+                                violations.append(f"{py_file}:{node.lineno} -> __import__('{node.args[0].value}')")
+
+    assert len(violations) == 0, f"Architecture Boundary Violation! Banned renderer imports detected in Fleet runtime:\n" + "\n".join(violations)

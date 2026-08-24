@@ -14,5 +14,9 @@ def canonical_json_dumps(data: Any) -> str:
     return json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
 
 def compute_data_sha256(data: Any) -> str:
+    if isinstance(data, (bytes, bytearray)):
+        return hashlib.sha256(data).hexdigest()
+    if isinstance(data, str):
+        return hashlib.sha256(data.encode("utf-8")).hexdigest()
     raw_bytes = canonical_json_dumps(data).encode("utf-8")
     return hashlib.sha256(raw_bytes).hexdigest()

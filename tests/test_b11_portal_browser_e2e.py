@@ -21,20 +21,20 @@ def test_b11_portal_serves_html_and_static_assets():
     assert "Content-Security-Policy" in html_resp.headers
     csp = html_resp.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp
-    assert "FortifiedReg Fleet v0.3.2" in html_resp.text
-    assert 'src="/static/portal.js?v=0.3.2"' in html_resp.text
+    assert "FortifiedReg Fleet" in html_resp.text
+    assert 'src="/static/portal.js?v=0.4.0"' in html_resp.text
 
     # 2. Portal CSS
-    css_resp = client.get("/static/portal.css")
+    css_resp = client.get("/static/portal.css?v=0.4.0")
     assert css_resp.status_code == 200
     assert "text/css" in css_resp.headers.get("content-type", "")
     assert "--bg-primary" in css_resp.text
 
     # 3. Portal JS
-    js_resp = client.get("/static/portal.js")
+    js_resp = client.get("/static/portal.js?v=0.4.0")
     assert js_resp.status_code == 200
     assert "javascript" in js_resp.headers.get("content-type", "")
-    assert "FortifiedReg Fleet v0.3.2" in js_resp.text
+    assert "FortifiedReg Fleet v0.4.0" in js_resp.text
 
     # 4. Golden Samples JSON
     samples_resp = client.get("/static/samples.json")
@@ -169,7 +169,7 @@ def test_b11_guided_demo_full_lifecycle_hermetic():
     ev_data = ev_res.json()
     assert ev_data["package_type"] == "checksummed_evidence_package"
     assert ev_data["run_id"] == run_id
-    assert ev_data["version"] == "0.3.2"
+    assert ev_data["version"] == "0.4.0"
     assert ev_data["package_sha256"] is not None
     assert ev_data["audit_events_count"] > 0
     assert ev_data["case_digest"] == case_digest

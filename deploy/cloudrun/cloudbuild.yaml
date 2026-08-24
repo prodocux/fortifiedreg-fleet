@@ -65,7 +65,7 @@ steps:
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--service-account=fortifiedreg-fleet-runtime@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--set-env-vars=FLEET_ENV=production,FLEET_COMMIT=$_GIT_COMMIT,GIT_COMMIT=$_GIT_COMMIT,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PDX_CORE_PIN=61cff57ec7938165234dd895177dccade7ac1a5f,PRODOCUX_PIN=c8acd2ba69c23458cb2589d8450246fe9b16424f,PRODOCUX_BASE_URL=$_PRODOCUX_URL'
+      - '--set-env-vars=FLEET_ENV=production,FLEET_COMMIT=$_GIT_COMMIT,GIT_COMMIT=$_GIT_COMMIT,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PDX_CORE_PIN=37e89752560b22dc8724d470dce96187f19e3f98,PRODOCUX_PIN=53c4784d4b2bae4437252a287193e897973e8474,PRODOCUX_BASE_URL=$_PRODOCUX_URL'
       - '--set-secrets=FLEET_JWT_SECRET=fleet-jwt-secret:latest'
       - '--memory=1Gi'
       - '--cpu=1'
@@ -80,7 +80,7 @@ substitutions:
   _PRODOCUX_URL: 'REQUIRED_LIVE_PRODOCUX_URL'
   _GIT_COMMIT: 'REQUIRED_40_CHAR_GIT_COMMIT'
   _SHORT_COMMIT: 'REQUIRED_12_CHAR_SHORT_COMMIT'
-  _IMAGE_TAG: 'v0.3.2'
+  _IMAGE_TAG: 'v0.4.0'
 
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_ARTIFACT_REPO/fleet:$_IMAGE_TAG-$_SHORT_COMMIT'

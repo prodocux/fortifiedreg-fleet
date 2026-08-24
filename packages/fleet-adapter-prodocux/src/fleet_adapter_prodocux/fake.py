@@ -103,3 +103,48 @@ class FakeProDocuXIntakeAdapter(IntakePort):
             "slide_count": 6,
             "total_words": 150,
         }
+
+    def extract_content_blocks(
+        self, document_filename: str, document_bytes: bytes, max_pages: int = 50
+    ) -> Dict[str, Any]:
+        safe_filename = sanitize_document_filename(document_filename)
+        validate_document_payload(document_bytes)
+        source_sha = hashlib.sha256(document_bytes).hexdigest()
+
+        return {
+            "schema_version": "prodocux_content_blocks_v1",
+            "document_id": f"doc-{safe_filename}",
+            "filename": safe_filename,
+            "source_sha256": source_sha,
+            "text_items": [
+                "Aqua: 78.5%",
+                "Glycerin: 5.0%",
+                "Retinol: 0.05%",
+                "Phenoxyethanol: 0.8%",
+            ],
+            "blocks": [
+                {"block_id": "b1", "block_type": "paragraph", "text": "Aqua: 78.5%", "source_locator": "Page 1, Row 1", "confidence": 0.99},
+                {"block_id": "b2", "block_type": "paragraph", "text": "Glycerin: 5.0%", "source_locator": "Page 1, Row 2", "confidence": 0.98},
+                {"block_id": "b3", "block_type": "paragraph", "text": "Retinol: 0.05%", "source_locator": "Page 1, Row 3", "confidence": 0.98},
+                {"block_id": "b4", "block_type": "paragraph", "text": "Phenoxyethanol: 0.8%", "source_locator": "Page 1, Row 4", "confidence": 0.97},
+            ],
+        }
+
+    def render_artifact(
+        self, render_request: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        fmt = render_request.get("format", "pdf")
+        title = render_request.get("title", "Rendered Artifact")
+        dummy_content = f"DUMMY_RENDERED_{fmt.upper()}_CONTENT_FOR_{title}".encode("utf-8")
+        sha256 = hashlib.sha256(dummy_content).hexdigest()
+        import base64
+        return {
+            "status": "success",
+            "schema_version": "prodocux_render_result_v1",
+            "format": fmt,
+            "title": title,
+            "sha256": sha256,
+            "size_bytes": len(dummy_content),
+            "content_b64": base64.b64encode(dummy_content).decode("ascii"),
+        }
+

@@ -1,646 +1,877 @@
 /**
- * FortifiedReg Fleet v0.3.2 — Portal JavaScript Client (ES Module)
- * Strictly fail-closed: zero synthetic fallbacks, zero client-side mock tokens/digests.
- * 100% CSP compliant: zero inline style mutations, zero style attributes.
+ * FortifiedReg Fleet v0.4.0 — PWA & Role-Based Autonomous Compliance Client.
+ * Implements strict CSP compliance (0 inline styles), single-identity dual-role session,
+ * event-driven component telemetry, two-tier import preview, and proposal governance.
  */
 
-// ── Global State ──
-let SESSION = null;
-let SAMPLES = null;
-let STATE = {
-    scenario: 'retinol',
-    caseId: null,
-    caseDigest: null,
-    plan: null,
-    planDigest: null,
-    execution: null,
-    checkpoint: null,
-    approvalRequest: null,
-    approvalDecision: null,
-    registeredDocs: {},
-    runId: null
+// Global Application State
+const STATE = {
+  token: null,
+  sessionId: null,
+  sub: null,
+  actingRole: 'formulator',
+  expiresAt: null,
+  timerInterval: null,
+  draft: null,
+  pendingPreviewCandidates: [],
+  selectedProposalId: null,
+  deferredInstallPrompt: null
 };
 
-const SCENARIO_CONFIGS = {
-    retinol: {
-        name: 'Retinol Night Serum',
-        expected: 'PASS',
-        description: 'Standard facial serum with Retinol (0.05%) and Phenoxyethanol (0.8%). MoS > 100.',
-        formula: [
-            { inci_name: 'Aqua', concentration_pct: 78.5 },
-            { inci_name: 'Glycerin', concentration_pct: 5.0, cas_number: '56-81-5', noael_mg_kg_day: 10000.0 },
-            { inci_name: 'Retinol', concentration_pct: 0.05, cas_number: '68-26-8', noael_mg_kg_day: 2.0 },
-            { inci_name: 'Phenoxyethanol', concentration_pct: 0.8, cas_number: '122-99-6', noael_mg_kg_day: 500.0 }
-        ]
-    },
-    peptide: {
-        name: 'Active Peptide Eye Cream',
-        expected: 'REVIEW',
-        description: 'Novel peptide formulation missing authoritative 90-day oral toxicity NOAEL study.',
-        formula: [
-            { inci_name: 'Aqua', concentration_pct: 95.0 },
-            { inci_name: 'Palmitoyl Tripeptide-38', concentration_pct: 2.0, cas_number: '1447824-23-8' },
-            { inci_name: 'Phenoxyethanol', concentration_pct: 0.5, cas_number: '122-99-6', noael_mg_kg_day: 500.0 }
-        ]
-    },
-    mercury: {
-        name: 'Mercury Bleaching Cream',
-        expected: 'FAIL',
-        description: 'Contains Mercury (2.0%), strictly prohibited under EU Annex II entry #221.',
-        formula: [
-            { inci_name: 'Aqua', concentration_pct: 88.0 },
-            { inci_name: 'Mercury', concentration_pct: 2.0, cas_number: '7439-97-6', noael_mg_kg_day: 0.01 }
-        ]
-    }
-};
+// ---------------------------------------------------------------------------
+// 1. PWA & Service Worker Initialization
+// ---------------------------------------------------------------------------
 
-const FORMAT_DOC_TYPES = {
-    pdf: 'SDS',
-    docx: 'COA',
-    csv: 'COA',
-    xlsx: 'COA',
-    pptx: 'COA'
-};
-
-// ── HTTP Helper (Fail-Closed) ──
-async function fetchApi(url, options = {}) {
-    const headers = options.headers || {};
-    if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
-        headers['Content-Type'] = 'application/json';
-        options.body = JSON.stringify(options.body);
-    }
-    if (SESSION && SESSION.token && !headers['Authorization']) {
-        headers['Authorization'] = 'Bearer ' + SESSION.token;
-    }
-    options.headers = headers;
-
-    const response = await fetch(url, options);
-    const text = await response.text();
-    let data = null;
-    try {
-        data = JSON.parse(text);
-    } catch (e) {
-        data = null;
-    }
-    return {
-        ok: response.ok,
-        status: response.status,
-        data,
-        rawText: text,
-        headers: response.headers
-    };
-}
-
-// ── Initialization ──
-document.addEventListener('DOMContentLoaded', async () => {
-    setupTabNavigation();
-    setupScenarioCards();
-    setupActionButtons();
-    await loadSamples();
-    await checkDeploymentTruth();
-    await acquireDemoSession();
-});
-
-// ── Tab Navigation ──
-function setupTabNavigation() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = btn.getAttribute('data-view');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
-            btn.classList.add('active');
-            const sec = document.getElementById(target);
-            if (sec) sec.classList.add('active');
-        });
+function initPWA() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/service-worker.js').catch((err) => {
+        console.warn('ServiceWorker registration error:', err);
+      });
     });
-}
+  }
 
-// ── Top Truth Bar & Health Probes ──
-async function checkDeploymentTruth() {
-    try {
-        const verRes = await fetchApi('/v1/version');
-        if (verRes.ok && verRes.data) {
-            const v = verRes.data;
-            setText('truth-version', v.fleet_version || '0.3.2');
-            setText('truth-revision', v.cloud_run_revision || 'local');
-            setText('truth-commit', v.fleet_commit ? v.fleet_commit.substring(0, 7) : 'unknown');
-            setText('truth-pdx', v.pdx_core_pin ? v.pdx_core_pin.substring(0, 7) : 'unknown');
-            setText('truth-prodocux', v.prodocux_pin ? v.prodocux_pin.substring(0, 7) : 'unknown');
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    STATE.deferredInstallPrompt = e;
+    const installBtn = document.getElementById('btn-install-pwa');
+    if (installBtn) installBtn.classList.remove('hidden');
+  });
+
+  const installBtn = document.getElementById('btn-install-pwa');
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (STATE.deferredInstallPrompt) {
+        STATE.deferredInstallPrompt.prompt();
+        const { outcome } = await STATE.deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          installBtn.classList.add('hidden');
         }
-
-        const readyRes = await fetchApi('/v1/ready');
-        const alertBanner = document.getElementById('demo-blocked-banner');
-        const elReady = document.getElementById('truth-ready');
-
-        if (readyRes.ok && readyRes.data && readyRes.data.status === 'ready') {
-            setText('truth-ready', 'READY (200)');
-            if (elReady) {
-                elReady.classList.remove('ready-fail');
-                elReady.classList.add('ready-pass');
-            }
-            if (alertBanner) alertBanner.classList.remove('visible');
-        } else {
-            setText('truth-ready', 'DEGRADED (' + readyRes.status + ')');
-            if (elReady) {
-                elReady.classList.remove('ready-pass');
-                elReady.classList.add('ready-fail');
-            }
-            if (alertBanner) {
-                alertBanner.textContent = 'DEMO BLOCKED: Upstream dependencies are unavailable (HTTP ' + readyRes.status + ').';
-                alertBanner.classList.add('visible');
-            }
-        }
-    } catch (err) {
-        setText('truth-ready', 'UNAVAILABLE');
-    }
-}
-
-// ── Load Golden Samples ──
-async function loadSamples() {
-    try {
-        const res = await fetch('/static/samples.json');
-        if (res.ok) {
-            SAMPLES = await res.json();
-            renderSampleCards();
-        }
-    } catch (e) {
-        console.error('Failed to load golden samples:', e);
-    }
-}
-
-function renderSampleCards() {
-    if (!SAMPLES) return;
-    const grid = document.getElementById('golden-intake-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    for (const [fmt, sample] of Object.entries(SAMPLES)) {
-        const card = document.createElement('div');
-        card.className = 'select-card';
-        card.id = 'intake-card-' + fmt;
-        card.innerHTML = `
-            <div class="flex-between mb-05">
-                <span class="badge badge-blue">${fmt.toUpperCase()}</span>
-                <span id="status-${fmt}" class="badge badge-review">PENDING</span>
-            </div>
-            <div class="font-bold text-base mb-025">${escapeHtml(sample.fn || fmt)}</div>
-            <div class="text-xs text-muted font-mono mb-05">
-                SHA: ${sample.sha256 ? sample.sha256.substring(0, 12) + '...' : '—'}
-            </div>
-            <div id="profile-${fmt}" class="text-xs text-secondary min-h-12">
-                ${escapeHtml(sample.type || 'Document')}
-            </div>
-        `;
-        grid.appendChild(card);
-    }
-}
-
-// ── Session Acquisition ──
-async function acquireDemoSession(persona = 'formulator') {
-    try {
-        const res = await fetchApi('/v1/demo/session', {
-            method: 'POST',
-            body: { persona }
-        });
-        if (res.ok && res.data && res.data.access_token) {
-            SESSION = {
-                token: res.data.access_token,
-                sub: res.data.sub,
-                persona: res.data.persona,
-                expires_at: res.data.expires_at
-            };
-            const chip = document.getElementById('session-chip');
-            if (chip) {
-                chip.classList.add('visible');
-                chip.textContent = '🔬 ' + (res.data.persona_label || persona) + ' · ' + res.data.sub;
-            }
-        }
-    } catch (e) {
-        console.error('Session acquisition error:', e);
-    }
-}
-
-// ── Step 1: Scenario Setup ──
-function setupScenarioCards() {
-    document.querySelectorAll('.scenario-option').forEach(card => {
-        card.addEventListener('click', () => {
-            document.querySelectorAll('.scenario-option').forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-            STATE.scenario = card.getAttribute('data-scenario');
-            resetSubsequentSteps();
-        });
+        STATE.deferredInstallPrompt = null;
+      }
     });
+  }
+
+  window.addEventListener('online', () => {
+    const banner = document.getElementById('offline-banner');
+    if (banner) banner.classList.add('hidden');
+  });
+
+  window.addEventListener('offline', () => {
+    const banner = document.getElementById('offline-banner');
+    if (banner) banner.classList.remove('hidden');
+    setTelemetryStatus('node-prodocux-intake', 'OFFLINE', 'badge-fail');
+    setTelemetryStatus('node-cosmetics-engine', 'OFFLINE', 'badge-fail');
+    setTelemetryStatus('node-gemini-assistant', 'OFFLINE', 'badge-fail');
+    setTelemetryStatus('node-pdx-orchestrator', 'OFFLINE', 'badge-fail');
+  });
 }
 
-function resetSubsequentSteps() {
-    STATE.caseId = null;
-    STATE.caseDigest = null;
-    STATE.plan = null;
-    STATE.execution = null;
-    STATE.checkpoint = null;
-    STATE.approvalRequest = null;
-    STATE.approvalDecision = null;
-    STATE.registeredDocs = {};
-    STATE.runId = null;
 
-    const evalBtn = document.getElementById('btn-run-eval');
-    if (evalBtn) evalBtn.disabled = true;
+// ---------------------------------------------------------------------------
+// 2. Telemetry Status Helper (Event-Driven Only)
+// ---------------------------------------------------------------------------
 
-    const evalOut = document.getElementById('eval-results-box');
-    if (evalOut) {
-        evalOut.classList.add('hidden');
-        evalOut.classList.remove('visible');
-    }
-
-    const gateCard = document.getElementById('gate-card');
-    if (gateCard) {
-        gateCard.classList.add('hidden');
-        gateCard.classList.remove('visible');
-    }
-
-    const finalCard = document.getElementById('final-evidence-card');
-    if (finalCard) {
-        finalCard.classList.add('hidden');
-        finalCard.classList.remove('visible');
-    }
-
-    if (SAMPLES) {
-        for (const fmt of Object.keys(SAMPLES)) {
-            const st = document.getElementById('status-' + fmt);
-            if (st) { st.className = 'badge badge-review'; st.textContent = 'PENDING'; }
-        }
-    }
+function setTelemetryStatus(nodeId, statusText, badgeClass) {
+  const statusEl = document.querySelector(`#${nodeId} .node-status`);
+  if (!statusEl) return;
+  statusEl.textContent = statusText;
+  statusEl.className = `node-status badge ${badgeClass}`;
 }
 
-// ── Action Buttons ──
-function setupActionButtons() {
-    const btnRegisterAll = document.getElementById('btn-register-all');
-    if (btnRegisterAll) {
-        btnRegisterAll.addEventListener('click', runEvidenceIntake);
-    }
 
-    const btnRunEval = document.getElementById('btn-run-eval');
-    if (btnRunEval) {
-        btnRunEval.addEventListener('click', runFleetEvaluation);
-    }
+// ---------------------------------------------------------------------------
+// 3. Session & Timer Management
+// ---------------------------------------------------------------------------
 
-    const btnApprove = document.getElementById('btn-approve-gate');
-    if (btnApprove) {
-        btnApprove.addEventListener('click', () => submitHumanDecision('approved'));
-    }
-
-    const btnReject = document.getElementById('btn-reject-gate');
-    if (btnReject) {
-        btnReject.addEventListener('click', () => submitHumanDecision('rejected'));
-    }
-
-    const btnDownloadEvidence = document.getElementById('btn-download-evidence');
-    if (btnDownloadEvidence) {
-        btnDownloadEvidence.addEventListener('click', downloadEvidencePackage);
-    }
-}
-
-// ── Step 2: 5-Format Evidence Intake (Strict Fail-Closed, 0 Fallbacks) ──
-async function runEvidenceIntake() {
-    if (!SAMPLES) return;
-    const btn = document.getElementById('btn-register-all');
-    if (btn) btn.disabled = true;
-    STATE.registeredDocs = {};
-
-    let allSucceeded = true;
-
-    for (const [fmt, sample] of Object.entries(SAMPLES)) {
-        const st = document.getElementById('status-' + fmt);
-        const pr = document.getElementById('profile-' + fmt);
-        if (st) { st.className = 'badge badge-blue'; st.textContent = 'PROFILING...'; }
-
-        // 1. Profile Document via Real API
-        const docId = 'doc-' + fmt + '-' + Date.now();
-        const profRes = await fetchApi('/v1/dossiers/documents/profile', {
-            method: 'POST',
-            body: {
-                doc_id: docId,
-                filename: sample.fn || (fmt + '_sample.' + fmt),
-                content_b64: sample.b64
-            }
-        });
-
-        if (profRes.ok && profRes.data) {
-            // 2. Register Document into tenant resolver
-            const regRes = await fetchApi('/v1/dossiers/documents/register', {
-                method: 'POST',
-                body: {
-                    doc_id: docId,
-                    filename: sample.fn || (fmt + '_sample.' + fmt),
-                    content_b64: sample.b64
-                }
-            });
-
-            // Fail closed: enforce genuine server-computed SHA-256 returned by API matching expected sample digest
-            if (regRes.ok && regRes.data && regRes.data.sha256 && regRes.data.sha256 === sample.sha256) {
-                STATE.registeredDocs[fmt] = {
-                    doc_id: docId,
-                    sha256: regRes.data.sha256,
-                    filename: sample.fn || (fmt + '_sample.' + fmt),
-                    fmt: fmt
-                };
-                if (st) { st.className = 'badge badge-pass'; st.textContent = 'VERIFIED'; }
-                if (pr) {
-                    const sm = profRes.data.structural_metadata || {};
-                    const metric = sm.page_count ? (sm.page_count + ' pages') :
-                                   sm.sheet_count ? (sm.sheet_count + ' sheets') :
-                                   sm.slide_count ? (sm.slide_count + ' slides') :
-                                   sm.row_count ? (sm.row_count + ' rows') :
-                                   sm.paragraph_count ? (sm.paragraph_count + ' paras') : 'Structure parsed';
-                    pr.textContent = metric + ' · ' + (regRes.data.size_bytes || 0) + ' B';
-                }
-            } else {
-                allSucceeded = false;
-                const errLabel = (regRes.ok && regRes.data && regRes.data.sha256 !== sample.sha256) ? 'SHA MISMATCH' : 'REG FAIL';
-                if (st) { st.className = 'badge badge-fail'; st.textContent = errLabel; }
-            }
-        } else {
-            allSucceeded = false;
-            if (st) { st.className = 'badge badge-fail'; st.textContent = 'PROF FAIL'; }
-        }
-    }
-
-    if (btn) btn.disabled = false;
-
-    // Fail closed: only enable Step 3 evaluation if all 5 formats succeeded
-    const evalBtn = document.getElementById('btn-run-eval');
-    if (evalBtn) {
-        evalBtn.disabled = !allSucceeded || (Object.keys(STATE.registeredDocs).length !== 5);
-    }
-}
-
-// ── Step 3: Governed Fleet Evaluation ──
-async function runFleetEvaluation() {
-    const config = SCENARIO_CONFIGS[STATE.scenario];
-    if (!config) return;
-
-    const evalBtn = document.getElementById('btn-run-eval');
-    if (evalBtn) evalBtn.disabled = true;
-
-    const evalBox = document.getElementById('eval-results-box');
-    if (evalBox) {
-        evalBox.classList.remove('hidden');
-        evalBox.classList.add('visible');
-        evalBox.innerHTML = '<div class="text-muted">Executing multi-agent review pipeline...</div>';
-    }
-
-    // 1. Create Dossier Case strictly conforming to canonical DossierCase schema
-    const caseUuid = crypto.randomUUID();
-    const supplierDocs = Object.values(STATE.registeredDocs).map(d => ({
-        doc_id: d.doc_id,
-        filename: d.filename,
-        doc_type: FORMAT_DOC_TYPES[d.fmt] || 'SDS',
-        sha256: d.sha256,
-        supplier_name: 'Golden Evidence Supplier',
-        issue_date: '2025-01-10',
-        expiry_date: '2028-01-10'
-    }));
-
-    const createRes = await fetchApi('/v1/dossiers/create', {
-        method: 'POST',
-        body: {
-            case_id: caseUuid,
-            tenant_id: 'tenant-demo',
-            product_name: config.name,
-            jurisdiction: 'EU',
-            formula: config.formula,
-            exposure_scenario: {
-                product_type: 'Face serum',
-                daily_applied_amount_g: 1.54,
-                retention_factor: 1.0,
-                body_weight_kg: 60.0
-            },
-            supplier_documents: supplierDocs
-        }
+async function initSession(actingRole = 'formulator') {
+  try {
+    const res = await fetch('/v1/demo/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acting_role: actingRole })
     });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
 
-    if (!createRes.ok || !createRes.data) {
-        showServerFailure(evalBox, 'Case Creation Failed', createRes);
-        if (evalBtn) evalBtn.disabled = false;
-        return;
-    }
+    STATE.token = data.token;
+    STATE.sessionId = data.session_id;
+    STATE.sub = data.sub;
+    STATE.actingRole = data.acting_role;
+    STATE.expiresAt = new Date(data.expires_at).getTime();
 
-    STATE.caseId = caseUuid;
-    STATE.caseDigest = createRes.data.case_digest;
-
-    // 2. Compile and Run Workflow
-    const runRes = await fetchApi('/v1/dossiers/' + caseUuid + '/compile-and-run', {
-        method: 'POST'
-    });
-
-    if (!runRes.ok || !runRes.data) {
-        showServerFailure(evalBox, 'Workflow Compilation/Run Failed', runRes);
-        if (evalBtn) evalBtn.disabled = false;
-        return;
-    }
-
-    // Fail closed: enforce valid plan and request_id from server
-    if (!runRes.data.plan || !runRes.data.plan.request_id) {
-        showServerFailure(evalBox, 'Invalid Server State: missing plan request_id', runRes);
-        if (evalBtn) evalBtn.disabled = false;
-        return;
-    }
-
-    STATE.plan = runRes.data.plan;
-    STATE.planDigest = runRes.data.plan_digest;
-    STATE.execution = runRes.data.execution;
-    STATE.runId = runRes.data.plan.request_id;
-
-    // 3. Render Verifier Results
-    renderEvaluationResults(evalBox, runRes.data);
-
-    // 4. Update Gate Card
-    const execStatus = runRes.data.execution ? runRes.data.execution.status : null;
-    const gateCard = document.getElementById('gate-card');
-    if (gateCard) {
-        gateCard.classList.remove('hidden');
-        gateCard.classList.add('visible');
-        if (execStatus === 'awaiting_approval') {
-            const chk = runRes.data.execution.checkpoint;
-            const apprReqId = runRes.data.execution.approval_request_id;
-
-            if (!chk || !apprReqId) {
-                enableGateButtons(false);
-                setText('gate-blocked-reason', 'Server evidence incomplete: checkpoint or approval request ID missing.');
-                return;
-            }
-
-            STATE.checkpoint = chk;
-            STATE.approvalRequest = { approval_request_id: apprReqId };
-            setText('gate-checkpoint-id', STATE.checkpoint.checkpoint_id);
-            setText('gate-case-digest', STATE.caseDigest || '—');
-            setText('gate-plan-digest', STATE.planDigest || '—');
-            enableGateButtons(true);
-            setText('gate-blocked-reason', '');
-        } else {
-            enableGateButtons(false);
-            const reason = execStatus === 'failed' ? 'Governance policy blocked: formulation contains regulatory violations.' :
-                           execStatus === 'review' ? 'Governance policy blocked: missing mandatory toxicology studies.' :
-                           'Execution state does not permit approval (' + execStatus + ').';
-            setText('gate-blocked-reason', reason);
-        }
-    }
-
-    if (evalBtn) evalBtn.disabled = false;
+    updateSessionChip();
+    startSessionTimer();
+    await loadDraft();
+  } catch (err) {
+    console.error('Failed to initialize demo session:', err);
+  }
 }
 
-function renderEvaluationResults(container, data) {
-    const exec = data.execution || {};
-    const verifier = (exec.verifier_results && exec.verifier_results[0]) || {};
-    const status = (verifier.status || exec.status || 'unknown').toLowerCase();
+function updateSessionChip() {
+  const labelEl = document.getElementById('session-label');
+  if (labelEl) {
+    const shortId = STATE.sessionId ? STATE.sessionId.slice(-6).toUpperCase() : 'INIT';
+    labelEl.textContent = `Session #${shortId}`;
+  }
+}
 
-    const badgeClass = status === 'pass' ? 'badge-pass' : status === 'review' ? 'badge-review' : 'badge-fail';
-    const statusLabel = status.toUpperCase();
+function startSessionTimer() {
+  if (STATE.timerInterval) clearInterval(STATE.timerInterval);
 
-    let mosRows = '';
-    const details = verifier.substance_evaluations || [];
-    for (const sub of details) {
-        const mosVal = sub.margin_of_safety ? sub.margin_of_safety.toFixed(1) : (sub.noael_mg_kg_day ? 'N/A' : 'Missing NOAEL');
-        const verdictBadge = sub.status === 'pass' ? '<span class="badge badge-pass">PASS</span>' :
-                             sub.status === 'review' ? '<span class="badge badge-review">REVIEW</span>' :
-                             '<span class="badge badge-fail">FAIL</span>';
-        mosRows += `
-            <tr>
-                <td><strong>${escapeHtml(sub.inci_name)}</strong></td>
-                <td>${sub.concentration_pct}%</td>
-                <td>${sub.sed_mg_kg_bw_day ? sub.sed_mg_kg_bw_day.toFixed(6) : '—'}</td>
-                <td>${sub.noael_mg_kg_day || '—'}</td>
-                <td class="font-mono font-bold">${mosVal}</td>
-                <td>${verdictBadge}</td>
-            </tr>
-        `;
+  const timerEl = document.getElementById('session-timer');
+  STATE.timerInterval = setInterval(() => {
+    if (!STATE.expiresAt) return;
+    const now = Date.now();
+    const remainingMs = STATE.expiresAt - now;
+
+    if (remainingMs <= 0) {
+      clearInterval(STATE.timerInterval);
+      if (timerEl) timerEl.textContent = 'EXPIRED';
+      alert('Demo Session 已到期。請點擊【重新開始 Demo】以換發全新工作階段。');
+      return;
     }
 
-    container.innerHTML = `
-        <div class="flex-between mb-1">
-            <div class="text-lg font-extrabold">Fleet Review Verdict: <span class="badge ${badgeClass}">${statusLabel}</span></div>
-            <div class="text-xs text-muted font-mono">Plan SHA: ${escapeHtml(data.plan_digest ? data.plan_digest.substring(0, 16) : '—')}...</div>
-        </div>
-        ${details.length > 0 ? `
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>INCI Name</th>
-                        <th>Conc %</th>
-                        <th>SED (mg/kg/d)</th>
-                        <th>NOAEL</th>
-                        <th>Margin of Safety</th>
-                        <th>Verdict</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${mosRows}
-                </tbody>
-            </table>
-        ` : ''}
+    const totalSec = Math.floor(remainingMs / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    if (timerEl) timerEl.textContent = `${mm}:${ss}`;
+  }, 1000);
+}
+
+async function restartSession() {
+  if (STATE.timerInterval) clearInterval(STATE.timerInterval);
+  STATE.draft = null;
+  STATE.selectedProposalId = null;
+
+  try {
+    const res = await fetch('/v1/demo/session/restart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acting_role: 'formulator' })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    STATE.token = data.token;
+    STATE.sessionId = data.session_id;
+    STATE.sub = data.sub;
+    STATE.actingRole = 'formulator';
+    STATE.expiresAt = new Date(data.expires_at).getTime();
+
+    updateSessionChip();
+    startSessionTimer();
+    switchRole('formulator');
+    await loadDraft();
+
+    // Reset telemetry nodes to IDLE
+    setTelemetryStatus('node-prodocux-intake', 'IDLE', 'badge-idle');
+    setTelemetryStatus('node-cosmetics-engine', 'IDLE', 'badge-idle');
+    setTelemetryStatus('node-gemini-assistant', 'IDLE', 'badge-idle');
+    setTelemetryStatus('node-pdx-orchestrator', 'IDLE', 'badge-idle');
+    setTelemetryStatus('node-manager-gate', 'IDLE', 'badge-idle');
+    setTelemetryStatus('node-prodocux-render', 'IDLE', 'badge-idle');
+  } catch (err) {
+    console.error('Failed to restart session:', err);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// 4. Role Switching (Single Identity Simulation)
+// ---------------------------------------------------------------------------
+
+function switchRole(role) {
+  STATE.actingRole = role;
+
+  const btnFormulator = document.getElementById('btn-role-formulator');
+  const btnManager = document.getElementById('btn-role-manager');
+  const viewFormulator = document.getElementById('view-formulator');
+  const viewManager = document.getElementById('view-manager');
+  const viewExport = document.getElementById('view-export');
+
+  if (role === 'formulator') {
+    btnFormulator.classList.add('active');
+    btnManager.classList.remove('active');
+    viewFormulator.classList.add('active');
+    viewManager.classList.remove('active');
+    if (viewExport) viewExport.classList.remove('active');
+  } else {
+    btnManager.classList.add('active');
+    btnFormulator.classList.remove('active');
+    viewManager.classList.add('active');
+    viewFormulator.classList.remove('active');
+    if (viewExport) viewExport.classList.remove('active');
+    loadProposalsInbox();
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// 5. Formulation Management & SCCS Diagnostics
+// ---------------------------------------------------------------------------
+
+async function loadDraft() {
+  if (!STATE.token) return;
+  try {
+    const res = await fetch('/v1/formulations/draft', {
+      headers: { 'Authorization': `Bearer ${STATE.token}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    STATE.draft = data.draft;
+
+    renderFormulationTable();
+    renderDiagnostics(data.sccs_evaluation, data.inci_evaluation);
+    await loadAssistantSuggestions();
+  } catch (err) {
+    console.error('Failed to load draft:', err);
+  }
+}
+
+function renderFormulationTable() {
+  if (!STATE.draft) return;
+  const tbody = document.getElementById('tbody-ingredients');
+  const nameInput = document.getElementById('input-product-name');
+  const revBadge = document.getElementById('draft-revision-badge');
+  const digestBadge = document.getElementById('draft-digest-badge');
+
+  if (nameInput) nameInput.value = STATE.draft.product_name || '';
+  if (revBadge) revBadge.textContent = `Revision: ${STATE.draft.revision}`;
+  if (digestBadge) digestBadge.textContent = `Case SHA: ${STATE.draft.case_digest.slice(0, 12)}...`;
+
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  STATE.draft.ingredients.forEach((item, index) => {
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td><input type="text" class="table-input" data-field="inci_name" data-index="${index}" value="${item.inci_name}"></td>
+      <td><input type="number" step="0.01" class="table-input" data-field="concentration_pct" data-index="${index}" value="${item.concentration_pct}"></td>
+      <td><input type="text" class="table-input" data-field="cas_number" data-index="${index}" value="${item.cas_number || ''}"></td>
+      <td><input type="number" step="0.1" class="table-input" data-field="noael_mg_kg_day" data-index="${index}" value="${item.noael_mg_kg_day ?? ''}"></td>
+      <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-del-row" data-index="${index}">🗑️</button></td>
     `;
+    tbody.appendChild(tr);
+  });
+
+  // Bind change events
+  tbody.querySelectorAll('.table-input').forEach((input) => {
+    input.addEventListener('change', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      const field = e.target.dataset.field;
+      let val = e.target.value;
+      if (field === 'concentration_pct') val = parseFloat(val) || 0;
+      if (field === 'noael_mg_kg_day') val = val ? parseFloat(val) : null;
+      STATE.draft.ingredients[idx][field] = val;
+    });
+  });
+
+  tbody.querySelectorAll('.btn-del-row').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      STATE.draft.ingredients.splice(idx, 1);
+      renderFormulationTable();
+    });
+  });
 }
 
-function enableGateButtons(enabled) {
-    const btnApprove = document.getElementById('btn-approve-gate');
-    const btnReject = document.getElementById('btn-reject-gate');
-    if (btnApprove) btnApprove.disabled = !enabled;
-    if (btnReject) btnReject.disabled = !enabled;
+function addIngredientRow() {
+  if (!STATE.draft) return;
+  STATE.draft.ingredients.push({
+    inci_name: 'New Ingredient',
+    concentration_pct: 1.0,
+    cas_number: '',
+    noael_mg_kg_day: null
+  });
+  renderFormulationTable();
 }
 
-// ── Step 4: Human Decision Gate ──
-async function submitHumanDecision(decision) {
-    if (!STATE.checkpoint || !STATE.caseId || !STATE.approvalRequest) return;
+async function saveDraft() {
+  if (!STATE.token || !STATE.draft) return;
+  const nameInput = document.getElementById('input-product-name');
+  if (nameInput) STATE.draft.product_name = nameInput.value;
 
-    enableGateButtons(false);
+  setTelemetryStatus('node-cosmetics-engine', 'EVALUATING', 'badge-running');
 
-    const payload = {
-        checkpoint_id: STATE.checkpoint.checkpoint_id,
-        run_id: STATE.checkpoint.run_id,
-        approval_request_id: STATE.approvalRequest.approval_request_id,
-        idempotency_key: 'idem-' + STATE.checkpoint.checkpoint_id + '-' + decision,
-        decision: decision,
-        reason: decision === 'approved' ? 'Approved by regulatory signatory.' : 'Rejected at Human-in-the-Loop gate.',
-        case_digest: STATE.caseDigest,
-        plan_digest: STATE.planDigest,
-        evidence_digests: STATE.checkpoint.evidence_digests || {}
-    };
-
-    const res = await fetchApi('/v1/approval/decide', {
-        method: 'POST',
-        body: payload
+  try {
+    const res = await fetch('/v1/formulations/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${STATE.token}`
+      },
+      body: JSON.stringify({
+        product_name: STATE.draft.product_name,
+        ingredients: STATE.draft.ingredients,
+        exposure_scenario: STATE.draft.exposure_scenario,
+        acting_role: STATE.actingRole
+      })
     });
 
-    if (!res.ok || !res.data) {
-        const gateCard = document.getElementById('gate-card');
-        showServerFailure(gateCard, 'Approval Decision Submission Failed', res);
-        return;
-    }
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    STATE.draft = data.draft;
 
-    STATE.approvalDecision = res.data;
+    renderFormulationTable();
+    renderDiagnostics(data.sccs_evaluation, data.inci_evaluation);
+    await loadAssistantSuggestions();
 
-    // ── Step 5: Finalized Certified Artifact ──
-    const finalCard = document.getElementById('final-evidence-card');
-    if (finalCard) {
-        finalCard.classList.remove('hidden');
-        finalCard.classList.add('visible');
-        const art = res.data.artifact_identity || res.data.artifact_storage_identity;
-        if (!art || !art.sha256) {
-            showServerFailure(finalCard, 'Server Evidence Incomplete: artifact identity missing', res);
-            return;
-        }
-
-        setText('art-uri', art.uri || art.artifact_uri || '—');
-        setText('art-sha', art.sha256 || '—');
-        setText('art-size', art.size_bytes !== undefined ? (art.size_bytes + ' B') : '—');
-        setText('art-store-mode', res.data.artifact_store_mode || 'local_filesystem_ephemeral');
-    }
+    const isPass = data.sccs_evaluation.status === 'PASS';
+    setTelemetryStatus('node-cosmetics-engine', isPass ? 'PASSED' : 'REVIEW/FAIL', isPass ? 'badge-pass' : 'badge-review');
+  } catch (err) {
+    console.error('Failed to save draft:', err);
+    setTelemetryStatus('node-cosmetics-engine', 'ERROR', 'badge-fail');
+  }
 }
 
-// ── Step 5: Download Checksummed Evidence Package ──
-async function downloadEvidencePackage() {
-    if (!STATE.runId) return;
-    const res = await fetchApi('/v1/evidence/runs/' + STATE.runId);
-    if (res.ok && res.data) {
-        const jsonStr = JSON.stringify(res.data, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'evidence_package_' + STATE.runId + '.json';
-        a.click();
-        URL.revokeObjectURL(url);
+function renderDiagnostics(sccs, inci) {
+  const scoreEl = document.getElementById('compliance-score');
+  const mosList = document.getElementById('sidebar-mos-list');
+  const gateIndicator = document.getElementById('gate-indicator');
+  const gateDesc = document.getElementById('gate-desc');
+
+  if (mosList) {
+    mosList.innerHTML = '';
+    const substances = sccs.substance_evaluations || [];
+    substances.forEach((s) => {
+      const div = document.createElement('div');
+      div.className = 'mos-item flex-between';
+      const mosVal = s.margin_of_safety != null ? Math.round(s.margin_of_safety) : 'N/A';
+      div.innerHTML = `
+        <span><strong>${s.inci_name}</strong> (${s.concentration_pct}%)</span>
+        <span class="badge ${s.status === 'PASS' ? 'badge-pass' : (s.status === 'REVIEW' ? 'badge-review' : 'badge-fail')}">
+          MoS: ${mosVal}
+        </span>
+      `;
+      mosList.appendChild(div);
+    });
+  }
+
+  // Update Gate Status Box
+  if (gateIndicator && gateDesc) {
+    if (sccs.status === 'FAIL' || inci.status === 'FAIL') {
+      gateIndicator.textContent = 'BLOCKED (FAIL)';
+      gateIndicator.className = 'gate-status-indicator badge-fail';
+      gateDesc.textContent = '配方含有禁用物質或防腐劑超標，無法提交主管。';
+    } else if (sccs.status === 'REVIEW' || inci.status === 'REVIEW') {
+      gateIndicator.textContent = 'REVIEW NEEDED';
+      gateIndicator.className = 'gate-status-indicator badge-review';
+      gateDesc.textContent = '成分缺乏毒理數據，提交後需主管明確填寫核准理由。';
     } else {
-        alert('Failed to retrieve evidence package (HTTP ' + res.status + ').');
+      gateIndicator.textContent = 'READY (PASS)';
+      gateIndicator.className = 'gate-status-indicator badge-pass';
+      gateDesc.textContent = '配方完全合規，所有成分 MoS ≥ 100。';
     }
+  }
 }
 
-// ── Error Helper ──
-function showServerFailure(container, title, res) {
-    const reqId = (res.data && res.data.request_id) || 'unknown';
-    const errCode = (res.data && res.data.error) || ('HTTP_' + res.status);
-    const msg = (res.data && (res.data.detail || res.data.message)) || res.rawText || 'Server evidence incomplete.';
 
-    const errDiv = document.createElement('div');
-    errDiv.className = 'alert-banner visible mt-1';
-    errDiv.innerHTML = `
-        <strong>${escapeHtml(title)} [${escapeHtml(errCode)}]:</strong> ${escapeHtml(msg)}<br>
-        <span class="text-xs font-mono">HTTP ${res.status} · Request ID: ${escapeHtml(reqId)}</span>
+// ---------------------------------------------------------------------------
+// 6. AI Copilot Suggestions
+// ---------------------------------------------------------------------------
+
+async function loadAssistantSuggestions() {
+  if (!STATE.token || !STATE.draft) return;
+  setTelemetryStatus('node-gemini-assistant', 'ANALYZING', 'badge-running');
+
+  try {
+    const res = await fetch('/v1/assistant/suggestions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${STATE.token}`
+      },
+      body: JSON.stringify({
+        product_name: STATE.draft.product_name,
+        ingredients: STATE.draft.ingredients,
+        exposure_scenario: STATE.draft.exposure_scenario
+      })
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const scoreEl = document.getElementById('compliance-score');
+    if (scoreEl) scoreEl.textContent = data.overall_compliance_score;
+
+    const listEl = document.getElementById('sidebar-suggestions-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    data.suggestions.forEach((s) => {
+      const card = document.createElement('div');
+      card.className = `suggestion-card ${s.severity === 'high' ? 'severity-high' : ''}`;
+
+      let btnHtml = '';
+      if (s.proposed_patch && s.action_label) {
+        btnHtml = `<button type="button" class="btn btn-secondary btn-sm btn-apply-patch mt-05">${s.action_label}</button>`;
+      }
+
+      card.innerHTML = `
+        <div class="suggestion-title">${s.title}</div>
+        <div class="suggestion-msg">${s.message}</div>
+        <div class="suggestion-citation">📜 ${s.rule_citation}</div>
+        ${btnHtml}
+      `;
+
+      if (s.proposed_patch) {
+        const patchBtn = card.querySelector('.btn-apply-patch');
+        if (patchBtn) {
+          patchBtn.addEventListener('click', () => applySuggestionPatch(s.proposed_patch));
+        }
+      }
+
+      listEl.appendChild(card);
+    });
+
+    setTelemetryStatus('node-gemini-assistant', 'READY', 'badge-pass');
+  } catch (err) {
+    console.error('Failed to load assistant suggestions:', err);
+    setTelemetryStatus('node-gemini-assistant', 'UNAVAILABLE', 'badge-review');
+  }
+}
+
+function applySuggestionPatch(patch) {
+  if (!STATE.draft) return;
+
+  if (patch.remove_inci) {
+    STATE.draft.ingredients = STATE.draft.ingredients.filter(
+      (item) => item.inci_name.toLowerCase() !== patch.remove_inci.toLowerCase()
+    );
+  } else if (patch.inci_name) {
+    const item = STATE.draft.ingredients.find(
+      (i) => i.inci_name.toLowerCase() === patch.inci_name.toLowerCase()
+    );
+    if (item) {
+      if (patch.concentration_pct != null) item.concentration_pct = patch.concentration_pct;
+      if (patch.noael_mg_kg_day != null) item.noael_mg_kg_day = patch.noael_mg_kg_day;
+    }
+  }
+
+  saveDraft();
+}
+
+
+// ---------------------------------------------------------------------------
+// 7. 5-Format Preset Import Preview
+// ---------------------------------------------------------------------------
+
+async function triggerParsePreview(scenarioKey) {
+  setTelemetryStatus('node-prodocux-intake', 'PARSING', 'badge-running');
+
+  try {
+    const res = await fetch('/v1/formulations/parse-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario_key: scenarioKey })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    STATE.pendingPreviewCandidates = data.candidates || [];
+
+    const modal = document.getElementById('modal-import-preview');
+    const tbody = document.getElementById('modal-tbody-candidates');
+    const warningsEl = document.getElementById('modal-warnings');
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      STATE.pendingPreviewCandidates.forEach((c) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${c.inci_name}</strong></td>
+          <td>${c.concentration_pct}%</td>
+          <td>${c.cas_number || '—'}</td>
+          <td>${c.noael_mg_kg_day ?? '—'}</td>
+          <td><span class="text-xs font-mono text-muted">${c.source_location}</span></td>
+          <td><span class="badge badge-info">${Math.round(c.confidence * 100)}%</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    if (warningsEl) {
+      const allWarnings = STATE.pendingPreviewCandidates.flatMap((c) => c.warnings || []);
+      warningsEl.textContent = allWarnings.length > 0 ? `⚠️ 注意事項: ${allWarnings.join('; ')}` : '';
+    }
+
+    if (modal) modal.classList.remove('hidden');
+    setTelemetryStatus('node-prodocux-intake', 'EXTRACTED', 'badge-pass');
+  } catch (err) {
+    console.error('Parse preview failed:', err);
+    setTelemetryStatus('node-prodocux-intake', 'FAILED', 'badge-fail');
+  }
+}
+
+function applyPreviewToDraft() {
+  if (!STATE.draft || STATE.pendingPreviewCandidates.length === 0) return;
+
+  STATE.draft.ingredients = STATE.pendingPreviewCandidates.map((c) => ({
+    inci_name: c.inci_name,
+    concentration_pct: c.concentration_pct,
+    cas_number: c.cas_number,
+    noael_mg_kg_day: c.noael_mg_kg_day
+  }));
+
+  const modal = document.getElementById('modal-import-preview');
+  if (modal) modal.classList.add('hidden');
+
+  saveDraft();
+}
+
+
+// ---------------------------------------------------------------------------
+// 8. Proposal Submission Gate
+// ---------------------------------------------------------------------------
+
+async function submitProposal() {
+  if (!STATE.token) return;
+  setTelemetryStatus('node-pdx-orchestrator', 'COMPILING', 'badge-running');
+
+  try {
+    const res = await fetch('/v1/formulations/submit-proposal', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${STATE.token}` }
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json();
+      const reasons = errJson.detail?.reasons || [errJson.detail];
+      alert(`❌ 提交被阻斷 (Submission Blocked):\n${reasons.join('\n')}`);
+      setTelemetryStatus('node-pdx-orchestrator', 'BLOCKED', 'badge-fail');
+      return;
+    }
+
+    const data = await res.json();
+    alert(`✅ 提案提交成功 (Proposal Submitted)！\n提案編號: ${data.proposal_id}\n門禁決策: ${data.gate_decision}\n已進入主管審查收件匣。`);
+
+    setTelemetryStatus('node-pdx-orchestrator', 'PLAN COMPILED', 'badge-pass');
+    setTelemetryStatus('node-manager-gate', 'AWAITING APPROVAL', 'badge-review');
+
+    // Switch view to manager
+    switchRole('product_manager');
+  } catch (err) {
+    console.error('Failed to submit proposal:', err);
+    setTelemetryStatus('node-pdx-orchestrator', 'ERROR', 'badge-fail');
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// 9. Product Manager Inbox & Decisions
+// ---------------------------------------------------------------------------
+
+async function loadProposalsInbox() {
+  if (!STATE.token) return;
+  try {
+    const res = await fetch('/v1/proposals/inbox', {
+      headers: { 'Authorization': `Bearer ${STATE.token}` }
+    });
+    if (!res.ok) return;
+    const proposals = await res.json();
+
+    const listEl = document.getElementById('inbox-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    if (proposals.length === 0) {
+      listEl.innerHTML = '<p class="text-sm text-muted text-center py-2">收件匣目前無待審提案。</p>';
+      return;
+    }
+
+    proposals.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = `inbox-item ${STATE.selectedProposalId === p.proposal_id ? 'selected' : ''}`;
+      item.dataset.id = p.proposal_id;
+
+      const badgeClass = p.status === 'approved' ? 'badge-pass' : (p.status === 'returned' ? 'badge-fail' : 'badge-review');
+
+      item.innerHTML = `
+        <div class="inbox-item-title">${p.product_name} (Rev ${p.revision})</div>
+        <div class="inbox-item-meta">
+          <span>${p.proposal_id}</span>
+          <span class="badge ${badgeClass}">${p.status.toUpperCase()}</span>
+        </div>
+      `;
+
+      item.addEventListener('click', () => showProposalDetail(p));
+      listEl.appendChild(item);
+    });
+
+    // Auto-select first proposal if none selected
+    if (!STATE.selectedProposalId && proposals.length > 0) {
+      showProposalDetail(proposals[0]);
+    }
+  } catch (err) {
+    console.error('Failed to load proposals inbox:', err);
+  }
+}
+
+function showProposalDetail(p) {
+  STATE.selectedProposalId = p.proposal_id;
+
+  document.querySelectorAll('.inbox-item').forEach((el) => {
+    el.classList.toggle('selected', el.dataset.id === p.proposal_id);
+  });
+
+  const titleEl = document.getElementById('detail-product-name');
+  const metaEl = document.getElementById('detail-proposal-meta');
+  const gateBadgeEl = document.getElementById('detail-gate-badge');
+  const bodyEl = document.getElementById('detail-body');
+  const actionsBox = document.getElementById('manager-actions-box');
+
+  if (titleEl) titleEl.textContent = `${p.product_name} (Revision ${p.revision})`;
+  if (metaEl) metaEl.textContent = `Proposal ID: ${p.proposal_id} · Case SHA: ${p.case_digest.slice(0, 16)}... · Plan SHA: ${p.plan_digest.slice(0, 16)}...`;
+
+  if (gateBadgeEl) {
+    const isPass = p.gate_decision === 'PASS';
+    gateBadgeEl.innerHTML = `<span class="badge ${isPass ? 'badge-pass' : 'badge-review'}">GATE: ${p.gate_decision}</span>`;
+  }
+
+  if (bodyEl) {
+    let ingredientsHtml = '<table class="data-table mb-1"><thead><tr><th>INCI Name</th><th>Concentration</th><th>CAS</th><th>NOAEL</th></tr></thead><tbody>';
+    p.ingredients_summary.forEach((item) => {
+      ingredientsHtml += `<tr><td>${item.inci_name}</td><td>${item.concentration_pct}%</td><td>${item.cas_number || '—'}</td><td>${item.noael_mg_kg_day ?? '—'}</td></tr>`;
+    });
+    ingredientsHtml += '</tbody></table>';
+
+    let reasonsHtml = '';
+    if (p.gate_reasons && p.gate_reasons.length > 0) {
+      reasonsHtml = `<div class="card mb-1"><div class="text-sm font-bold text-amber mb-05">📋 門禁審查意見:</div><ul class="text-sm text-secondary">${p.gate_reasons.map((r) => `<li>${r}</li>`).join('')}</ul></div>`;
+    }
+
+    bodyEl.innerHTML = `
+      ${reasonsHtml}
+      <div class="text-sm font-bold text-secondary mb-05">配方成分清單:</div>
+      ${ingredientsHtml}
     `;
-    container.appendChild(errDiv);
+  }
+
+  if (actionsBox) {
+    if (p.status === 'pending_review') {
+      actionsBox.classList.remove('hidden');
+    } else {
+      actionsBox.classList.add('hidden');
+    }
+  }
 }
 
-function setText(id, val) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
+async function decideProposal(decision) {
+  if (!STATE.token || !STATE.selectedProposalId) return;
+
+  const rationaleInput = document.getElementById('input-manager-rationale');
+  const commentInput = document.getElementById('input-return-comment');
+  const rationale = rationaleInput ? rationaleInput.value.trim() : '';
+  const returnComments = commentInput ? commentInput.value.trim() : '';
+
+  setTelemetryStatus('node-manager-gate', 'DECIDING', 'badge-running');
+
+  try {
+    const res = await fetch(`/v1/proposals/${STATE.selectedProposalId}/decide`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${STATE.token}`
+      },
+      body: JSON.stringify({
+        decision: decision,
+        rationale: rationale,
+        return_comments: returnComments
+      })
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json();
+      alert(`決策失敗: ${errJson.detail}`);
+      setTelemetryStatus('node-manager-gate', 'DECISION ERROR', 'badge-fail');
+      return;
+    }
+
+    const data = await res.json();
+
+    if (decision === 'approved') {
+      alert(`🎉 提案已成功核准並定稿 (Approved & Finalized)！\n產品編號: ${data.product_id}\nSHA-256 存證: ${data.artifact_identity.sha256}`);
+      setTelemetryStatus('node-manager-gate', 'FINALIZED', 'badge-pass');
+      setTelemetryStatus('node-prodocux-render', 'READY FOR EXPORT', 'badge-pass');
+      await showExportCenter(data.product_id);
+    } else {
+      alert(`↩️ 提案已退回配方師修改。\n退回意見已記錄至審計日誌。`);
+      setTelemetryStatus('node-manager-gate', 'RETURNED', 'badge-review');
+      await loadProposalsInbox();
+    }
+  } catch (err) {
+    console.error('Failed to decide proposal:', err);
+  }
 }
 
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+
+// ---------------------------------------------------------------------------
+// 10. Approved Product Record & 5-Format Export Center
+// ---------------------------------------------------------------------------
+
+async function showExportCenter(productId) {
+  const viewFormulator = document.getElementById('view-formulator');
+  const viewManager = document.getElementById('view-manager');
+  const viewExport = document.getElementById('view-export');
+
+  if (viewFormulator) viewFormulator.classList.remove('active');
+  if (viewManager) viewManager.classList.remove('active');
+  if (viewExport) viewExport.classList.add('active');
+
+  try {
+    const res = await fetch(`/v1/products/${productId}/export-bundle`, {
+      headers: { 'Authorization': `Bearer ${STATE.token}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const listEl = document.getElementById('approved-products-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = `
+      <div class="card mb-15">
+        <div class="flex-between mb-1">
+          <div>
+            <div class="text-lg font-bold">${data.bundle_spec.product_name} (Revision ${data.bundle_spec.revision})</div>
+            <div class="text-xs font-mono text-muted">Product ID: ${data.product_id} · Checkpoint: ${data.bundle_spec.checkpoint_id}</div>
+          </div>
+          <span class="badge badge-pass">FINALIZED &amp; IMMUTABLE</span>
+        </div>
+
+        <div class="form-group mb-1">
+          <label class="form-label">SHA-256 密碼學存證指紋 (Cryptographic Checksum Fingerprint):</label>
+          <input type="text" class="form-control font-mono" value="${data.sha256_checksum}" readonly>
+        </div>
+
+        <div class="text-sm font-bold text-secondary mb-075">ProDocuX 通用五格式渲染規格 (ProDocuX 5-Format Render Artifacts):</div>
+        <div class="d-flex gap-075 flex-wrap">
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="pdf">⬇️ 下載 PDF 安全摘要規格</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="docx">⬇️ 下載 DOCX 分析證書規格</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="csv">⬇️ 下載 CSV 配方矩陣規格</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="xlsx">⬇️ 下載 XLSX 毒理評估規格</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="pptx">⬇️ 下載 PPTX 審查簡報規格</button>
+          <button type="button" class="btn btn-primary btn-export" data-fmt="json">⬇️ 下載完整 Checksummed Evidence</button>
+        </div>
+      </div>
+    `;
+
+    listEl.querySelectorAll('.btn-export').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        const fmt = e.target.dataset.fmt;
+        if (fmt === 'json') {
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${data.bundle_spec.product_name.replace(/\s+/g, '_')}_evidence_package.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
+
+        try {
+          setTelemetryStatus('node-prodocux-render', `RENDERING ${fmt.toUpperCase()}`, 'badge-running');
+          const rRes = await fetch(`/v1/products/${productId}/render-artifact`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${STATE.token}`
+            },
+            body: JSON.stringify({ format: fmt })
+          });
+
+          if (!rRes.ok) {
+            const err = await rRes.json();
+            alert(`渲染失敗: ${err.detail || 'ProDocuX Render Engine Error'}`);
+            setTelemetryStatus('node-prodocux-render', 'RENDER ERROR', 'badge-fail');
+            return;
+          }
+
+          const rData = await rRes.json();
+          setTelemetryStatus('node-prodocux-render', `${fmt.toUpperCase()} RENDERED`, 'badge-pass');
+
+          // Download base64 payload
+          const b64 = rData.result?.content_b64;
+          if (b64) {
+            const byteChars = atob(b64);
+            const byteNums = new Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+              byteNums[i] = byteChars.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNums);
+            const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${data.bundle_spec.product_name.replace(/\s+/g, '_')}_certified.${fmt}`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } else {
+            alert(`✅ ${fmt.toUpperCase()} 渲染完成！SHA-256: ${rData.result?.sha256}`);
+          }
+        } catch (err) {
+          console.error('Failed to render artifact:', err);
+          setTelemetryStatus('node-prodocux-render', 'RENDER FAILED', 'badge-fail');
+        }
+      });
+    });
+  } catch (err) {
+    console.error('Failed to show export center:', err);
+  }
 }
+
+
+// ---------------------------------------------------------------------------
+// 11. Event Listeners Binding
+// ---------------------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+  initPWA();
+  initSession('formulator');
+
+  // Role Buttons
+  const btnFormulator = document.getElementById('btn-role-formulator');
+  const btnManager = document.getElementById('btn-role-manager');
+  if (btnFormulator) btnFormulator.addEventListener('click', () => switchRole('formulator'));
+  if (btnManager) btnManager.addEventListener('click', () => switchRole('product_manager'));
+
+  // Restart Button
+  const btnRestart = document.getElementById('btn-restart-demo');
+  if (btnRestart) btnRestart.addEventListener('click', restartSession);
+
+  // Preset Scenario Chips
+  document.querySelectorAll('.preset-chip').forEach((chip) => {
+    chip.addEventListener('click', (e) => {
+      const scenarioKey = chip.dataset.scenario;
+      triggerParsePreview(scenarioKey);
+    });
+  });
+
+  // Modal Buttons
+  const modalClose = document.getElementById('btn-modal-close');
+  const modalCancel = document.getElementById('btn-modal-cancel');
+  const modalApply = document.getElementById('btn-modal-apply');
+  const modal = document.getElementById('modal-import-preview');
+
+  if (modalClose) modalClose.addEventListener('click', () => modal.classList.add('hidden'));
+  if (modalCancel) modalCancel.addEventListener('click', () => modal.classList.add('hidden'));
+  if (modalApply) modalApply.addEventListener('click', applyPreviewToDraft);
+
+  // Table Buttons
+  const btnAdd = document.getElementById('btn-add-ingredient');
+  const btnSave = document.getElementById('btn-save-draft');
+  if (btnAdd) btnAdd.addEventListener('click', addIngredientRow);
+  if (btnSave) btnSave.addEventListener('click', saveDraft);
+
+  // Submit Proposal Button
+  const btnSubmit = document.getElementById('btn-submit-proposal');
+  if (btnSubmit) btnSubmit.addEventListener('click', submitProposal);
+
+  // Manager Decision Buttons
+  const btnAccept = document.getElementById('btn-manager-accept');
+  const btnReturn = document.getElementById('btn-manager-return');
+  if (btnAccept) btnAccept.addEventListener('click', () => decideProposal('approved'));
+  if (btnReturn) btnReturn.addEventListener('click', () => decideProposal('returned'));
+});

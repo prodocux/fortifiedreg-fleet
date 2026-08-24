@@ -522,6 +522,16 @@ class RecordingIntakeAdapter(IntakePort):
         self.recorded_calls.append(("profile_presentation", document_filename, len(document_bytes)))
         return self.target.profile_presentation(document_filename, document_bytes)
 
+    def extract_content_blocks(
+        self, document_filename: str, document_bytes: bytes, max_pages: int = 50
+    ) -> Dict[str, Any]:
+        self.recorded_calls.append(("extract_content_blocks", document_filename, len(document_bytes)))
+        return self.target.extract_content_blocks(document_filename, document_bytes, max_pages=max_pages)
+
+    def render_artifact(self, render_request: Dict[str, Any]) -> Dict[str, Any]:
+        self.recorded_calls.append(("render_artifact", render_request.get("format", ""), 0))
+        return self.target.render_artifact(render_request)
+
 @pytest.mark.parametrize(
     "fmt_ext,doc_id,filename,expected_tool,expected_op",
     [
@@ -653,7 +663,7 @@ def test_evidence_package_endpoint(client, auth_headers):
     assert resp.status_code == 200
     data = resp.json()
     assert data["package_type"] == "checksummed_evidence_package"
-    assert data["version"] == "0.3.2"
+    assert data["version"] == "0.4.0"
     assert data["tenant_id"] == "tenant-acme-corp"
     assert data["run_id"] == "run-test-12345"
     assert data["integrity"] == "sha256_checksum_only"

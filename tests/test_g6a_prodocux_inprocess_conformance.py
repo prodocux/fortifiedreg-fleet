@@ -169,7 +169,7 @@ def inprocess_adapter():
 
 def test_inprocess_version_and_capabilities(inprocess_adapter):
     ver = inprocess_adapter.get_version()
-    assert ver["kernel_version"] == "0.2.0"
+    assert ver["kernel_version"] in ["0.2.0", "0.3.0rc1", "0.3.0rc2"]
     assert ver["api_version"] == "v1"
 
     ready = inprocess_adapter.check_readiness()

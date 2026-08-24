@@ -1,6 +1,6 @@
 [project]
 name = "fleet-api"
-version = "0.3.2"
+version = "0.4.0"
 description = "FastAPI Service Application for Fortified Enterprise Fleet"
 requires-python = ">=3.11"
 dependencies = [
