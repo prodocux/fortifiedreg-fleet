@@ -78,22 +78,28 @@ Write-Host " [✓] ProDocuX Service URL: $PRODOCUX_URL" -ForegroundColor Green
 Write-Host " [✓] Latest Ready Revision: $LATEST_REV" -ForegroundColor Green
 
 # 1. Anonymous probe: Must be rejected with exact HTTP 401 or 403 (Fail-closed)
+$anonStatus = 0
 try {
-    $anonRes = Invoke-WebRequest -Uri "$PRODOCUX_URL/v1/health" -Method Get -SkipHttpErrorCheck -TimeoutSec 15
-    if ($anonRes.StatusCode -notin 401, 403) {
-        Write-Error "FAIL-CLOSED VIOLATION: Anonymous access returned HTTP $($anonRes.StatusCode). Service is not properly protected by private IAM (expected 401/403)."
-        exit 1
+    $anonRes = Invoke-WebRequest -Uri "$PRODOCUX_URL/v1/version" -Method Get -TimeoutSec 15
+    $anonStatus = [int]$anonRes.StatusCode
+} catch [System.Net.WebException] {
+    if ($_.Exception.Response) {
+        $anonStatus = [int]$_.Exception.Response.StatusCode
     }
-    Write-Host " [✓] Anonymous Access Probe : BLOCKED (HTTP $($anonRes.StatusCode), strictly private)" -ForegroundColor Green
 } catch {
-    # Check if the exception response is HTTP 401/403
-    if ($_.Exception.Response -and ($_.Exception.Response.StatusCode.value__ -in 401, 403)) {
-        Write-Host " [✓] Anonymous Access Probe : BLOCKED (HTTP $($_.Exception.Response.StatusCode.value__), strictly private)" -ForegroundColor Green
+    if ($_.Exception.Response) {
+        $anonStatus = [int]$_.Exception.Response.StatusCode
     } else {
-        Write-Error "Anonymous access check failed with non-IAM error: $_"
+        Write-Error "Anonymous access check failed with non-HTTP error: $_"
         exit 1
     }
 }
+
+if ($anonStatus -notin 401, 403) {
+    Write-Error "FAIL-CLOSED VIOLATION: Anonymous access returned HTTP $anonStatus. Service is not properly protected by private IAM (expected 401/403)."
+    exit 1
+}
+Write-Host " [✓] Anonymous Access Probe : BLOCKED (HTTP $anonStatus, strictly private)" -ForegroundColor Green
 
 # 2. Authenticated probe: Strictly require GCP Identity Token for $RUNTIME_SA (No fallback allowed)
 $idToken = (gcloud auth print-identity-token --audiences=$PRODOCUX_URL --impersonate-service-account=$RUNTIME_SA 2>$null)
@@ -105,12 +111,12 @@ if ([string]::IsNullOrWhiteSpace($idToken)) {
 
 try {
     $authHeaders = @{ Authorization = "Bearer $($idToken.Trim())" }
-    $authRes = Invoke-RestMethod -Uri "$PRODOCUX_URL/v1/health" -Method Get -Headers $authHeaders -TimeoutSec 15
-    if ($authRes.status -ne "healthy" -and $authRes.status -ne "ok") {
-        Write-Error "Authenticated health check returned unexpected status. Response: $($authRes | ConvertTo-Json)"
+    $authRes = Invoke-RestMethod -Uri "$PRODOCUX_URL/v1/version" -Method Get -Headers $authHeaders -TimeoutSec 15
+    if ([string]::IsNullOrWhiteSpace($authRes.kernel_version) -or $authRes.kernel_version -ne "0.3.0rc1") {
+        Write-Error "Authenticated version probe returned unexpected response: $($authRes | ConvertTo-Json)"
         exit 1
     }
-    Write-Host " [✓] Authenticated Probe    : PASS (status '$($authRes.status)', service ready)" -ForegroundColor Green
+    Write-Host " [✓] Authenticated Probe    : PASS (Kernel v$($authRes.kernel_version), API $($authRes.api_version), service ready)" -ForegroundColor Green
 } catch {
     Write-Error "Authenticated health probe failed: $_"
     exit 1
