@@ -789,3 +789,124 @@ def test_crash_window_after_artifact_write_retry_succeeds_with_single_outbox(cli
     matching_outbox = [r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]
     assert len(matching_outbox) == 1
     assert matching_outbox[0].target_pdx_status == "resumed"
+
+
+def test_missing_manifest_sha_or_uri_fails_closed(client, monkeypatch):
+    """Verify that if PDX resume result omits manifest_sha256 or artifact_uri, execution fails closed."""
+    from fleet_api.deps import get_orchestrator
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Case A: Omit manifest_sha256
+    prop_res_a = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id_a = prop_res_a.json()["proposal_id"]
+
+    orchestrator = get_orchestrator()
+    orig_resume = orchestrator.resume_with_decision
+
+    def mock_resume_missing_sha(chk, dec):
+        res = orig_resume(chk, dec)
+        res.pop("manifest_sha256", None)
+        return res
+
+    monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_missing_sha)
+    decide_res_a = client.post(
+        f"/v1/proposals/{proposal_id_a}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Missing sha test."},
+    )
+    assert decide_res_a.status_code == 500
+
+    # Case B: Omit artifact_uri
+    prop_res_b = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id_b = prop_res_b.json()["proposal_id"]
+
+    def mock_resume_missing_uri(chk, dec):
+        res = orig_resume(chk, dec)
+        res.pop("artifact_uri", None)
+        return res
+
+    monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_missing_uri)
+    decide_res_b = client.post(
+        f"/v1/proposals/{proposal_id_b}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Missing uri test."},
+    )
+    assert decide_res_b.status_code == 500
+
+
+def test_crash_window_after_mark_resume_completed_before_checkpoint_update_recovers_idempotently(client, monkeypatch):
+    """
+    Verify the second crash window:
+    1. mark_resume_completed succeeds (context becomes COMPLETED, outbox record emitted).
+    2. Server crashes before update_checkpoint_status.
+    3. On retry, the COMPLETED recovery path replays checkpoint status update, ensures artifact storage,
+       and constructs the ApprovedProductRecord idempotently without duplicating outbox records.
+    """
+    from fleet_api.deps import get_resume_context_store, get_checkpoint_store, get_artifact_store
+    from fleet_governance_core.models.approval import CheckpointStatusEnum, FleetExecutionStatus
+    from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+    checkpoint_id = prop_res.json()["proposal"]["checkpoint_id"]
+
+    checkpoint_store = get_checkpoint_store()
+    orig_update_status = checkpoint_store.update_checkpoint_status
+
+    # 1. Attempt 1: Crash right after mark_resume_completed during update_checkpoint_status
+    crash_injected = {"count": 0}
+
+    def mock_update_status_crash(tenant_id, chk_id, new_status):
+        crash_injected["count"] += 1
+        if crash_injected["count"] == 1:
+            raise RuntimeError("Simulated crash right after mark_resume_completed before checkpoint status update")
+        return orig_update_status(tenant_id, chk_id, new_status)
+
+    monkeypatch.setattr(checkpoint_store, "update_checkpoint_status", mock_update_status_crash)
+
+    decide_res_1 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Second crash window test."},
+    )
+    assert decide_res_1.status_code == 500
+
+    # Verify context in resume_context_store is already COMPLETED
+    resume_store = get_resume_context_store()
+    ctx = resume_store.get_context("tenant-demo", checkpoint_id)
+    assert ctx.status == FleetExecutionStatus.COMPLETED
+
+    # Verify checkpoint is still PENDING because crash happened before update
+    chk_pending = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk_pending.status == CheckpointStatusEnum.PENDING
+
+    # Exactly ONE completed outbox message was written by mark_resume_completed
+    initial_outbox = [r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]
+    assert len(initial_outbox) == 1
+
+    # 2. Attempt 2 (Retry/Restart after crash): Should hit completed recovery path
+    decide_res_2 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Second crash window test."},
+    )
+    assert decide_res_2.status_code == 200, f"Expected 200 on retry after crash, got {decide_res_2.text}"
+    decide_data = decide_res_2.json()
+    assert decide_data["status"] == "finalized"
+    product_id = decide_data["product_id"]
+    assert product_id in _APPROVED_PRODUCTS_STORE
+
+    # Verify checkpoint successfully transitioned to RESUMED via projection recovery
+    chk_resumed = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk_resumed.status == CheckpointStatusEnum.RESUMED
+
+    # Verify outbox records remain EXACTLY ONE (no duplicate outbox messages)
+    final_outbox = [r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]
+    assert len(final_outbox) == 1

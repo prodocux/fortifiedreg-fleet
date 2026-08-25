@@ -41,6 +41,7 @@ from fleet_governance_core.models.approval import (
     AuthenticatedActor,
     CheckpointStatusEnum,
     FleetApprovalRecord,
+    FleetExecutionStatus,
     PDXApprovalDecision,
     PDXApprovalRequest,
     PDXWorkflowCheckpoint,
@@ -673,8 +674,87 @@ async def manager_decide_proposal(
             reason=req.rationale or "Approved by Product Manager.",
         )
 
-        # 2. Handle Lease Fencing & State Machine
         ctx = resume_store.get_context(tenant_id, proposal.checkpoint_id)
+
+        # Crash recovery path: if context is already COMPLETED (e.g. previous attempt completed mark_resume_completed but crashed before updating checkpoint or returning product)
+        if ctx and ctx.status == FleetExecutionStatus.COMPLETED:
+            # Replay checkpoint projection synchronization
+            checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
+
+            approved_at_iso = appr_record.decided_at
+            canonical_pif = {
+                "tenant_id": tenant_id,
+                "session_id": proposal.session_id,
+                "proposal_id": proposal.proposal_id,
+                "product_name": proposal.product_name,
+                "revision": proposal.revision,
+                "case_digest": proposal.case_digest,
+                "plan_digest": proposal.plan_digest,
+                "ingredients": proposal.ingredients_summary,
+                "sccs_summary": proposal.sccs_evaluation_summary,
+                "pdx_manifest_digest": ctx.result_identity.sha256 if ctx.result_identity else None,
+                "pdx_artifact_uri": ctx.result_identity.uri if ctx.result_identity else None,
+                "approved_by": actor.sub,
+                "approved_at": approved_at_iso,
+            }
+            canonical_pif_bytes = canonical_json_dumps(canonical_pif).encode("utf-8")
+            art_sha = hashlib.sha256(canonical_pif_bytes).hexdigest()
+            art_storage = ArtifactStorageIdentity(
+                artifact_id=f"art-prod-{proposal.proposal_id}",
+                uri=f"artifact://{tenant_id}/dossiers/{proposal.proposal_id}/finalized_pif_record.json",
+                sha256=art_sha,
+                size_bytes=len(canonical_pif_bytes),
+                media_type="application/json",
+            )
+            artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
+
+            existing_prod = next(
+                (p for p in _APPROVED_PRODUCTS_STORE.values() if p.proposal_id == proposal.proposal_id and p.tenant_id == tenant_id),
+                None,
+            )
+            if existing_prod:
+                product_id = existing_prod.product_id
+                approved_product = existing_prod
+            else:
+                product_id = f"prod-{uuid.uuid4().hex[:8]}"
+                approved_product = ApprovedProductRecord(
+                    product_id=product_id,
+                    tenant_id=tenant_id,
+                    session_id=proposal.session_id,
+                    proposal_id=proposal.proposal_id,
+                    revision=proposal.revision,
+                    product_name=proposal.product_name,
+                    case_digest=proposal.case_digest,
+                    plan_digest=proposal.plan_digest,
+                    checkpoint_id=proposal.checkpoint_id,
+                    artifact_identity=art_storage,
+                    approval_metadata={
+                        "approved_by": actor.sub,
+                        "approved_at": approved_at_iso,
+                        "rationale": req.rationale or "Approved by Product Manager.",
+                        "sha256_checksum": art_sha,
+                        "pdx_artifact_uri": ctx.result_identity.uri if ctx.result_identity else None,
+                        "pdx_manifest_sha256": ctx.result_identity.sha256 if ctx.result_identity else None,
+                    },
+                )
+                _APPROVED_PRODUCTS_STORE[product_id] = approved_product
+
+            proposal.status = ProposalStatusEnum.APPROVED
+            proposal.manager_rationale = req.rationale
+            proposal.decided_at = approved_at_iso
+
+            draft = _DRAFTS_STORE.get(proposal.session_id)
+            if draft:
+                draft.status = FormulationStatusEnum.DRAFT
+
+            return {
+                "status": "finalized",
+                "product_id": product_id,
+                "artifact_identity": art_storage.model_dump(mode="json"),
+                "approved_product": approved_product.model_dump(mode="json"),
+            }
+
+        # 2. Handle Lease Fencing & State Machine
         cur_version = ctx.version if ctx else 1
         lease_id = None
 
@@ -705,13 +785,17 @@ async def manager_decide_proposal(
 
             pdx_result_ident = ArtifactStorageIdentity.model_validate(raw_pdx_ident)
 
-            # Verify consistency between artifact_identity and resume_result metadata
+            # Strict validation: manifest_sha256 and artifact_uri MUST be present and match pdx_result_ident
             manifest_sha = resume_result.get("manifest_sha256")
-            if manifest_sha and pdx_result_ident.sha256 != manifest_sha:
+            if not manifest_sha or not isinstance(manifest_sha, str) or len(manifest_sha) != 64:
+                raise RuntimeError(f"PDX resume result missing or invalid manifest_sha256: {manifest_sha}")
+            if pdx_result_ident.sha256 != manifest_sha:
                 raise RuntimeError(f"PDX artifact identity SHA-256 mismatch: {pdx_result_ident.sha256} != {manifest_sha}")
 
             artifact_uri = resume_result.get("artifact_uri")
-            if artifact_uri and pdx_result_ident.uri != artifact_uri:
+            if not artifact_uri or not isinstance(artifact_uri, str) or not artifact_uri.startswith("artifact://"):
+                raise RuntimeError(f"PDX resume result missing or invalid artifact_uri: {artifact_uri}")
+            if pdx_result_ident.uri != artifact_uri:
                 raise RuntimeError(f"PDX artifact identity URI mismatch: {pdx_result_ident.uri} != {artifact_uri}")
 
         except Exception as exc:
