@@ -852,6 +852,7 @@ async function loadProposalsInbox() {
 
 function showProposalDetail(p) {
   STATE.selectedProposalId = p.proposal_id;
+  STATE.selectedProposal = p;
 
   document.querySelectorAll('.inbox-item').forEach((el) => {
     el.classList.toggle('selected', el.dataset.id === p.proposal_id);
@@ -896,6 +897,106 @@ function showProposalDetail(p) {
     } else {
       actionsBox.classList.add('hidden');
     }
+  }
+}
+
+async function sendManagerChatMessage(customQuery = null) {
+  if (!STATE.token) return;
+  const inputEl = document.getElementById('input-manager-chat-message');
+  const query = (customQuery || (inputEl ? inputEl.value : '')).trim();
+  if (!query) return;
+
+  if (inputEl) inputEl.value = '';
+
+  const messagesContainer = document.getElementById('manager-chat-messages');
+  if (messagesContainer) {
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-bubble chat-user';
+    userBubble.innerHTML = `
+      <div class="chat-sender">👔 Product Manager</div>
+      <div class="chat-text">${escapeHtml(query)}</div>
+    `;
+    messagesContainer.appendChild(userBubble);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  setTelemetryStatus('node-gemini-assistant', 'REASONING', 'badge-running');
+
+  const p = STATE.selectedProposal;
+  const productName = p ? p.product_name : (STATE.draft ? STATE.draft.product_name : 'Formula');
+  const ingredients = p ? p.ingredients_summary : (STATE.draft ? STATE.draft.ingredients : []);
+  const gateDecision = p ? p.gate_decision : null;
+  const gateReasons = p ? p.gate_reasons : null;
+
+  try {
+    const res = await fetch('/v1/assistant/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${STATE.token}`
+      },
+      body: JSON.stringify({
+        message: query,
+        product_name: productName,
+        ingredients: ingredients,
+        acting_role: 'product_manager',
+        gate_decision: gateDecision,
+        gate_reasons: gateReasons
+      })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    if (messagesContainer) {
+      const botBubble = document.createElement('div');
+      botBubble.className = 'chat-bubble chat-bot';
+      const formattedReply = formatMarkdown(data.reply);
+      
+      let insertBtnHtml = '';
+      if (query.toLowerCase().includes('rationale') || query.includes('理由') || query.includes('草擬')) {
+        insertBtnHtml = `<div class="mt-05"><button type="button" class="btn btn-secondary btn-sm btn-insert-rationale">📋 Insert Rationale into Input Field</button></div>`;
+      }
+
+      botBubble.innerHTML = `
+        <div class="chat-sender">✨ ${data.provider}</div>
+        <div class="chat-text">${formattedReply}</div>
+        ${insertBtnHtml}
+      `;
+
+      if (insertBtnHtml) {
+        const insBtn = botBubble.querySelector('.btn-insert-rationale');
+        if (insBtn) {
+          insBtn.addEventListener('click', () => {
+            const ratInput = document.getElementById('input-manager-rationale');
+            if (ratInput) {
+              // Extract clean text from reply
+              const cleanText = data.reply.replace(/<[^>]*>?/gm, '').replace(/#+\s*/g, '').slice(0, 500).trim();
+              ratInput.value = cleanText;
+              ratInput.focus();
+            }
+          });
+        }
+      }
+
+      messagesContainer.appendChild(botBubble);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    setTelemetryStatus('node-gemini-assistant', 'READY', 'badge-pass');
+  } catch (err) {
+    console.error('Failed to send manager chat message:', err);
+    if (messagesContainer) {
+      const errBubble = document.createElement('div');
+      errBubble.className = 'chat-bubble chat-bot';
+      errBubble.innerHTML = `
+        <div class="chat-sender">⚠️ Gemini Advisor</div>
+        <div class="chat-text">Unable to complete query. Please try again.</div>
+      `;
+      messagesContainer.appendChild(errBubble);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    setTelemetryStatus('node-gemini-assistant', 'UNAVAILABLE', 'badge-review');
   }
 }
 
@@ -1133,6 +1234,26 @@ document.addEventListener('DOMContentLoaded', () => {
     chip.addEventListener('click', () => {
       const prompt = chip.dataset.prompt;
       if (prompt) sendChatMessage(prompt);
+    });
+  });
+
+  // Manager Copilot Interactive Chat Listeners
+  const btnMgrChatSend = document.getElementById('btn-manager-chat-send');
+  const inputMgrChatMsg = document.getElementById('input-manager-chat-message');
+  if (btnMgrChatSend) btnMgrChatSend.addEventListener('click', () => sendManagerChatMessage());
+  if (inputMgrChatMsg) {
+    inputMgrChatMsg.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendManagerChatMessage();
+      }
+    });
+  }
+
+  document.querySelectorAll('.btn-mgr-prompt').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const prompt = chip.dataset.prompt;
+      if (prompt) sendManagerChatMessage(prompt);
     });
   });
 

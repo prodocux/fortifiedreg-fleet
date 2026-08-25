@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/portal.css?v=0.4.2">
-    <script type="module" src="/static/portal.js?v=0.4.2" defer></script>
+    <link rel="stylesheet" href="/static/portal.css?v=0.4.3">
+    <script type="module" src="/static/portal.js?v=0.4.3" defer></script>
 </head>
 <body>
 
@@ -253,30 +253,8 @@
                         <div class="text-xs text-muted" id="guardrail-badge">Local Guardrail / Model Armor-Compatible</div>
                     </div>
 
-                    <!-- Live SCCS Score Card -->
-                    <div class="score-card mb-125">
-                        <div class="score-num" id="compliance-score">100</div>
-                        <div class="score-label">SCCS Regulatory Compliance Index</div>
-                    </div>
-
-                    <!-- Toxicology SED/MoS Diagnostic -->
+                    <!-- Interactive Gemini Regulatory Dialogue Chat (Prominent Top Placement) -->
                     <div class="sidebar-section mb-125">
-                        <div class="sidebar-section-title">📊 Toxicological Margin of Safety (MoS Matrix)</div>
-                        <div class="mos-list" id="sidebar-mos-list">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-
-                    <!-- Actionable Suggestions -->
-                    <div class="sidebar-section mb-125">
-                        <div class="sidebar-section-title">💡 Smart Formulation Recommendations &amp; Citations</div>
-                        <div class="suggestions-list" id="sidebar-suggestions-list">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-
-                    <!-- Interactive Gemini Regulatory Dialogue Chat -->
-                    <div class="sidebar-section">
                         <div class="sidebar-section-title">💬 Live Gemini Regulatory Dialogue</div>
                         <div class="chat-container" id="gemini-chat-container">
                             <div class="chat-messages" id="chat-messages">
@@ -297,6 +275,28 @@
                                 <input type="text" id="input-chat-message" class="form-control form-control-sm" placeholder="Ask a regulatory question...">
                                 <button type="button" class="btn btn-primary btn-sm" id="btn-chat-send">➤ Send</button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Live SCCS Score Card -->
+                    <div class="score-card mb-125">
+                        <div class="score-num" id="compliance-score">100</div>
+                        <div class="score-label">SCCS Regulatory Compliance Index</div>
+                    </div>
+
+                    <!-- Toxicology SED/MoS Diagnostic -->
+                    <div class="sidebar-section mb-125">
+                        <div class="sidebar-section-title">📊 Toxicological Margin of Safety (MoS Matrix)</div>
+                        <div class="mos-list" id="sidebar-mos-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Actionable Suggestions -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">💡 Smart Formulation Recommendations &amp; Citations</div>
+                        <div class="suggestions-list" id="sidebar-suggestions-list">
+                            <!-- Populated dynamically -->
                         </div>
                     </div>
                 </div>
@@ -355,6 +355,39 @@
                         <div class="d-flex gap-1">
                             <button type="button" class="btn btn-success" id="btn-manager-accept">✓ Accept &amp; Finalize Proposal</button>
                             <button type="button" class="btn btn-danger" id="btn-manager-return">✕ Return to Formulator</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manager AI Copilot & Decision Assistant -->
+            <div class="manager-copilot">
+                <div class="card card-sidebar">
+                    <div class="sidebar-header">
+                        <div class="ai-badge">✨ Gemini Manager Copilot</div>
+                        <div class="text-xs text-muted">HitL Governance &amp; Rationale Engine</div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">💬 Manager Governance Dialogue</div>
+                        <div class="chat-container" id="manager-chat-container">
+                            <div class="chat-messages" id="manager-chat-messages">
+                                <div class="chat-bubble chat-bot">
+                                    <div class="chat-sender">✨ Gemini Advisor</div>
+                                    <div class="chat-text">Welcome, Product Manager. Select a proposal from the inbox, and I can analyze safety gaps, review MoS, or automatically draft an authoritative approval rationale for CSO sign-off.</div>
+                                </div>
+                            </div>
+                            
+                            <div class="chat-quick-prompts">
+                                <button type="button" class="btn-prompt-chip btn-mgr-prompt" data-prompt="Draft an authoritative regulatory & toxicological approval rationale for this proposal">📝 Auto-Draft Approval Rationale</button>
+                                <button type="button" class="btn-prompt-chip btn-mgr-prompt" data-prompt="Analyze the toxicology safety margins and regulatory risk of this proposal">🔍 SCCS Risk Evaluation</button>
+                                <button type="button" class="btn-prompt-chip btn-mgr-prompt" data-prompt="Why does this proposal require manager review and what evidence satisfies SCCS?">❓ Data Gap Analysis</button>
+                            </div>
+                            
+                            <div class="chat-input-row">
+                                <input type="text" id="input-manager-chat-message" class="form-control form-control-sm" placeholder="Ask manager copilot...">
+                                <button type="button" class="btn btn-primary btn-sm" id="btn-manager-chat-send">➤ Send</button>
+                            </div>
                         </div>
                     </div>
                 </div>

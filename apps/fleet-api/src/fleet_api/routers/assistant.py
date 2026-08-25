@@ -143,6 +143,9 @@ class ChatRequest(BaseModel):
     product_name: Optional[str] = "Formula"
     ingredients: Optional[List[FormulaItem]] = Field(default_factory=list)
     exposure_scenario: Optional[ExposureScenario] = None
+    acting_role: Optional[str] = "formulator"
+    gate_decision: Optional[str] = None
+    gate_reasons: Optional[List[str]] = Field(default_factory=list)
     history: Optional[List[ChatMessage]] = Field(default_factory=list)
 
 
@@ -187,16 +190,28 @@ async def chat_with_gemini_copilot(
         [f"{i.inci_name} ({i.concentration_pct}%, CAS: {i.cas_number or 'N/A'}, NOAEL: {i.noael_mg_kg_day or 'N/A'})" for i in (req.ingredients or [])]
     ) or "None (Empty formula)"
 
-    # 3. System prompt construction
-    system_instruction = (
-        "You are the EU Cosmetics Regulatory AI Copilot for FortifiedReg Fleet, an autonomous regulatory compliance suite. "
-        "You specialize in EU Cosmetics Regulation (EC) No 1223/2009, SCCS Notes of Guidance for Testing of Cosmetic Ingredients (12th Revision, SCCS/1647/22), "
-        "Annex II (Prohibited Substances), Annex III (Restricted Substances), Annex V (Preservatives), Margin of Safety (MoS = NOAEL / SED) calculations, "
-        "and Product Information File (PIF) compliance.\n"
-        f"Active Product: '{req.product_name}'\n"
-        f"Active Ingredients in Draft: {formula_summary}\n"
-        "Provide concise, professional, citation-backed answers. Use Markdown formatting. If the user asks in Traditional/Simplified Chinese or any other language, reply politely in the matching language while keeping technical regulatory terms precise."
-    )
+    # 3. Role-specific System prompt construction
+    if req.acting_role == "product_manager":
+        system_instruction = (
+            "You are the EU Cosmetics Regulatory AI Copilot for FortifiedReg Fleet assisting the Product Manager & CSO Signatory in evaluating proposed product dossiers. "
+            f"Active Proposal: '{req.product_name}' (Gate Status: {req.gate_decision or 'PENDING_REVIEW'}).\n"
+            f"Gate Review Notes: {', '.join(req.gate_reasons or []) or 'None'}.\n"
+            f"Formulation Ingredients: {formula_summary}\n"
+            "Help the manager evaluate toxicological safety margins, data gaps (e.g. novel peptides without 90-day oral NOAEL studies), "
+            "and draft formal, authoritative approval rationales or formulation return feedback under Regulation (EC) No 1223/2009 and SCCS Notes of Guidance (12th Revision). "
+            "When asked to draft an approval rationale, provide a formal, professional, audit-ready justification suitable for inputting into the Manager Rationale field. "
+            "Provide concise, professional, citation-backed answers. Use Markdown formatting. If the user asks in Traditional/Simplified Chinese or any other language, reply politely in the matching language."
+        )
+    else:
+        system_instruction = (
+            "You are the EU Cosmetics Regulatory AI Copilot for FortifiedReg Fleet, an autonomous regulatory compliance suite. "
+            "You specialize in EU Cosmetics Regulation (EC) No 1223/2009, SCCS Notes of Guidance for Testing of Cosmetic Ingredients (12th Revision, SCCS/1647/22), "
+            "Annex II (Prohibited Substances), Annex III (Restricted Substances), Annex V (Preservatives), Margin of Safety (MoS = NOAEL / SED) calculations, "
+            "and Product Information File (PIF) compliance.\n"
+            f"Active Product: '{req.product_name}'\n"
+            f"Active Ingredients in Draft: {formula_summary}\n"
+            "Provide concise, professional, citation-backed answers. Use Markdown formatting. If the user asks in Traditional/Simplified Chinese or any other language, reply politely in the matching language while keeping technical regulatory terms precise."
+        )
 
     # 3a. Check for Live Gemini Studio API Key
     gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")

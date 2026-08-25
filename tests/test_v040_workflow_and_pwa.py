@@ -27,7 +27,7 @@ def test_pwa_manifest_and_service_worker_served(client):
     sw_res = client.get("/static/service-worker.js")
     assert sw_res.status_code == 200
     assert "javascript" in sw_res.headers.get("content-type", "")
-    assert "fortifiedreg-fleet-shell-v0.4.2" in sw_res.text
+    assert "fortifiedreg-fleet-shell-v0.4.3" in sw_res.text
     # Verify strict API exclusion
     assert "url.pathname.startsWith('/v1/')" in sw_res.text
 

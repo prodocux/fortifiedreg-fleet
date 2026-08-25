@@ -247,11 +247,11 @@ body {
 
 .workspace-layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr);
+  gap: 1.25rem;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 960px) {
   .workspace-layout {
     grid-template-columns: 1fr;
   }
@@ -517,11 +517,20 @@ body {
 /* Manager Workspace Layout */
 .manager-layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 1.5rem;
+  grid-template-columns: 280px minmax(0, 1.3fr) minmax(340px, 1fr);
+  gap: 1.25rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
+  .manager-layout {
+    grid-template-columns: 280px 1fr;
+  }
+  .manager-copilot {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 768px) {
   .manager-layout {
     grid-template-columns: 1fr;
   }
