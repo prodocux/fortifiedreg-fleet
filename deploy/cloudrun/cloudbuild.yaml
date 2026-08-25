@@ -66,7 +66,7 @@ steps:
       - '--allow-unauthenticated'
       - '--service-account=fortifiedreg-fleet-runtime@$PROJECT_ID.iam.gserviceaccount.com'
       - '--set-env-vars=FLEET_ENV=production,FLEET_COMMIT=$_GIT_COMMIT,GIT_COMMIT=$_GIT_COMMIT,FLEET_INTAKE_ADAPTER=live,FLEET_PDX_ADAPTER=live,PDX_CORE_PIN=37e89752560b22dc8724d470dce96187f19e3f98,PRODOCUX_PIN=53c4784d4b2bae4437252a287193e897973e8474,PRODOCUX_BASE_URL=$_PRODOCUX_URL,FLEET_PERSISTENCE_PROFILE=ephemeral_single_instance'
-      - '--set-secrets=FLEET_JWT_SECRET=fleet-jwt-secret:latest'
+      - '--set-secrets=FLEET_JWT_SECRET=fleet-jwt-secret:latest,GEMINI_API_KEY=fleet-gemini-api-key:latest'
       - '--memory=1Gi'
       - '--cpu=1'
       - '--min-instances=1'

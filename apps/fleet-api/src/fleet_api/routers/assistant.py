@@ -201,28 +201,30 @@ async def chat_with_gemini_copilot(
     # 3a. Check for Live Gemini Studio API Key
     gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if gemini_key:
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
-        payload = {
-            "contents": [
-                {"role": "user", "parts": [{"text": f"System Context: {system_instruction}\n\nUser Question: {req.message}"}]}
-            ],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 800}
-        }
-        try:
-            req_data = json.dumps(payload).encode("utf-8")
-            http_req = urllib.request.Request(gemini_url, data=req_data, headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(http_req, timeout=10) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                text = result["candidates"][0]["content"]["parts"][0]["text"]
-                return ChatResponse(
-                    status="success",
-                    provider="Google Gemini 1.5 Flash (Live AI Studio)",
-                    reply=text,
-                    guardrail_status="PASSED",
-                    rule_references=["Regulation (EC) No 1223/2009", "SCCS Notes of Guidance 12th Revision"],
-                )
-        except Exception:
-            pass
+        active_models = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.5-flash"]
+        for model_name in active_models:
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+            payload = {
+                "contents": [
+                    {"role": "user", "parts": [{"text": f"System Context: {system_instruction}\n\nUser Question: {req.message}"}]}
+                ],
+                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1000}
+            }
+            try:
+                req_data = json.dumps(payload).encode("utf-8")
+                http_req = urllib.request.Request(gemini_url, data=req_data, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(http_req, timeout=12) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    text = result["candidates"][0]["content"]["parts"][0]["text"]
+                    return ChatResponse(
+                        status="success",
+                        provider=f"Google Gemini ({model_name} Live Model)",
+                        reply=text,
+                        guardrail_status="PASSED",
+                        rule_references=["Regulation (EC) No 1223/2009 (Annex II/III/V)", "SCCS Notes of Guidance (12th Revision)", "IFRA Standards"],
+                    )
+            except Exception:
+                continue
 
     # 3b. Check for Google Cloud Vertex AI (Cloud Run Native Identity & IAM)
     gcp_project = os.environ.get("GCP_PROJECT_ID", "fortifiedreg-fleet")

@@ -123,12 +123,31 @@ try {
 }
 
 # Grant Secret Accessor to Dedicated Runtime Service Account
-Write-Host "[+] Granting Secret Accessor permission to $RuntimeSA..." -ForegroundColor Yellow
+Write-Host "[+] Granting Secret Accessor permission to $RuntimeSA for fleet-jwt-secret..." -ForegroundColor Yellow
 gcloud secrets add-iam-policy-binding $secretName `
     --member="serviceAccount:$RuntimeSA" `
     --role="roles/secretmanager.secretAccessor" `
     --project=$ProjectId `
     --quiet 2>$null
+
+# Also configure fleet-gemini-api-key if present
+if ($env:GEMINI_API_KEY) {
+    Write-Host "[+] Configuring fleet-gemini-api-key in Secret Manager..." -ForegroundColor Yellow
+    $geminiSecretName = "fleet-gemini-api-key"
+    gcloud secrets create $geminiSecretName --replication-policy="automatic" --project=$ProjectId 2>$null
+    $tempGeminiFile = [System.IO.Path]::GetTempFileName()
+    [System.IO.File]::WriteAllText($tempGeminiFile, $env:GEMINI_API_KEY.Trim())
+    try {
+        gcloud secrets versions add $geminiSecretName --data-file=$tempGeminiFile --project=$ProjectId 2>$null
+    } finally {
+        Remove-Item $tempGeminiFile -Force -ErrorAction SilentlyContinue
+    }
+    gcloud secrets add-iam-policy-binding $geminiSecretName `
+        --member="serviceAccount:$RuntimeSA" `
+        --role="roles/secretmanager.secretAccessor" `
+        --project=$ProjectId `
+        --quiet 2>$null
+}
 
 # 5. Build Container Image via Cloud Build with build-arg
 Write-Host "`n[Step 4/5] Building OCI-Pinned Container Image via Cloud Build..." -ForegroundColor Cyan
