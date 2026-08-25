@@ -705,21 +705,25 @@ async def manager_decide_proposal(
             )
             put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
             if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
-                try:
-                    resume_store.mark_resume_failed(
+                # Execution context remains terminal COMPLETED; record publication conflict for operator review
+                get_audit_log().append_audit_event(
+                    AuditEvent(
                         tenant_id=tenant_id,
-                        checkpoint_id=proposal.checkpoint_id,
-                        expected_version=ctx.version,
-                        lease_id=ctx.lease_id or "",
-                        safe_error_code="ARTIFACT_CONFLICT_BLOCKED",
-                        request_id=proposal.approval_request_id,
-                        is_retryable=False,
+                        run_id=proposal.session_id,
+                        actor_id=actor.sub,
+                        event_type=AuditEventTypeEnum.VERIFICATION_FAILED,
+                        payload={
+                            "action": "product_publication_blocked",
+                            "proposal_id": proposal.proposal_id,
+                            "checkpoint_id": proposal.checkpoint_id,
+                            "error": "ARTIFACT_CONFLICT_BLOCKED",
+                            "detail": "Storage contains conflicting artifact digest; ApprovedProductRecord withheld.",
+                        },
                     )
-                except Exception:
-                    pass
+                )
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Artifact storage conflict: an artifact with a conflicting digest already exists during completed recovery.",
+                    detail="Artifact storage conflict: an artifact with a conflicting digest already exists during completed recovery (publication blocked).",
                 )
 
             # Replay checkpoint projection synchronization

@@ -965,6 +965,7 @@ def test_completed_recovery_artifact_conflict_fails_closed(client, monkeypatch):
     target_path.write_bytes(tampered_bytes)
 
     # 3. Attempt 2 (Recovery attempt): Must fail closed with 409 Conflict because storage digest conflicts
+    initial_product_count = len(_APPROVED_PRODUCTS_STORE)
     decide_res_2 = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -973,10 +974,29 @@ def test_completed_recovery_artifact_conflict_fails_closed(client, monkeypatch):
     assert decide_res_2.status_code == 409
     assert "Artifact storage conflict" in decide_res_2.json()["detail"]
 
-    # Verify context transitioned to BLOCKED_REVIEW (non-retryable)
+    # Verify no ApprovedProductRecord was added
+    assert len(_APPROVED_PRODUCTS_STORE) == initial_product_count
+
+    # Verify execution context remains terminal COMPLETED (never downgraded)
     ctx_after = resume_store.get_context("tenant-demo", checkpoint_id)
-    assert ctx_after.status == FleetExecutionStatus.BLOCKED_REVIEW
-    assert ctx_after.last_error.get("safe_error_code") == "ARTIFACT_CONFLICT_BLOCKED"
+    assert ctx_after.status == FleetExecutionStatus.COMPLETED
+
+    # Verify outbox records remain EXACTLY ONE resumed projection record
+    outbox_recs = [r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]
+    assert len(outbox_recs) == 1
+    assert outbox_recs[0].target_pdx_status == "resumed"
+
+    # Verify that store rejects any attempt to mark completed context as failed without a valid active lease
+    import pytest
+    with pytest.raises(ValueError, match="Lease mismatch"):
+        resume_store.mark_resume_failed(
+            tenant_id="tenant-demo",
+            checkpoint_id=checkpoint_id,
+            expected_version=ctx_after.version,
+            lease_id="invalid-lease-on-completed-record",
+            safe_error_code="TEST_ERROR",
+            request_id="test-req",
+        )
 
 
 def test_system_version_reflects_ephemeral_persistence_profile(client):
