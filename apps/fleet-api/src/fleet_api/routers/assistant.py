@@ -187,19 +187,20 @@ async def chat_with_gemini_copilot(
         [f"{i.inci_name} ({i.concentration_pct}%, CAS: {i.cas_number or 'N/A'}, NOAEL: {i.noael_mg_kg_day or 'N/A'})" for i in (req.ingredients or [])]
     ) or "None (Empty formula)"
 
-    # 3. Check for Live Gemini API Key
+    # 3. System prompt construction
+    system_instruction = (
+        "You are the EU Cosmetics Regulatory AI Copilot for FortifiedReg Fleet, an autonomous regulatory compliance suite. "
+        "You specialize in EU Cosmetics Regulation (EC) No 1223/2009, SCCS Notes of Guidance for Testing of Cosmetic Ingredients (12th Revision, SCCS/1647/22), "
+        "Annex II (Prohibited Substances), Annex III (Restricted Substances), Annex V (Preservatives), Margin of Safety (MoS = NOAEL / SED) calculations, "
+        "and Product Information File (PIF) compliance.\n"
+        f"Active Product: '{req.product_name}'\n"
+        f"Active Ingredients in Draft: {formula_summary}\n"
+        "Provide concise, professional, citation-backed answers. Use Markdown formatting. If the user asks in Traditional/Simplified Chinese or any other language, reply politely in the matching language while keeping technical regulatory terms precise."
+    )
+
+    # 3a. Check for Live Gemini Studio API Key
     gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if gemini_key:
-        system_instruction = (
-            "You are the EU Cosmetics Regulatory AI Copilot for FortifiedReg Fleet, an autonomous regulatory compliance suite. "
-            "You specialize in EU Cosmetics Regulation (EC) No 1223/2009, SCCS Notes of Guidance for Testing of Cosmetic Ingredients (12th Revision, SCCS/1647/22), "
-            "Annex II (Prohibited Substances), Annex III (Restricted Substances), Annex V (Preservatives), Margin of Safety (MoS = NOAEL / SED) calculations, "
-            "and Product Information File (PIF) compliance.\n"
-            f"Active Product: '{req.product_name}'\n"
-            f"Active Ingredients in Draft: {formula_summary}\n"
-            "Provide concise, professional, citation-backed answers. Use Markdown formatting."
-        )
-
         gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
         payload = {
             "contents": [
@@ -215,69 +216,108 @@ async def chat_with_gemini_copilot(
                 text = result["candidates"][0]["content"]["parts"][0]["text"]
                 return ChatResponse(
                     status="success",
-                    provider="Google Gemini 1.5 Flash (Live API)",
+                    provider="Google Gemini 1.5 Flash (Live AI Studio)",
                     reply=text,
                     guardrail_status="PASSED",
                     rule_references=["Regulation (EC) No 1223/2009", "SCCS Notes of Guidance 12th Revision"],
                 )
-        except Exception as e:
-            # Fallback to local expert reasoning engine if network or quota issue
+        except Exception:
             pass
 
-    # 4. Built-in Regulatory Expert Reasoning Engine (Autonomous Grounded Responses)
+    # 3b. Check for Google Cloud Vertex AI (Cloud Run Native Identity & IAM)
+    gcp_project = os.environ.get("GCP_PROJECT_ID", "fortifiedreg-fleet")
+    vertex_region = "us-central1"
+    vertex_model = "gemini-1.5-flash"
+    try:
+        meta_req = urllib.request.Request(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"}
+        )
+        with urllib.request.urlopen(meta_req, timeout=2) as meta_resp:
+            token_json = json.loads(meta_resp.read().decode("utf-8"))
+            access_token = token_json.get("access_token")
+
+        if access_token:
+            vertex_url = f"https://{vertex_region}-aiplatform.googleapis.com/v1/projects/{gcp_project}/locations/{vertex_region}/publishers/google/models/{vertex_model}:generateContent"
+            payload = {
+                "contents": [
+                    {"role": "user", "parts": [{"text": f"System Context: {system_instruction}\n\nUser Question: {req.message}"}]}
+                ],
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 800}
+            }
+            req_data = json.dumps(payload).encode("utf-8")
+            http_req = urllib.request.Request(
+                vertex_url,
+                data=req_data,
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {access_token}"}
+            )
+            with urllib.request.urlopen(http_req, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                text = result["candidates"][0]["content"]["parts"][0]["text"]
+                return ChatResponse(
+                    status="success",
+                    provider="Google Vertex AI Gemini 1.5 Flash (Live GCP Enterprise)",
+                    reply=text,
+                    guardrail_status="PASSED",
+                    rule_references=["Regulation (EC) No 1223/2009", "SCCS Notes of Guidance 12th Revision"],
+                )
+    except Exception:
+        pass
+
+    # 4. Built-in Multilingual Regulatory Expert Reasoning Engine (Autonomous Grounded Responses)
     msg_lower = req.message.lower().strip()
     rule_refs = ["Regulation (EC) No 1223/2009", "SCCS Notes of Guidance (12th Revision)"]
 
-    if "mercury" in msg_lower or "7439-97-6" in msg_lower:
+    if any(k in msg_lower for k in ["mercury", "汞", "水銀", "7439-97-6"]):
         rule_refs.append("Regulation (EC) No 1223/2009 Annex II, Entry 221")
         reply = (
-            "⚠️ **EU Regulatory Hazard Analysis: Mercury (CAS 7439-97-6)**\n\n"
-            "* **Regulatory Status**: Strictly **PROHIBITED** in all cosmetic products in the EU under **Regulation (EC) No 1223/2009, Annex II, Entry #221**.\n"
-            "* **Toxicological Impact**: Mercury compounds cause severe nephrotoxicity, neurotoxicity, and bioaccumulate in human tissues.\n"
-            "* **Fleet Gate Action**: The Submission Gate enforces a **FAIL-CLOSED** policy. As long as Mercury is present at any concentration (> 0%), your formulation cannot be submitted to the Product Manager.\n"
-            "* **Remediation**: Remove Mercury completely from the formulation table. For brightening functionality, consider safe, compliant alternatives such as Niacinamide (2-5%) or Ascorbyl Glucoside."
+            "⚠️ **EU Regulatory Hazard Analysis: Mercury (CAS 7439-97-6) / 汞物質法規警示**\n\n"
+            "* **Regulatory Status / 法規狀態**: Strictly **PROHIBITED** in all cosmetic products under **Regulation (EC) No 1223/2009, Annex II, Entry #221**（歐盟化妝品法規附錄二禁用物質清單第 221 項）。\n"
+            "* **Toxicological Impact / 毒理危害**: Mercury compounds cause severe nephrotoxicity, neurotoxicity, and bioaccumulate in human tissues（具劇烈腎毒性與神經毒性，並在人體累積）。\n"
+            "* **Fleet Gate Action / 系統門禁**: The Submission Gate enforces a strict **FAIL-CLOSED** policy. As long as Mercury is present at any concentration (> 0%), your formulation cannot be submitted to the Product Manager（配方只要含有汞，門禁將即時強制鎖定為 BLOCKED (FAIL)，無法提交主管審批）。\n"
+            "* **Remediation / 建議處置**: Remove Mercury completely from the formulation table. For brightening functionality, consider safe, compliant alternatives such as Niacinamide (2-5%) or Ascorbyl Glucoside."
         )
-    elif "phenoxyethanol" in msg_lower or "122-99-6" in msg_lower or "preservative" in msg_lower:
+    elif any(k in msg_lower for k in ["phenoxyethanol", "苯氧乙醇", "防腐劑", "preservative", "122-99-6"]):
         rule_refs.append("Regulation (EC) No 1223/2009 Annex V, Entry 29")
         reply = (
-            "📊 **EU Annex V Preservative Restriction: Phenoxyethanol (CAS 122-99-6)**\n\n"
-            "* **Maximum Allowed Concentration**: **1.0%** (Annex V, Entry #29).\n"
-            "* **Toxicological Assessment**: NOAEL = 500 mg/kg bw/day (90-day subchronic oral toxicity study, SCCS/1575/16).\n"
-            "* **Current Evaluation**: If formulated above 1.0% (e.g. 2.5%), it triggers a hard **Annex V violation** and blocks manager gate submission.\n"
-            "* **Recommendation**: Formulate Phenoxyethanol at **0.6% – 0.8%**, frequently combined with Ethylhexylglycerin (0.1–0.3%) or Caprylyl Glycol to boost antimicrobial efficacy while preserving full compliance."
+            "📊 **EU Annex V Preservative Restriction: Phenoxyethanol (CAS 122-99-6) / 苯氧乙醇限制**\n\n"
+            "* **Maximum Allowed Concentration / 最高法定濃度**: **1.0%** (Annex V, Entry #29).\n"
+            "* **Toxicological Assessment / 毒理評估**: NOAEL = 500 mg/kg bw/day (90-day subchronic oral toxicity study, SCCS/1575/16).\n"
+            "* **Current Evaluation / 當前判定**: If formulated above 1.0% (e.g. 2.5%), it triggers a hard **Annex V violation** and blocks manager gate submission（濃度若超過 1.0%，將直接觸發附錄五違規並阻斷提交）。\n"
+            "* **Recommendation / 建議配方**: Formulate Phenoxyethanol at **0.6% – 0.8%**, combined with Ethylhexylglycerin (0.1–0.3%) or Caprylyl Glycol to boost antimicrobial efficacy while preserving full compliance."
         )
-    elif "retinol" in msg_lower or "vitamin a" in msg_lower or "68-26-8" in msg_lower:
+    elif any(k in msg_lower for k in ["retinol", "a醇", "視黃醇", "維生素a", "vitamin a", "68-26-8"]):
         rule_refs.append("SCCS Opinion on Vitamin A (SCCS/1647/22)")
         rule_refs.append("Regulation (EC) No 1223/2009 Annex III Entry 324")
         reply = (
-            "🧪 **SCCS Toxicology Profile: Retinol (CAS 68-26-8)**\n\n"
-            "* **SCCS Opinion (SCCS/1647/22)**: Maximum safe concentrations are **0.05% Retinol Equivalent (RE)** for body lotions and **0.3% RE** for other leave-on and rinse-off cosmetic products.\n"
-            "* **Key Toxicology Endpoints**: Oral NOAEL = 2.0 mg/kg bw/day (teratogenicity/developmental toxicity endpoint).\n"
-            "* **Margin of Safety (MoS)**: At 0.05% in a face serum (Daily Applied Amount = 0.8g, Body Weight = 60kg):\n"
+            "🧪 **SCCS Toxicology Profile: Retinol (CAS 68-26-8) / A醇安全評估**\n\n"
+            "* **SCCS Opinion (SCCS/1647/22)**: Maximum safe concentrations are **0.05% Retinol Equivalent (RE)** for body lotions and **0.3% RE** for face creams and rinse-off cosmetic products.\n"
+            "* **Key Toxicology Endpoints / 關鍵毒理數據**: Oral NOAEL = 2.0 mg/kg bw/day (teratogenicity/developmental toxicity endpoint).\n"
+            "* **Margin of Safety (MoS) / 安全邊際計算** (Face Serum, Daily Applied Amount = 0.8g, Body Weight = 60kg):\n"
             "  $$\\text{SED} = \\frac{0.8 \\times 1000 \\times (0.05 / 100) \\times 1.0}{60} = 0.00667 \\text{ mg/kg bw/day}$$\n"
             "  $$\\text{MoS} = \\frac{2.0}{0.00667} \\approx 300 \\ge 100 \\quad (\\text{PASS})$$"
         )
-    elif "peptide" in msg_lower or "tripeptide" in msg_lower or "1447824-23-8" in msg_lower:
+    elif any(k in msg_lower for k in ["peptide", "tripeptide", "胜肽", "多肽", "1447824-23-8"]):
         rule_refs.append("SCCS Notes of Guidance Chapter 3-4 (Toxicological Testing)")
         reply = (
-            "🔍 **Data Gap Analysis: Palmitoyl Tripeptide-38**\n\n"
-            "* **Status**: Novel synthetic peptide. In the default regulatory database, a standardized 90-day subchronic oral NOAEL study is not registered.\n"
-            "* **Workflow Impact**: Formulations with missing NOAEL endpoints are categorized as **REVIEW NEEDED**.\n"
-            "* **Resolution**: You can still submit the proposal to the Manager Gate. However, the Product Manager will be required to input a technical approval rationale (e.g. citing supplier in-vitro patch test and local tolerance data) before finalizing."
+            "🔍 **Data Gap Analysis: Palmitoyl Tripeptide-38 / 胜肽數據缺口**\n\n"
+            "* **Status / 現況**: Novel synthetic peptide lacking registered 90-day subchronic oral NOAEL study in public cosmetics databases.\n"
+            "* **Workflow Impact / 流程影響**: Formulations with missing NOAEL endpoints are categorized as **REVIEW NEEDED**.\n"
+            "* **Resolution / 核准方式**: You can still submit the proposal to the Manager Gate. However, the Product Manager will be required to input a technical approval rationale before finalizing."
         )
-    elif "mos" in msg_lower or "margin of safety" in msg_lower or "sed" in msg_lower or "calculate" in msg_lower or "formula" in msg_lower:
+    elif any(k in msg_lower for k in ["mos", "margin of safety", "安全邊際", "sed", "calculate", "計算", "公式", "formula"]):
         rule_refs.append("SCCS Notes of Guidance (12th Revision) Formula Framework")
         reply = (
-            "📐 **SCCS Margin of Safety (MoS) Calculation Methodology**\n\n"
-            "1. **Systemic Exposure Dose (SED)**:\n"
+            "📐 **SCCS Margin of Safety (MoS) Calculation Methodology / 安全邊際計算準則**\n\n"
+            "1. **Systemic Exposure Dose (SED) / 系統暴露量**:\n"
             "   $$\\text{SED} = \\frac{A \\times 1000 \\times (C / 100) \\times R_f}{BW}$$\n"
             "   * $A$: Daily applied amount ($0.8\\text{ g/day}$ for face serum)\n"
             "   * $C$: Concentration percentage (\\%)\n"
             "   * $R_f$: Retention factor ($1.0$ for leave-on products)\n"
             "   * $BW$: Default human body weight ($60.0\\text{ kg}$)\n\n"
-            "2. **Margin of Safety (MoS)**:\n"
+            "2. **Margin of Safety (MoS) / 安全邊際**:\n"
             "   $$\\text{MoS} = \\frac{\\text{NOAEL}}{\\text{SED}}$$\n"
-            "   * **Acceptance Criterion**: $\\text{MoS} \\ge 100$ is mandatory to demonstrate human safety."
+            "   * **Acceptance Criterion / 合規門檻**: $\\text{MoS} \\ge 100$ is mandatory under SCCS Notes of Guidance."
         )
     else:
         reply = (
@@ -286,7 +326,7 @@ async def chat_with_gemini_copilot(
             f"* **Current Ingredients**: {formula_summary}\n"
             f"* **Applicable Standards**: EU Regulation (EC) No 1223/2009 and SCCS Notes of Guidance (12th Rev).\n"
             f"* **Assistance Available**: You can ask me about:\n"
-            f"  1. Specific chemical restrictions (e.g. *'Is Mercury allowed?'* or *'What is the limit for Phenoxyethanol?'*)\n"
+            f"  1. Specific chemical restrictions (e.g. *'Is Mercury allowed?'* or *'我可以在配方中加入汞嗎？'*)\n"
             f"  2. Toxicological formulas (e.g. *'How is MoS calculated?'*)\n"
             f"  3. Requirements for Human-in-the-Loop manager approval workflows."
         )
