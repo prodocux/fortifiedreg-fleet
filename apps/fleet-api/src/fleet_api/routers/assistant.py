@@ -72,10 +72,10 @@ async def get_regulatory_suggestions(
                 SuggestionItem(
                     type="regulatory_hazard",
                     severity="high",
-                    title="歐盟 Annex II 禁用物質 (Mercury 汞)",
-                    message="配方中檢測到汞 (Mercury)，屬於歐盟化妝品法規 (EC) No 1223/2009 Annex II Entry #221 嚴格禁止使用物質。此配方無法通過門禁，必須立即自配方中剔除。",
+                    title="EU Annex II Prohibited Substance (Mercury)",
+                    message="Mercury detected in formulation. Strictly prohibited under EU Cosmetics Regulation (EC) No 1223/2009 Annex II Entry #221. Gate submission will be blocked; remove immediately.",
                     rule_citation="Regulation (EC) No 1223/2009 Annex II, Entry 221",
-                    action_label="自配方中移除 Mercury",
+                    action_label="Remove Mercury from Formulation",
                     proposed_patch={"remove_inci": item.inci_name},
                 )
             )
@@ -85,10 +85,10 @@ async def get_regulatory_suggestions(
                 SuggestionItem(
                     type="regulatory_hazard",
                     severity="high",
-                    title="防腐劑濃度超出 Annex V 上限 (Phenoxyethanol)",
-                    message=f"Phenoxyethanol 當前濃度為 {item.concentration_pct}%，已超出歐盟 Annex V 規定最高允許上限 1.0%。建議調降至 0.8% 以維持防腐效能並符合法規限制。",
+                    title="Annex V Preservative Limit Exceeded (Phenoxyethanol > 1.0%)",
+                    message=f"Phenoxyethanol concentration is currently {item.concentration_pct}%, exceeding the EU Annex V maximum allowed limit of 1.0%. Recommend reducing to 0.8% to maintain preservation while ensuring compliance.",
                     rule_citation="Regulation (EC) No 1223/2009 Annex V, Entry 29 (Max: 1.0%)",
-                    action_label="調降 Phenoxyethanol 濃度至 0.8%",
+                    action_label="Reduce Phenoxyethanol to 0.8%",
                     proposed_patch={"inci_name": item.inci_name, "concentration_pct": 0.8},
                 )
             )
@@ -98,10 +98,10 @@ async def get_regulatory_suggestions(
                 SuggestionItem(
                     type="missing_data",
                     severity="medium",
-                    title="缺少 90 天口服亞慢性毒理研究 (NOAEL)",
-                    message=f"{item.inci_name} 屬於新型胜肽成分，資料庫中尚未登記 90-day subchronic oral NOAEL 試驗數據。提交後將標註為 REVIEW，需由產品主管與安全評估員審閱並填寫核准理由。",
+                    title="Missing 90-Day Subchronic Oral NOAEL Study",
+                    message=f"{item.inci_name} is a novel peptide ingredient lacking registered 90-day subchronic oral NOAEL data. Submission will require REVIEW status with manager rationale.",
                     rule_citation="SCCS Notes of Guidance 12th Revision, Chapter 3-4 (Toxicological Data Requirements)",
-                    action_label="填入參考 NOAEL 數值",
+                    action_label="Apply Reference NOAEL Value",
                     proposed_patch={"inci_name": item.inci_name, "noael_mg_kg_day": 500.0},
                 )
             )
@@ -112,8 +112,8 @@ async def get_regulatory_suggestions(
             SuggestionItem(
                 type="optimization",
                 severity="low",
-                title="配方毒理安全邊際優良 (MoS > 100)",
-                message="所有成分之 Margin of Safety (MoS) 均遠高於歐盟 SCCS 建議閾值 100，無禁用物質或防腐劑超標問題，已達直接提交主管核准標準。",
+                title="Optimal Toxicological Safety Margin (MoS > 100)",
+                message="All formulation ingredients have Margin of Safety (MoS) exceeding the EU SCCS threshold of 100 with zero prohibited substances or preservative violations.",
                 rule_citation="SCCS Notes of Guidance 12th Revision (SCCS/1647/22)",
             )
         )

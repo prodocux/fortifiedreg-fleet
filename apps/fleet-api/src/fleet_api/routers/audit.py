@@ -4,8 +4,9 @@ Exposes tenant-isolated, session-scoped, append-only audit event queries for gov
 """
 from typing import Any, Dict, List, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fleet_api.deps import audit_log, get_tenant_and_actor
+from fleet_api.deps import get_audit_log, get_tenant_and_actor
 from fleet_governance_core.models.approval import AuthenticatedActor
+from fleet_governance_core.ports.audit_log_port import AuditLogPort
 
 router = APIRouter(prefix="/v1/audit", tags=["Audit"])
 
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/v1/audit", tags=["Audit"])
 def list_tenant_audit_events(
     limit: int = Query(default=50, ge=1, le=100),
     identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    audit_log: AuditLogPort = Depends(get_audit_log),
 ) -> Dict[str, Any]:
     """Retrieve immutable audit events for the authenticated session.
 
@@ -47,6 +49,7 @@ def list_tenant_audit_events(
 def get_run_audit_trail(
     run_id: str,
     identity: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    audit_log: AuditLogPort = Depends(get_audit_log),
 ) -> List[Dict[str, Any]]:
     """Retrieve all immutable audit events for a given workflow execution run within authenticated tenant boundary."""
     tenant_id, _ = identity

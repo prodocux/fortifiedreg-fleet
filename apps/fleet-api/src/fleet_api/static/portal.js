@@ -128,7 +128,7 @@ function startSessionTimer() {
     if (remainingMs <= 0) {
       clearInterval(STATE.timerInterval);
       if (timerEl) timerEl.textContent = 'EXPIRED';
-      alert('Demo Session 已到期。請點擊【重新開始 Demo】以換發全新工作階段。');
+      alert('Demo Session has expired. Please click [Restart Demo Session] to generate a fresh workspace.');
       return;
     }
 
@@ -211,6 +211,33 @@ function switchRole(role) {
 // 5. Formulation Management & SCCS Diagnostics
 // ---------------------------------------------------------------------------
 
+function collectIngredientsFromTable() {
+  const tbody = document.getElementById('tbody-ingredients');
+  if (!tbody) return STATE.draft ? STATE.draft.ingredients : [];
+
+  const rows = tbody.querySelectorAll('tr');
+  const ingredients = [];
+  rows.forEach((tr) => {
+    const nameInput = tr.querySelector('[data-field="inci_name"]');
+    const concInput = tr.querySelector('[data-field="concentration_pct"]');
+    const casInput = tr.querySelector('[data-field="cas_number"]');
+    const noaelInput = tr.querySelector('[data-field="noael_mg_kg_day"]');
+
+    if (nameInput && concInput) {
+      const name = nameInput.value.trim();
+      if (name) {
+        ingredients.push({
+          inci_name: name,
+          concentration_pct: parseFloat(concInput.value) || 0,
+          cas_number: casInput ? casInput.value.trim() : '',
+          noael_mg_kg_day: (noaelInput && noaelInput.value.trim() !== '') ? parseFloat(noaelInput.value) : null
+        });
+      }
+    }
+  });
+  return ingredients;
+}
+
 async function loadDraft() {
   if (!STATE.token) return;
   try {
@@ -256,29 +283,36 @@ function renderFormulationTable() {
     tbody.appendChild(tr);
   });
 
-  // Bind change events
+  // Bind change and input events
   tbody.querySelectorAll('.table-input').forEach((input) => {
-    input.addEventListener('change', (e) => {
+    const updateMem = (e) => {
       const idx = parseInt(e.target.dataset.index, 10);
       const field = e.target.dataset.field;
       let val = e.target.value;
       if (field === 'concentration_pct') val = parseFloat(val) || 0;
-      if (field === 'noael_mg_kg_day') val = val ? parseFloat(val) : null;
-      STATE.draft.ingredients[idx][field] = val;
-    });
+      if (field === 'noael_mg_kg_day') val = (val && val.trim() !== '') ? parseFloat(val) : null;
+      if (STATE.draft && STATE.draft.ingredients[idx]) {
+        STATE.draft.ingredients[idx][field] = val;
+      }
+    };
+    input.addEventListener('change', updateMem);
+    input.addEventListener('input', updateMem);
   });
 
   tbody.querySelectorAll('.btn-del-row').forEach((btn) => {
     btn.addEventListener('click', (e) => {
+      STATE.draft.ingredients = collectIngredientsFromTable();
       const idx = parseInt(e.target.dataset.index, 10);
       STATE.draft.ingredients.splice(idx, 1);
       renderFormulationTable();
+      saveDraft();
     });
   });
 }
 
 function addIngredientRow() {
   if (!STATE.draft) return;
+  STATE.draft.ingredients = collectIngredientsFromTable();
   STATE.draft.ingredients.push({
     inci_name: 'New Ingredient',
     concentration_pct: 1.0,
@@ -291,7 +325,15 @@ function addIngredientRow() {
 async function saveDraft() {
   if (!STATE.token || !STATE.draft) return;
   const nameInput = document.getElementById('input-product-name');
-  if (nameInput) STATE.draft.product_name = nameInput.value;
+  if (nameInput) STATE.draft.product_name = nameInput.value.trim();
+
+  STATE.draft.ingredients = collectIngredientsFromTable();
+
+  const saveBtn = document.getElementById('btn-save-draft');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = '💾 Saving & Analyzing...';
+  }
 
   setTelemetryStatus('node-cosmetics-engine', 'EVALUATING', 'badge-running');
 
@@ -318,11 +360,27 @@ async function saveDraft() {
     renderDiagnostics(data.sccs_evaluation, data.inci_evaluation);
     await loadAssistantSuggestions();
 
-    const isPass = data.sccs_evaluation.status === 'PASS';
+    const isPass = (data.sccs_evaluation?.status || '').toLowerCase() === 'pass' &&
+                   (data.inci_evaluation?.status || '').toLowerCase() === 'pass';
     setTelemetryStatus('node-cosmetics-engine', isPass ? 'PASSED' : 'REVIEW/FAIL', isPass ? 'badge-pass' : 'badge-review');
+
+    if (saveBtn) {
+      saveBtn.textContent = '✅ Saved & Analyzed!';
+      setTimeout(() => {
+        saveBtn.textContent = '💾 Save & Re-analyze Formulation';
+        saveBtn.disabled = false;
+      }, 1500);
+    }
   } catch (err) {
     console.error('Failed to save draft:', err);
     setTelemetryStatus('node-cosmetics-engine', 'ERROR', 'badge-fail');
+    if (saveBtn) {
+      saveBtn.textContent = '❌ Save Failed';
+      setTimeout(() => {
+        saveBtn.textContent = '💾 Save & Re-analyze Formulation';
+        saveBtn.disabled = false;
+      }, 2000);
+    }
   }
 }
 
@@ -334,14 +392,16 @@ function renderDiagnostics(sccs, inci) {
 
   if (mosList) {
     mosList.innerHTML = '';
-    const substances = sccs.substance_evaluations || [];
+    const substances = sccs?.substance_evaluations || [];
     substances.forEach((s) => {
       const div = document.createElement('div');
       div.className = 'mos-item flex-between';
       const mosVal = s.margin_of_safety != null ? Math.round(s.margin_of_safety) : 'N/A';
+      const stLower = (s.status || '').toLowerCase();
+      const badgeClass = stLower === 'pass' ? 'badge-pass' : (stLower === 'review' ? 'badge-review' : 'badge-fail');
       div.innerHTML = `
         <span><strong>${s.inci_name}</strong> (${s.concentration_pct}%)</span>
-        <span class="badge ${s.status === 'PASS' ? 'badge-pass' : (s.status === 'REVIEW' ? 'badge-review' : 'badge-fail')}">
+        <span class="badge ${badgeClass}">
           MoS: ${mosVal}
         </span>
       `;
@@ -349,20 +409,23 @@ function renderDiagnostics(sccs, inci) {
     });
   }
 
-  // Update Gate Status Box
+  // Update Gate Status Box with strict case-insensitive status handling
   if (gateIndicator && gateDesc) {
-    if (sccs.status === 'FAIL' || inci.status === 'FAIL') {
+    const sccsSt = (sccs?.status || '').toLowerCase();
+    const inciSt = (inci?.status || '').toLowerCase();
+
+    if (sccsSt === 'fail' || inciSt === 'fail') {
       gateIndicator.textContent = 'BLOCKED (FAIL)';
       gateIndicator.className = 'gate-status-indicator badge-fail';
-      gateDesc.textContent = '配方含有禁用物質或防腐劑超標，無法提交主管。';
-    } else if (sccs.status === 'REVIEW' || inci.status === 'REVIEW') {
+      gateDesc.textContent = 'Formulation contains prohibited substances or preservative limits exceeded; submission blocked.';
+    } else if (sccsSt === 'review' || inciSt === 'review') {
       gateIndicator.textContent = 'REVIEW NEEDED';
       gateIndicator.className = 'gate-status-indicator badge-review';
-      gateDesc.textContent = '成分缺乏毒理數據，提交後需主管明確填寫核准理由。';
+      gateDesc.textContent = 'Some ingredients lack toxicology NOAEL studies; manager approval rationale required.';
     } else {
       gateIndicator.textContent = 'READY (PASS)';
       gateIndicator.className = 'gate-status-indicator badge-pass';
-      gateDesc.textContent = '配方完全合規，所有成分 MoS ≥ 100。';
+      gateDesc.textContent = 'Formulation is fully compliant; all ingredients MoS ≥ 100.';
     }
   }
 }
@@ -435,6 +498,7 @@ async function loadAssistantSuggestions() {
 
 function applySuggestionPatch(patch) {
   if (!STATE.draft) return;
+  STATE.draft.ingredients = collectIngredientsFromTable();
 
   if (patch.remove_inci) {
     STATE.draft.ingredients = STATE.draft.ingredients.filter(
@@ -494,7 +558,7 @@ async function triggerParsePreview(scenarioKey) {
 
     if (warningsEl) {
       const allWarnings = STATE.pendingPreviewCandidates.flatMap((c) => c.warnings || []);
-      warningsEl.textContent = allWarnings.length > 0 ? `⚠️ 注意事項: ${allWarnings.join('; ')}` : '';
+      warningsEl.textContent = allWarnings.length > 0 ? `⚠️ Warnings: ${allWarnings.join('; ')}` : '';
     }
 
     if (modal) modal.classList.remove('hidden');
@@ -539,13 +603,13 @@ async function submitProposal() {
     if (!res.ok) {
       const errJson = await res.json();
       const reasons = errJson.detail?.reasons || [errJson.detail];
-      alert(`❌ 提交被阻斷 (Submission Blocked):\n${reasons.join('\n')}`);
+      alert(`❌ Submission Blocked:\n${reasons.join('\n')}`);
       setTelemetryStatus('node-pdx-orchestrator', 'BLOCKED', 'badge-fail');
       return;
     }
 
     const data = await res.json();
-    alert(`✅ 提案提交成功 (Proposal Submitted)！\n提案編號: ${data.proposal_id}\n門禁決策: ${data.gate_decision}\n已進入主管審查收件匣。`);
+    alert(`✅ Proposal Submitted Successfully!\nProposal ID: ${data.proposal_id}\nGate Decision: ${data.gate_decision}\nRouted to Product Manager inbox for review.`);
 
     setTelemetryStatus('node-pdx-orchestrator', 'PLAN COMPILED', 'badge-pass');
     setTelemetryStatus('node-manager-gate', 'AWAITING APPROVAL', 'badge-review');
@@ -577,7 +641,7 @@ async function loadProposalsInbox() {
     listEl.innerHTML = '';
 
     if (proposals.length === 0) {
-      listEl.innerHTML = '<p class="text-sm text-muted text-center py-2">收件匣目前無待審提案。</p>';
+      listEl.innerHTML = '<p class="text-sm text-muted text-center py-2">No pending proposals in inbox.</p>';
       return;
     }
 
@@ -639,12 +703,12 @@ function showProposalDetail(p) {
 
     let reasonsHtml = '';
     if (p.gate_reasons && p.gate_reasons.length > 0) {
-      reasonsHtml = `<div class="card mb-1"><div class="text-sm font-bold text-amber mb-05">📋 門禁審查意見:</div><ul class="text-sm text-secondary">${p.gate_reasons.map((r) => `<li>${r}</li>`).join('')}</ul></div>`;
+      reasonsHtml = `<div class="card mb-1"><div class="text-sm font-bold text-amber mb-05">📋 Gate Review Notes:</div><ul class="text-sm text-secondary">${p.gate_reasons.map((r) => `<li>${r}</li>`).join('')}</ul></div>`;
     }
 
     bodyEl.innerHTML = `
       ${reasonsHtml}
-      <div class="text-sm font-bold text-secondary mb-05">配方成分清單:</div>
+      <div class="text-sm font-bold text-secondary mb-05">Formulation Ingredients Summary:</div>
       ${ingredientsHtml}
     `;
   }
@@ -684,7 +748,7 @@ async function decideProposal(decision) {
 
     if (!res.ok) {
       const errJson = await res.json();
-      alert(`決策失敗: ${errJson.detail}`);
+      alert(`Decision failed: ${errJson.detail}`);
       setTelemetryStatus('node-manager-gate', 'DECISION ERROR', 'badge-fail');
       return;
     }
@@ -692,12 +756,12 @@ async function decideProposal(decision) {
     const data = await res.json();
 
     if (decision === 'approved') {
-      alert(`🎉 提案已成功核准並定稿 (Approved & Finalized)！\n產品編號: ${data.product_id}\nSHA-256 存證: ${data.artifact_identity.sha256}`);
+      alert(`🎉 Proposal Approved & Finalized!\nProduct ID: ${data.product_id}\nSHA-256 Provenance Checksum: ${data.artifact_identity.sha256}`);
       setTelemetryStatus('node-manager-gate', 'FINALIZED', 'badge-pass');
       setTelemetryStatus('node-prodocux-render', 'READY FOR EXPORT', 'badge-pass');
       await showExportCenter(data.product_id);
     } else {
-      alert(`↩️ 提案已退回配方師修改。\n退回意見已記錄至審計日誌。`);
+      alert(`↩️ Proposal returned to Formulator for revision.\nReturn comments recorded in audit ledger.`);
       setTelemetryStatus('node-manager-gate', 'RETURNED', 'badge-review');
       await loadProposalsInbox();
     }
@@ -741,18 +805,18 @@ async function showExportCenter(productId) {
         </div>
 
         <div class="form-group mb-1">
-          <label class="form-label">SHA-256 密碼學存證指紋 (Cryptographic Checksum Fingerprint):</label>
+          <label class="form-label">SHA-256 Cryptographic Checksum Fingerprint:</label>
           <input type="text" class="form-control font-mono" value="${data.sha256_checksum}" readonly>
         </div>
 
-        <div class="text-sm font-bold text-secondary mb-075">ProDocuX 通用五格式渲染規格 (ProDocuX 5-Format Render Artifacts):</div>
+        <div class="text-sm font-bold text-secondary mb-075">ProDocuX 5-Format Render Specifications:</div>
         <div class="d-flex gap-075 flex-wrap">
-          <button type="button" class="btn btn-secondary btn-export" data-fmt="pdf">⬇️ 下載 PDF 安全摘要規格</button>
-          <button type="button" class="btn btn-secondary btn-export" data-fmt="docx">⬇️ 下載 DOCX 分析證書規格</button>
-          <button type="button" class="btn btn-secondary btn-export" data-fmt="csv">⬇️ 下載 CSV 配方矩陣規格</button>
-          <button type="button" class="btn btn-secondary btn-export" data-fmt="xlsx">⬇️ 下載 XLSX 毒理評估規格</button>
-          <button type="button" class="btn btn-secondary btn-export" data-fmt="pptx">⬇️ 下載 PPTX 審查簡報規格</button>
-          <button type="button" class="btn btn-primary btn-export" data-fmt="json">⬇️ 下載完整 Checksummed Evidence</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="pdf">⬇️ Download PDF Safety Summary</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="docx">⬇️ Download DOCX CoA Specification</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="csv">⬇️ Download CSV Formulation Matrix</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="xlsx">⬇️ Download XLSX Toxicology Model</button>
+          <button type="button" class="btn btn-secondary btn-export" data-fmt="pptx">⬇️ Download PPTX Review Deck</button>
+          <button type="button" class="btn btn-primary btn-export" data-fmt="json">⬇️ Download Complete Checksummed Evidence Package</button>
         </div>
       </div>
     `;
@@ -784,7 +848,7 @@ async function showExportCenter(productId) {
 
           if (!rRes.ok) {
             const err = await rRes.json();
-            alert(`渲染失敗: ${err.detail || 'ProDocuX Render Engine Error'}`);
+            alert(`Render failed: ${err.detail || 'ProDocuX Render Engine Error'}`);
             setTelemetryStatus('node-prodocux-render', 'RENDER ERROR', 'badge-fail');
             return;
           }
@@ -809,7 +873,7 @@ async function showExportCenter(productId) {
             a.click();
             URL.revokeObjectURL(url);
           } else {
-            alert(`✅ ${fmt.toUpperCase()} 渲染完成！SHA-256: ${rData.result?.sha256}`);
+            alert(`✅ ${fmt.toUpperCase()} rendered successfully! SHA-256: ${rData.result?.sha256}`);
           }
         } catch (err) {
           console.error('Failed to render artifact:', err);

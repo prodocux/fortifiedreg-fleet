@@ -70,7 +70,7 @@ def test_health_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "healthy"
-    assert data["version"] == "0.3.2"
+    assert data["version"] == "0.4.0"
     assert data["runtime_mode"] == "local_memory_emulation"
     assert "adapters" in data
     assert data["adapters"]["orchestrator"]["configured_mode"] in ("fake", "live")
@@ -81,7 +81,7 @@ def test_ready_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ready"
-    assert data["version"] == "0.3.2"
+    assert data["version"] == "0.4.0"
     assert "adapters" in data
     assert data["adapters"]["intake"]["status"] == "ready"
     assert data["adapters"]["orchestrator"]["status"] == "ready"

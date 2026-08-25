@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -30,27 +30,27 @@
         <div class="header-controls">
             <div id="session-chip" class="session-chip">
                 <span class="pulse-dot"></span>
-                <span id="session-label">Session 初始化中...</span>
-                <span id="session-timer" class="session-timer">15:00</span>
+                <span id="session-label">Initializing Session...</span>
+                <span id="session-timer" class="session-timer">120:00</span>
             </div>
 
             <div class="role-switch-container">
-                <button type="button" class="btn-role active" id="btn-role-formulator" data-role="formulator">🔬 配方師 (Formulator)</button>
-                <button type="button" class="btn-role" id="btn-role-manager" data-role="product_manager">👔 產品主管 (Manager)</button>
+                <button type="button" class="btn-role active" id="btn-role-formulator" data-role="formulator">🔬 Formulator</button>
+                <button type="button" class="btn-role" id="btn-role-manager" data-role="product_manager">👔 Product Manager</button>
             </div>
 
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-restart-demo">🔄 重新開始 Demo</button>
-            <button type="button" class="btn btn-primary btn-sm hidden" id="btn-install-pwa">📲 安裝 App</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-restart-demo">🔄 Restart Demo Session</button>
+            <button type="button" class="btn btn-primary btn-sm hidden" id="btn-install-pwa">📲 Install App</button>
         </div>
     </div>
 </header>
 
 <div class="disclaimer-banner">
-    <span>💡 <strong>Demo Simulation & Persistence Profile:</strong> 目前由單一評審於同一 Session 中模擬配方師與產品主管雙重視角。運行架構為<strong>單一實例短效展示（Single-Instance Ephemeral Demo）</strong>，容器重啟將重置工作階段，非生產持久化架構；請求中斷已實作原子化 CAS 與冪等重試防護。</span>
+    <span>💡 <strong>Demo Simulation & Persistence Profile:</strong> Dual-role evaluation mode (Formulator / Product Manager) in a single active session. Deployment is configured as a <strong>Single-Instance Ephemeral Demo</strong> (container restarts reset state, not production durable). In-flight request interruptions are protected by atomic CAS leases and idempotent recovery.</span>
 </div>
 
 <div id="offline-banner" class="alert-banner alert-warning hidden">
-    ⚠️ <strong>後端服務連線中斷 / 處於離線狀態。</strong> 系統已啟動 Fail-Closed 安全防護，停止所有即時分析與簽核操作。
+    ⚠️ <strong>Backend service connection lost / Offline mode.</strong> Fail-closed security activated; live analysis and gate submission are paused.
 </div>
 
 <main class="app-container">
@@ -98,7 +98,7 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════════════════
-         VIEW 1: Formulator Workspace (配方師工作區)
+         VIEW 1: Formulator Workspace
     ══════════════════════════════════════════════════════════════════════════ -->
     <section id="view-formulator" class="role-workspace active">
         <div class="workspace-layout">
@@ -111,36 +111,36 @@
                     <div class="card-header">
                         <div class="card-num">1</div>
                         <div>
-                            <div class="card-title">5 格式檔案匯入與情境載入 (5-Format File Intake)</div>
-                            <div class="card-subtitle">點擊預設格式檔案，由 ProDocuX 二進位解析器提取文字／表格區塊並預覽確認</div>
+                            <div class="card-title">5-Format File Intake &amp; Preset Scenarios</div>
+                            <div class="card-subtitle">Select a preset file to extract structured text &amp; table blocks via ProDocuX binary parser and preview candidate ingredients</div>
                         </div>
                     </div>
 
                     <div class="preset-grid">
                         <button type="button" class="preset-chip" data-scenario="retinol">
                             <span class="chip-fmt fmt-pdf">PDF</span>
-                            <span class="chip-title">視黃醇精華液 SDS</span>
-                            <span class="badge badge-pass">預期: PASS</span>
+                            <span class="chip-title">Retinol Serum SDS</span>
+                            <span class="badge badge-pass">Expected: PASS</span>
                         </button>
                         <button type="button" class="preset-chip" data-scenario="peptide">
                             <span class="chip-fmt fmt-docx">DOCX</span>
-                            <span class="chip-title">胜肽眼霜規格書</span>
-                            <span class="badge badge-review">預期: REVIEW</span>
+                            <span class="chip-title">Peptide Cream Spec</span>
+                            <span class="badge badge-review">Expected: REVIEW</span>
                         </button>
                         <button type="button" class="preset-chip" data-scenario="day_cream">
                             <span class="chip-fmt fmt-csv">CSV</span>
-                            <span class="chip-title">合規日霜配方表</span>
-                            <span class="badge badge-pass">預期: PASS</span>
+                            <span class="chip-title">Compliant Day Cream</span>
+                            <span class="badge badge-pass">Expected: PASS</span>
                         </button>
                         <button type="button" class="preset-chip" data-scenario="phenoxy_excess">
                             <span class="chip-fmt fmt-xlsx">XLSX</span>
-                            <span class="chip-title">防腐劑超標試算表</span>
-                            <span class="badge badge-fail">預期: FAIL</span>
+                            <span class="chip-title">Excess Preservative</span>
+                            <span class="badge badge-fail">Expected: FAIL</span>
                         </button>
                         <button type="button" class="preset-chip" data-scenario="mercury">
                             <span class="chip-fmt fmt-pptx">PPTX</span>
-                            <span class="chip-title">汞斑霜審計簡報</span>
-                            <span class="badge badge-fail">預期: FAIL</span>
+                            <span class="chip-title">Mercury Cream Audit</span>
+                            <span class="badge badge-fail">Expected: FAIL</span>
                         </button>
                     </div>
                 </div>
@@ -151,8 +151,8 @@
                         <div class="d-flex align-center gap-075">
                             <div class="card-num">2</div>
                             <div>
-                                <div class="card-title">配方成分管理面板 (Formulation Management Panel)</div>
-                                <div class="card-subtitle">自由新增、修改、刪除成分，任何異動皆即刻遞增 Revision 並重算摘要</div>
+                                <div class="card-title">Formulation Management Panel</div>
+                                <div class="card-subtitle">Add, modify, or remove ingredients. Any modification increments revision and updates real-time SCCS diagnostics</div>
                             </div>
                         </div>
                         <div class="meta-tags">
@@ -162,7 +162,7 @@
                     </div>
 
                     <div class="form-group mb-1">
-                        <label class="form-label" for="input-product-name">產品名稱 (Product Name):</label>
+                        <label class="form-label" for="input-product-name">Product Name:</label>
                         <input type="text" id="input-product-name" class="form-control" value="Retinol Night Renewal Serum">
                     </div>
 
@@ -171,11 +171,11 @@
                         <table class="data-table" id="table-ingredients">
                             <thead>
                                 <tr>
-                                    <th>INCI 名稱</th>
-                                    <th>濃度 (%)</th>
-                                    <th>CAS 編號</th>
+                                    <th>INCI Name</th>
+                                    <th>Concentration (%)</th>
+                                    <th>CAS Number</th>
                                     <th>NOAEL (mg/kg/day)</th>
-                                    <th class="text-center">操作</th>
+                                    <th class="text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-ingredients">
@@ -185,8 +185,8 @@
                     </div>
 
                     <div class="flex-between">
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-ingredient">➕ 新增成分列</button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-save-draft">💾 儲存並重整分析</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-ingredient">➕ Add Ingredient</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-save-draft">💾 Save &amp; Re-analyze Formulation</button>
                     </div>
                 </div>
 
@@ -195,19 +195,19 @@
                     <div class="card-header">
                         <div class="card-num">3</div>
                         <div>
-                            <div class="card-title">向主管提交提案 (Submit Proposal to Manager Gate)</div>
-                            <div class="card-subtitle">經過 SCCS 毒理與 Annex 規則門禁檢驗；硬阻斷違規，通過者生成產品提案</div>
+                            <div class="card-title">Submit Proposal to Manager Gate</div>
+                            <div class="card-subtitle">Evaluated against SCCS toxicology &amp; Annex restriction rules; hard blocks violations and generates governed proposal</div>
                         </div>
                     </div>
 
                     <div class="gate-action-area">
                         <div class="gate-status-box" id="gate-status-box">
                             <div class="gate-status-indicator" id="gate-indicator">READY</div>
-                            <div class="gate-status-desc" id="gate-desc">目前配方可提交正式門禁檢驗。</div>
+                            <div class="gate-status-desc" id="gate-desc">Formulation is ready for formal gate submission.</div>
                         </div>
 
                         <button type="button" class="btn btn-success btn-lg" id="btn-submit-proposal">
-                            🚀 提交產品提案至主管審查 (Submit Proposal)
+                            🚀 Submit Product Proposal to Manager Gate
                         </button>
                     </div>
                 </div>
@@ -225,12 +225,12 @@
                     <!-- Live SCCS Score Card -->
                     <div class="score-card mb-125">
                         <div class="score-num" id="compliance-score">100</div>
-                        <div class="score-label">法規毒理合規指數 (SCCS Compliance Index)</div>
+                        <div class="score-label">SCCS Regulatory Compliance Index</div>
                     </div>
 
                     <!-- Toxicology SED/MoS Diagnostic -->
                     <div class="sidebar-section mb-125">
-                        <div class="sidebar-section-title">📊 毒理安全邊際診斷 (MoS Matrix)</div>
+                        <div class="sidebar-section-title">📊 Toxicological Margin of Safety (MoS Matrix)</div>
                         <div class="mos-list" id="sidebar-mos-list">
                             <!-- Populated dynamically -->
                         </div>
@@ -238,7 +238,7 @@
 
                     <!-- Actionable Suggestions -->
                     <div class="sidebar-section">
-                        <div class="sidebar-section-title">💡 智慧配方建議與法規引用</div>
+                        <div class="sidebar-section-title">💡 Smart Formulation Recommendations &amp; Citations</div>
                         <div class="suggestions-list" id="sidebar-suggestions-list">
                             <!-- Populated dynamically -->
                         </div>
@@ -251,7 +251,7 @@
 
 
     <!-- ══════════════════════════════════════════════════════════════════════════
-         VIEW 2: Product Manager Workspace (產品主管工作區)
+         VIEW 2: Product Manager Workspace
     ══════════════════════════════════════════════════════════════════════════ -->
     <section id="view-manager" class="role-workspace">
         <div class="manager-layout">
@@ -260,7 +260,7 @@
             <div class="manager-inbox">
                 <div class="card card-inbox">
                     <div class="card-header">
-                        <div class="card-title">提案審查收件匣 (Proposals Inbox)</div>
+                        <div class="card-title">Proposals Inbox</div>
                     </div>
                     <div class="inbox-list" id="inbox-list">
                         <!-- Populated dynamically -->
@@ -273,7 +273,7 @@
                 <div class="card" id="card-proposal-detail">
                     <div class="card-header flex-between">
                         <div>
-                            <div class="card-title" id="detail-product-name">請選擇左側提案進行審查</div>
+                            <div class="card-title" id="detail-product-name">Select a proposal from the inbox to review</div>
                             <div class="card-subtitle" id="detail-proposal-meta">Proposal ID: —</div>
                         </div>
                         <div id="detail-gate-badge"></div>
@@ -281,24 +281,24 @@
 
                     <!-- Proposal Content Summary -->
                     <div class="detail-body" id="detail-body">
-                        <p class="text-muted text-center py-2">尚未選擇提案。請由左側收件匣選擇一筆待審案件。</p>
+                        <p class="text-muted text-center py-2">No proposal selected. Please choose a pending review proposal from the inbox.</p>
                     </div>
 
                     <!-- Manager Decision Actions -->
                     <div class="manager-actions-box hidden" id="manager-actions-box">
                         <div class="form-group mb-1" id="group-rationale">
-                            <label class="form-label" for="input-manager-rationale">核准理由 / 審核說明 (Manager Rationale):</label>
-                            <input type="text" id="input-manager-rationale" class="form-control" placeholder="若為 REVIEW 狀態必須填寫核准依據...">
+                            <label class="form-label" for="input-manager-rationale">Manager Approval Rationale (Required for REVIEW status):</label>
+                            <input type="text" id="input-manager-rationale" class="form-control" placeholder="Provide technical/toxicological rationale for approval...">
                         </div>
 
                         <div class="form-group mb-1" id="group-return-comment">
-                            <label class="form-label" for="input-return-comment">退回修改建議 (Return Comments):</label>
-                            <input type="text" id="input-return-comment" class="form-control" placeholder="請說明需請配方師調整之項目...">
+                            <label class="form-label" for="input-return-comment">Return Comments (Required when returning):</label>
+                            <input type="text" id="input-return-comment" class="form-control" placeholder="Explain required formulation adjustments...">
                         </div>
 
                         <div class="d-flex gap-1">
-                            <button type="button" class="btn btn-success" id="btn-manager-accept">✓ 接受提案並定稿 (Accept &amp; Finalize)</button>
-                            <button type="button" class="btn btn-danger" id="btn-manager-return">✕ 退回提案 (Return to Formulator)</button>
+                            <button type="button" class="btn btn-success" id="btn-manager-accept">✓ Accept &amp; Finalize Proposal</button>
+                            <button type="button" class="btn btn-danger" id="btn-manager-return">✕ Return to Formulator</button>
                         </div>
                     </div>
                 </div>
@@ -315,8 +315,8 @@
         <div class="card">
             <div class="card-header flex-between">
                 <div>
-                    <div class="card-title text-emerald">✓ 定稿產品監管檔案庫 (Approved Product Records)</div>
-                    <div class="card-subtitle">不可竄改之正式產品紀錄，包含 64 位元 SHA-256 存證與 5 格式 ProDocuX 渲染規格</div>
+                    <div class="card-title text-emerald">✓ Approved Product Dossier Records</div>
+                    <div class="card-subtitle">Immutable regulatory product records with 64-character SHA-256 cryptographic provenance and 5-format ProDocuX render specifications</div>
                 </div>
             </div>
 
@@ -333,23 +333,23 @@
 <div class="modal-overlay hidden" id="modal-import-preview">
     <div class="modal-card">
         <div class="modal-header">
-            <div class="modal-title">📄 ProDocuX 內容解析與配方預覽確認</div>
+            <div class="modal-title">📄 ProDocuX Binary Intake &amp; Candidate Preview</div>
             <button type="button" class="btn-close" id="btn-modal-close">✕</button>
         </div>
         <div class="modal-body">
             <p class="text-sm text-secondary mb-1">
-                ProDocuX 已成功自來源文件提取通用區塊，並由 Fleet Cosmetics 正規化為以下成分候選列。請確認後再套用至權威配方：
+                ProDocuX has successfully extracted structured content blocks from the source document, and Fleet Cosmetics normalizer has generated candidate ingredients. Please review before applying to formulation:
             </p>
             <div class="table-wrap mb-1">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>INCI 名稱</th>
-                            <th>濃度 (%)</th>
+                            <th>INCI Name</th>
+                            <th>Concentration (%)</th>
                             <th>CAS</th>
                             <th>NOAEL</th>
-                            <th>來源位置</th>
-                            <th>信心度</th>
+                            <th>Source Location</th>
+                            <th>Confidence</th>
                         </tr>
                     </thead>
                     <tbody id="modal-tbody-candidates">
@@ -360,8 +360,8 @@
             <div id="modal-warnings" class="text-sm text-rose font-bold mb-1"></div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" id="btn-modal-cancel">取消 (Cancel)</button>
-            <button type="button" class="btn btn-primary" id="btn-modal-apply">套用至配方 (Apply to Formulation)</button>
+            <button type="button" class="btn btn-secondary" id="btn-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-primary" id="btn-modal-apply">Apply to Formulation</button>
         </div>
     </div>
 </div>

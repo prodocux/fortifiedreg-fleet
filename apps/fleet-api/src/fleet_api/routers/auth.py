@@ -91,7 +91,7 @@ async def create_demo_session(request: Request, response: Response) -> Dict[str,
         sub=session_id,
         roles=["demo_evaluator"],
         email=f"{persona_key}@demo.fortifiedreg.com",
-        expires_in_seconds=900,
+        expires_in_seconds=7200,
         extra_claims={"persona": persona_key},
     )
 
@@ -101,7 +101,7 @@ async def create_demo_session(request: Request, response: Response) -> Dict[str,
     return {
         "access_token": token,
         "token_type": "bearer",
-        "expires_in": 900,
+        "expires_in": 7200,
         "tenant_id": "tenant-demo",
         "sub": session_id,
         "persona": persona_key,

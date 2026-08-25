@@ -99,11 +99,11 @@ class SessionResponse(BaseModel):
 
 @router.post("/demo/session", response_model=SessionResponse)
 async def create_demo_session(req: Optional[CreateSessionRequest] = None) -> SessionResponse:
-    """Issue a 15-minute demo session token with dual-role acting simulation."""
+    """Issue a 120-minute demo session token with dual-role acting simulation."""
     acting_role = req.acting_role if req else ActingRoleEnum.FORMULATOR
     session_id = f"sess-{uuid.uuid4().hex[:8]}"
     sub = f"demo-session-{uuid.uuid4().hex[:12]}"
-    exp_time = datetime.now(timezone.utc) + timedelta(minutes=15)
+    exp_time = datetime.now(timezone.utc) + timedelta(minutes=120)
     exp_iso = exp_time.isoformat()
 
     session_obj = DemoSession(
@@ -137,7 +137,7 @@ async def create_demo_session(req: Optional[CreateSessionRequest] = None) -> Ses
         tenant_id="tenant-demo",
         sub=sub,
         roles=["demo_evaluator"],
-        expires_in_seconds=900,
+        expires_in_seconds=7200,
         extra_claims={
             "session_id": session_id,
             "allowed_demo_roles": ["formulator", "product_manager"],
