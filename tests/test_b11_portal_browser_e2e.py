@@ -192,7 +192,7 @@ LIVE_BASE_URL = os.getenv("BASE_URL", "").strip()
     reason="Set RUN_PLAYWRIGHT_E2E=1 and BASE_URL=<url> to run live Playwright browser tests",
 )
 def test_b11_playwright_live_browser_journey():
-    """Execute live browser verification via Playwright with complete 5-step Guided Demo UI interaction."""
+    """Execute live browser verification via Playwright with complete 5-step v0.4.0 PWA UI interaction."""
     from playwright.sync_api import sync_playwright
 
     base_url = LIVE_BASE_URL
@@ -204,38 +204,34 @@ def test_b11_playwright_live_browser_journey():
         console_errors = []
         page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
         page.on("pageerror", lambda err: console_errors.append(str(err)))
+        page.on("dialog", lambda dialog: dialog.accept())
 
         page.goto(base_url)
-        page.wait_for_selector(".brand-title")
+        page.wait_for_selector(".brand-title", timeout=15000)
 
         # Assert no JS/CSP errors on initial page load
         assert len(console_errors) == 0, f"Browser console errors detected: {console_errors}"
 
-        # 1. Check tab views
-        page.click("button[data-view='view-evidence']")
-        assert page.is_visible("#view-evidence.active")
+        # 1. Step 1: 5-Format Preset Scenario Import (click Retinol PDF preset chip)
+        page.click("button[data-scenario='retinol']")
+        page.wait_for_selector("#modal-import-preview:not(.hidden)", timeout=15000)
 
-        page.click("button[data-view='view-playground']")
-        assert page.is_visible("#view-playground.active")
+        # 2. Step 2: Apply Preview Candidates to Draft Formulation
+        page.click("#btn-modal-apply")
+        page.wait_for_selector("#gate-indicator", timeout=10000)
 
-        page.click("button[data-view='view-guided']")
-        assert page.is_visible("#view-guided.active")
+        # 3. Step 3: Submit Product Proposal to Manager Gate
+        page.click("#btn-submit-proposal")
+        page.wait_for_selector(".inbox-item", timeout=15000)
 
-        # 2. Step 2: Register 5-format golden evidence
-        page.click("#btn-register-all")
-        page.wait_for_selector("#btn-run-eval:not([disabled])", timeout=15000)
+        # 4. Step 4: Product Manager Reviews and Finalizes Proposal
+        page.click("#btn-manager-accept")
+        page.wait_for_selector("#view-export.active", timeout=15000)
 
-        # 3. Step 3: Run Governed Fleet Evaluation
-        page.click("#btn-run-eval")
-        page.wait_for_selector("#btn-approve-gate:not([disabled])", timeout=15000)
-
-        # 4. Step 4: Submit Human Approval Gate
-        page.click("#btn-approve-gate")
-        page.wait_for_selector("#final-evidence-card.visible", timeout=10000)
-
-        # 5. Step 5: Verify Certified Artifact Identity in DOM
-        art_sha = page.text_content("#art-sha")
-        assert art_sha and len(art_sha.strip()) == 64 and art_sha != "—"
+        # 5. Step 5: Verify Finalized Approved Product Record and Cryptographic Fingerprint in DOM
+        page.wait_for_selector("#approved-products-list input.font-mono", timeout=10000)
+        art_sha = page.input_value("#approved-products-list input.font-mono")
+        assert art_sha and len(art_sha.strip()) == 64, f"Invalid artifact sha256 in DOM: '{art_sha}'"
 
         # Assert zero console/CSP errors occurred during entire interactive lifecycle
         assert len(console_errors) == 0, f"Browser console errors during full journey: {console_errors}"
