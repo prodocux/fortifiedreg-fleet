@@ -319,16 +319,55 @@ async def chat_with_gemini_copilot(
             "   $$\\text{MoS} = \\frac{\\text{NOAEL}}{\\text{SED}}$$\n"
             "   * **Acceptance Criterion / 合規門檻**: $\\text{MoS} \\ge 100$ is mandatory under SCCS Notes of Guidance."
         )
+    elif any(k in msg_lower for k in ["mos", "margin of safety", "安全邊際", "sed", "calculate", "計算", "公式", "formula"]):
+        rule_refs.append("SCCS Notes of Guidance (12th Revision) Formula Framework")
+        reply = (
+            "📐 **SCCS Margin of Safety (MoS) Calculation Methodology / 安全邊際計算準則**\n\n"
+            "1. **Systemic Exposure Dose (SED) / 系統暴露量**:\n"
+            "   $$\\text{SED} = \\frac{A \\times 1000 \\times (C / 100) \\times R_f}{BW}$$\n"
+            "   * $A$: Daily applied amount ($0.8\\text{ g/day}$ for face serum)\n"
+            "   * $C$: Concentration percentage (\\%)\n"
+            "   * $R_f$: Retention factor ($1.0$ for leave-on products)\n"
+            "   * $BW$: Default human body weight ($60.0\\text{ kg}$)\n\n"
+            "2. **Margin of Safety (MoS) / 安全邊際**:\n"
+            "   $$\\text{MoS} = \\frac{\\text{NOAEL}}{\\text{SED}}$$\n"
+            "   * **Acceptance Criterion / 合規門檻**: $\\text{MoS} \\ge 100$ is mandatory under SCCS Notes of Guidance."
+        )
+    elif any(k in msg_lower for k in ["花香", "香味", "香精", "fragrance", "parfum", "allergen", "過敏原", "scent", "floral", "精油", "essential oil"]):
+        rule_refs.append("Regulation (EC) No 1223/2009 Article 19(1)(g) & Annex III")
+        rule_refs.append("Commission Regulation (EU) 2023/1545 (Cosmetic Allergens)")
+        reply = (
+            "🌸 **EU Cosmetics Regulation: Fragrance & Floral Scent Formulation Guide / 香精香料與花香調配法規準則**\n\n"
+            "在歐盟化妝品法規 (EC) No 1223/2009 規範下，增加產品花香味（如玫瑰、茉莉、薰衣草等）需遵循以下 4 大核心法規要求：\n\n"
+            "1. **INCI 標示規範 (Article 19)**:\n"
+            "   * 在成分表中統一標示為 `Parfum` 或 `Fragrance`，一般精油或香精添加量建議控制在 **0.05% – 0.3%**（精華液通常 $\\le 0.1\\%$ 以維持低敏）。\n\n"
+            "2. **法定過敏原揭露門檻 (EU 2023/1545 擴展至 56 種過敏原)**:\n"
+            "   * 花香調常見過敏原：**Linalool (芳樟醇)**、**Geraniol (香葉醇)**、**Citronellol (香茅醇)**、**Hexyl Cinnamal (己基肉桂醛)**、**Hydroxycitronellal**。\n"
+            "   * **免洗留體產品（Leave-on，如精華液/乳霜）**：當單一過敏原在成品中濃度 **超過 0.001% (10 ppm)** 時，**必須在 INCI 成分表單獨標出**。\n"
+            "   * **沖洗型產品（Rinse-off，如潔面乳）**：門檻為 **0.01% (100 ppm)**。\n\n"
+            "3. **IFRA 國際日用香料協會安全標準 (51st Amendment)**:\n"
+            "   * 原料供應商必須提供符合 IFRA Category 5B（臉部精華液產品）的 **IFRA Certificate** 與 **Allergen Breakdown Sheet**。\n\n"
+            "4. **安全邊際 (MoS) 評估**:\n"
+            "   * 若使用天然花水（如 *Rosa Damascena Flower Water*）替代部分去離子水，既可提供天然淡雅花香，又可避免高濃度過敏原超標，且 MoS 評估通常遠高於 100。"
+        )
+    elif any(k in msg_lower for k in ["乳化", "emulsifier", "增稠", "thickener", "穩定", "carbomer", "xanthan"]):
+        rule_refs.append("SCCS Notes of Guidance Chapter 3-3 (Physical-Chemical Specifications)")
+        reply = (
+            "🥣 **Emulsification & Rheology Guidance / 乳化與增稠體系建議**\n\n"
+            "* **精華液常用增稠穩定劑**：Xanthan Gum (0.1–0.3%)、Sodium Hyaluronate (0.1–0.5%) 或 Sclerotium Gum，具備優異的皮膚相容性且 MoS 均 > 1000。\n"
+            "* **乳化體系**：對於含有脂溶性活性成分（如 Retinol 0.05%），建議搭配 Polysorbate-20 (0.2–0.5%) 或 Lecithin 進行微乳化包裹，提高穩定性與生物利用度。"
+        )
     else:
         reply = (
-            f"🤖 **FortifiedReg Fleet Regulatory Advisor**\n\n"
-            f"I have reviewed your inquiry regarding *'{req.message}'* in the context of the active draft **'{req.product_name}'**.\n\n"
-            f"* **Current Ingredients**: {formula_summary}\n"
-            f"* **Applicable Standards**: EU Regulation (EC) No 1223/2009 and SCCS Notes of Guidance (12th Rev).\n"
-            f"* **Assistance Available**: You can ask me about:\n"
-            f"  1. Specific chemical restrictions (e.g. *'Is Mercury allowed?'* or *'我可以在配方中加入汞嗎？'*)\n"
-            f"  2. Toxicological formulas (e.g. *'How is MoS calculated?'*)\n"
-            f"  3. Requirements for Human-in-the-Loop manager approval workflows."
+            f"🤖 **FortifiedReg Fleet Regulatory Advisor / 歐盟化妝品法規專家顧問**\n\n"
+            f"已針對您提出的問題 **'{req.message}'** 結合當前配方 **'{req.product_name}'** 進行法規與毒理評估：\n\n"
+            f"* **當前配方成分**: {formula_summary}\n"
+            f"* **適用法規規範**: 歐盟化妝品法規 Regulation (EC) No 1223/2009、SCCS 第 12 版評估指引 (SCCS/1647/22)、EU 2023/1545 香精過敏原修訂案。\n"
+            f"* **您可以隨時詢問我**：\n"
+            f"  1. 🌸 **香精與花香調配**（例如：*'如何增加花香味？'*、*'香精過敏原標示門檻是多少？'*）\n"
+            f"  2. 🚫 **禁用與限用成分檢驗**（例如：*'我可以在配方中加入汞嗎？'*、*'苯氧乙醇最高添加量是多少？'*）\n"
+            f"  3. 🧪 **活性功效成分毒理**（例如：*'A醇最高允許濃度與安全邊際？'*、*'胜肽缺少 NOAEL 如何處置？'*）\n"
+            f"  4. 📐 **SCCS 毒理公式計算**（例如：*'MoS 與 SED 系統暴露量公式為何？'*）"
         )
 
     return ChatResponse(
