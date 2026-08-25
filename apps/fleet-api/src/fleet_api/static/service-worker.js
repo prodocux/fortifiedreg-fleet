@@ -6,12 +6,12 @@
  * - STRATEGY: Network-First for shell assets with offline fallback; aggressively flushes stale caches on update.
  */
 
-const CACHE_NAME = 'fortifiedreg-fleet-shell-v0.4.1';
+const CACHE_NAME = 'fortifiedreg-fleet-shell-v0.4.2';
 
 const STATIC_SHELL_ASSETS = [
   '/',
-  '/static/portal.css?v=0.4.1',
-  '/static/portal.js?v=0.4.1',
+  '/static/portal.css?v=0.4.2',
+  '/static/portal.js?v=0.4.2',
   '/static/manifest.webmanifest',
   '/static/samples.json',
   '/static/icons/icon-192.svg',

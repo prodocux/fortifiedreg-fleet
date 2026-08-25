@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/portal.css?v=0.4.1">
-    <script type="module" src="/static/portal.js?v=0.4.1" defer></script>
+    <link rel="stylesheet" href="/static/portal.css?v=0.4.2">
+    <script type="module" src="/static/portal.js?v=0.4.2" defer></script>
 </head>
 <body>
 
@@ -182,10 +182,41 @@
                                 <!-- Populated dynamically by JS -->
                             </tbody>
                         </table>
+                    <datalist id="ingredient-library-datalist">
+                        <option value="Aqua" label="Water / 去離子水 (CAS: 7732-18-5)"></option>
+                        <option value="Glycerin" label="Glycerin / 甘油 (CAS: 56-81-5, NOAEL: 1000)"></option>
+                        <option value="Retinol" label="Retinol / 視黃醇 (CAS: 68-26-8, NOAEL: 2.0)"></option>
+                        <option value="Phenoxyethanol" label="Phenoxyethanol / 苯氧乙醇 (CAS: 122-99-6, NOAEL: 500, Limit: 1.0%)"></option>
+                        <option value="Niacinamide" label="Niacinamide / 煙酰胺 (CAS: 98-92-0, NOAEL: 50)"></option>
+                        <option value="Sodium Hyaluronate" label="Sodium Hyaluronate / 玻尿酸鈉 (CAS: 9067-32-7)"></option>
+                        <option value="Palmitoyl Tripeptide-38" label="Palmitoyl Tripeptide-38 / 三胜肽 (CAS: 1447824-23-8)"></option>
+                        <option value="Rosa Damascena Flower Water" label="Rosa Damascena Flower Water / 玫瑰花水 (CAS: 90106-38-0)"></option>
+                        <option value="Phenethyl Alcohol" label="Phenethyl Alcohol / 苯乙醇 (CAS: 60-12-8, NOAEL: 500)"></option>
+                        <option value="Tocopherol" label="Tocopherol / 維生素E (CAS: 59-02-9, NOAEL: 500)"></option>
+                        <option value="Ascorbyl Glucoside" label="Ascorbyl Glucoside / 維生素C醣苷 (CAS: 129499-78-1, NOAEL: 1000)"></option>
+                        <option value="Panthenol" label="Panthenol / 維生素原B5 (CAS: 81-13-0, NOAEL: 1000)"></option>
+                        <option value="Allantoin" label="Allantoin / 尿囊素 (CAS: 97-59-6, NOAEL: 1000)"></option>
+                        <option value="Squalane" label="Squalane / 角鯊烷 (CAS: 111-01-3)"></option>
+                        <option value="Ceramide NP" label="Ceramide NP / 神經醯胺 (CAS: 100403-19-8)"></option>
+                        <option value="Salicylic Acid" label="Salicylic Acid / 水楊酸 (CAS: 69-72-7, NOAEL: 50, Limit: 2.0%)"></option>
+                        <option value="Linalool" label="Linalool / 芳樟醇 (CAS: 78-70-6, Allergen)"></option>
+                        <option value="Geraniol" label="Geraniol / 香葉醇 (CAS: 106-24-1, Allergen)"></option>
+                        <option value="Mercury" label="Mercury / 汞 (CAS: 7439-97-6, Annex II Prohibited)"></option>
+                    </datalist>
+
+                    <div class="ingredient-quick-bar mb-1">
+                        <span class="quick-bar-label">📚 Quick Add from Library:</span>
+                        <button type="button" class="btn-quick-ing" data-inci="Niacinamide" data-cas="98-92-0" data-noael="50.0" data-pct="2.0">+ Niacinamide (2%)</button>
+                        <button type="button" class="btn-quick-ing" data-inci="Sodium Hyaluronate" data-cas="9067-32-7" data-noael="1000.0" data-pct="0.2">+ Hyaluronic Acid (0.2%)</button>
+                        <button type="button" class="btn-quick-ing" data-inci="Rosa Damascena Flower Water" data-cas="90106-38-0" data-noael="1000.0" data-pct="10.0">+ Rose Water (10%)</button>
+                        <button type="button" class="btn-quick-ing" data-inci="Phenethyl Alcohol" data-cas="60-12-8" data-noael="500.0" data-pct="0.3">+ Phenethyl Alcohol (0.3%)</button>
+                        <button type="button" class="btn-quick-ing" data-inci="Tocopherol" data-cas="59-02-9" data-noael="500.0" data-pct="0.5">+ Vitamin E (0.5%)</button>
+                        <button type="button" class="btn-quick-ing" data-inci="Panthenol" data-cas="81-13-0" data-noael="1000.0" data-pct="1.0">+ Panthenol B5 (1%)</button>
+                        <button type="button" class="btn-quick-ing" data-inci="Ceramide NP" data-cas="100403-19-8" data-noael="1000.0" data-pct="0.1">+ Ceramide NP (0.1%)</button>
                     </div>
 
                     <div class="flex-between">
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-ingredient">➕ Add Ingredient</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-ingredient">➕ Add Custom Row</button>
                         <button type="button" class="btn btn-secondary btn-sm" id="btn-save-draft">💾 Save &amp; Re-analyze Formulation</button>
                     </div>
                 </div>

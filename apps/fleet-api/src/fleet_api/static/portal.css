@@ -825,3 +825,41 @@ body {
 .chat-input-row input {
   flex: 1;
 }
+
+/* Ingredient Library Quick Bar */
+.ingredient-quick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.85rem;
+  background-color: rgba(15, 23, 42, 0.7);
+  border: 1px dashed rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+}
+
+.quick-bar-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  margin-right: 0.25rem;
+}
+
+.btn-quick-ing {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-quick-ing:hover {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border-color: var(--accent-blue);
+  transform: translateY(-1px);
+}

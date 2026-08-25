@@ -208,12 +208,12 @@ async def chat_with_gemini_copilot(
                 "contents": [
                     {"role": "user", "parts": [{"text": f"System Context: {system_instruction}\n\nUser Question: {req.message}"}]}
                 ],
-                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1000}
+                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096}
             }
             try:
                 req_data = json.dumps(payload).encode("utf-8")
                 http_req = urllib.request.Request(gemini_url, data=req_data, headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(http_req, timeout=12) as resp:
+                with urllib.request.urlopen(http_req, timeout=25) as resp:
                     result = json.loads(resp.read().decode("utf-8"))
                     text = result["candidates"][0]["content"]["parts"][0]["text"]
                     return ChatResponse(

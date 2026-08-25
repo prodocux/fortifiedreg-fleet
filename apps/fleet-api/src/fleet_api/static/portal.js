@@ -18,6 +18,29 @@ const STATE = {
   deferredInstallPrompt: null
 };
 
+// Standard Cosmetic Ingredient Knowledge Database for Auto-complete
+const INGREDIENT_DATABASE = [
+  { inci: "Aqua", cas: "7732-18-5", noael: null, defaultPct: 70.0 },
+  { inci: "Glycerin", cas: "56-81-5", noael: 1000.0, defaultPct: 5.0 },
+  { inci: "Retinol", cas: "68-26-8", noael: 2.0, defaultPct: 0.05 },
+  { inci: "Phenoxyethanol", cas: "122-99-6", noael: 500.0, defaultPct: 0.8 },
+  { inci: "Niacinamide", cas: "98-92-0", noael: 50.0, defaultPct: 2.0 },
+  { inci: "Sodium Hyaluronate", cas: "9067-32-7", noael: 1000.0, defaultPct: 0.2 },
+  { inci: "Palmitoyl Tripeptide-38", cas: "1447824-23-8", noael: null, defaultPct: 2.0 },
+  { inci: "Rosa Damascena Flower Water", cas: "90106-38-0", noael: 1000.0, defaultPct: 10.0 },
+  { inci: "Phenethyl Alcohol", cas: "60-12-8", noael: 500.0, defaultPct: 0.3 },
+  { inci: "Tocopherol", cas: "59-02-9", noael: 500.0, defaultPct: 0.5 },
+  { inci: "Ascorbyl Glucoside", cas: "129499-78-1", noael: 1000.0, defaultPct: 2.0 },
+  { inci: "Panthenol", cas: "81-13-0", noael: 1000.0, defaultPct: 1.0 },
+  { inci: "Allantoin", cas: "97-59-6", noael: 1000.0, defaultPct: 0.2 },
+  { inci: "Squalane", cas: "111-01-3", noael: 1000.0, defaultPct: 3.0 },
+  { inci: "Ceramide NP", cas: "100403-19-8", noael: 1000.0, defaultPct: 0.1 },
+  { inci: "Salicylic Acid", cas: "69-72-7", noael: 50.0, defaultPct: 1.0 },
+  { inci: "Linalool", cas: "78-70-6", noael: 117.0, defaultPct: 0.005 },
+  { inci: "Geraniol", cas: "106-24-1", noael: 100.0, defaultPct: 0.003 },
+  { inci: "Mercury", cas: "7439-97-6", noael: 0.01, defaultPct: 1.0 }
+];
+
 // ---------------------------------------------------------------------------
 // 1. PWA & Service Worker Initialization
 // ---------------------------------------------------------------------------
@@ -276,25 +299,51 @@ function renderFormulationTable() {
     const tr = document.createElement('tr');
 
     tr.innerHTML = `
-      <td><input type="text" class="table-input" data-field="inci_name" data-index="${index}" value="${item.inci_name}"></td>
-      <td><input type="number" step="0.01" class="table-input" data-field="concentration_pct" data-index="${index}" value="${item.concentration_pct}"></td>
-      <td><input type="text" class="table-input" data-field="cas_number" data-index="${index}" value="${item.cas_number || ''}"></td>
-      <td><input type="number" step="0.1" class="table-input" data-field="noael_mg_kg_day" data-index="${index}" value="${item.noael_mg_kg_day ?? ''}"></td>
+      <td><input type="text" list="ingredient-library-datalist" class="table-input input-inci" data-field="inci_name" data-index="${index}" value="${item.inci_name}" placeholder="Type INCI or select..."></td>
+      <td><input type="number" step="0.01" class="table-input input-pct" data-field="concentration_pct" data-index="${index}" value="${item.concentration_pct}"></td>
+      <td><input type="text" class="table-input input-cas" data-field="cas_number" data-index="${index}" value="${item.cas_number || ''}" placeholder="CAS No."></td>
+      <td><input type="number" step="0.1" class="table-input input-noael" data-field="noael_mg_kg_day" data-index="${index}" value="${item.noael_mg_kg_day ?? ''}" placeholder="NOAEL"></td>
       <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-del-row" data-index="${index}">🗑️</button></td>
     `;
     tbody.appendChild(tr);
   });
 
-  // Bind change and input events
+  // Bind change and input events with smart database auto-fill
   tbody.querySelectorAll('.table-input').forEach((input) => {
     const updateMem = (e) => {
       const idx = parseInt(e.target.dataset.index, 10);
       const field = e.target.dataset.field;
       let val = e.target.value;
+
       if (field === 'concentration_pct') val = parseFloat(val) || 0;
       if (field === 'noael_mg_kg_day') val = (val && val.trim() !== '') ? parseFloat(val) : null;
+
       if (STATE.draft && STATE.draft.ingredients[idx]) {
         STATE.draft.ingredients[idx][field] = val;
+
+        // Auto-complete CAS and NOAEL if exact/fuzzy INCI match found in database
+        if (field === 'inci_name' && val) {
+          const match = INGREDIENT_DATABASE.find(
+            (db) => db.inci.toLowerCase() === val.trim().toLowerCase()
+          );
+          if (match) {
+            const tr = e.target.closest('tr');
+            if (match.cas && (!STATE.draft.ingredients[idx].cas_number || STATE.draft.ingredients[idx].cas_number === '')) {
+              STATE.draft.ingredients[idx].cas_number = match.cas;
+              if (tr) {
+                const casInput = tr.querySelector('.input-cas');
+                if (casInput) casInput.value = match.cas;
+              }
+            }
+            if (match.noael != null && STATE.draft.ingredients[idx].noael_mg_kg_day == null) {
+              STATE.draft.ingredients[idx].noael_mg_kg_day = match.noael;
+              if (tr) {
+                const noaelInput = tr.querySelector('.input-noael');
+                if (noaelInput) noaelInput.value = match.noael;
+              }
+            }
+          }
+        }
       }
     };
     input.addEventListener('change', updateMem);
@@ -316,12 +365,34 @@ function addIngredientRow() {
   if (!STATE.draft) return;
   STATE.draft.ingredients = collectIngredientsFromTable();
   STATE.draft.ingredients.push({
-    inci_name: 'New Ingredient',
+    inci_name: '',
     concentration_pct: 1.0,
     cas_number: '',
     noael_mg_kg_day: null
   });
   renderFormulationTable();
+}
+
+function addQuickIngredient(inci, cas, noael, pct) {
+  if (!STATE.draft) return;
+  STATE.draft.ingredients = collectIngredientsFromTable();
+  
+  // Check if already present
+  const existing = STATE.draft.ingredients.find(i => i.inci_name.toLowerCase() === inci.toLowerCase());
+  if (existing) {
+    existing.concentration_pct = pct;
+    existing.cas_number = cas;
+    existing.noael_mg_kg_day = noael;
+  } else {
+    STATE.draft.ingredients.push({
+      inci_name: inci,
+      concentration_pct: pct,
+      cas_number: cas,
+      noael_mg_kg_day: noael
+    });
+  }
+  renderFormulationTable();
+  saveDraft();
 }
 
 async function saveDraft() {
@@ -614,6 +685,7 @@ function formatMarkdown(text) {
 
 async function triggerParsePreview(scenarioKey) {
   setTelemetryStatus('node-prodocux-intake', 'PARSING', 'badge-running');
+  STATE.pendingScenarioKey = scenarioKey;
 
   try {
     const res = await fetch('/v1/formulations/parse-preview', {
@@ -662,6 +734,20 @@ async function triggerParsePreview(scenarioKey) {
 function applyPreviewToDraft() {
   if (!STATE.draft || STATE.pendingPreviewCandidates.length === 0) return;
 
+  const scenarioTitles = {
+    retinol: 'Retinol Night Renewal Serum',
+    peptide: 'Active Peptide Eye Cream',
+    day_cream: 'Hydrating Day Cream',
+    phenoxy_excess: 'Excess Phenoxyethanol Cream',
+    mercury: 'Mercury Bleaching Cream'
+  };
+
+  if (STATE.pendingScenarioKey && scenarioTitles[STATE.pendingScenarioKey]) {
+    STATE.draft.product_name = scenarioTitles[STATE.pendingScenarioKey];
+    const nameInput = document.getElementById('input-product-name');
+    if (nameInput) nameInput.value = STATE.draft.product_name;
+  }
+
   STATE.draft.ingredients = STATE.pendingPreviewCandidates.map((c) => ({
     inci_name: c.inci_name,
     concentration_pct: c.concentration_pct,
@@ -672,6 +758,7 @@ function applyPreviewToDraft() {
   const modal = document.getElementById('modal-import-preview');
   if (modal) modal.classList.add('hidden');
 
+  renderFormulationTable();
   saveDraft();
 }
 
@@ -1046,6 +1133,17 @@ document.addEventListener('DOMContentLoaded', () => {
     chip.addEventListener('click', () => {
       const prompt = chip.dataset.prompt;
       if (prompt) sendChatMessage(prompt);
+    });
+  });
+
+  // Quick Add from Ingredient Library Buttons
+  document.querySelectorAll('.btn-quick-ing').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const inci = btn.dataset.inci;
+      const cas = btn.dataset.cas;
+      const noael = btn.dataset.noael ? parseFloat(btn.dataset.noael) : null;
+      const pct = btn.dataset.pct ? parseFloat(btn.dataset.pct) : 1.0;
+      addQuickIngredient(inci, cas, noael, pct);
     });
   });
 });
