@@ -22,7 +22,7 @@ def test_b11_portal_serves_html_and_static_assets():
     csp = html_resp.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp
     assert "FortifiedReg Fleet" in html_resp.text
-    assert 'src="/static/portal.js?v=0.4.0"' in html_resp.text
+    assert 'src="/static/portal.js?v=0.4.1"' in html_resp.text
 
     # 2. Portal CSS
     css_resp = client.get("/static/portal.css?v=0.4.0")

@@ -82,6 +82,9 @@ def index() -> FileResponse:
         portal_file,
         status_code=200,
         headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "Content-Security-Policy": (
                 "default-src 'self'; "
                 "script-src 'self'; "

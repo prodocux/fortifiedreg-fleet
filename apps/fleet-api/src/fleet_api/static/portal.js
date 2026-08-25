@@ -25,7 +25,9 @@ const STATE = {
 function initPWA() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/static/service-worker.js').catch((err) => {
+      navigator.serviceWorker.register('/static/service-worker.js?v=0.4.1').then((reg) => {
+        reg.update();
+      }).catch((err) => {
         console.warn('ServiceWorker registration error:', err);
       });
     });
@@ -411,13 +413,17 @@ function renderDiagnostics(sccs, inci) {
 
   // Update Gate Status Box with strict case-insensitive status handling
   if (gateIndicator && gateDesc) {
+    const ingredients = STATE.draft ? STATE.draft.ingredients : [];
+    const hasMercury = ingredients.some(i => (i.inci_name || '').toLowerCase().includes('mercury'));
+    const hasExcessPreservative = ingredients.some(i => (i.inci_name || '').toLowerCase() === 'phenoxyethanol' && i.concentration_pct > 1.0);
+
     const sccsSt = (sccs?.status || '').toLowerCase();
     const inciSt = (inci?.status || '').toLowerCase();
 
-    if (sccsSt === 'fail' || inciSt === 'fail') {
+    if (hasMercury || hasExcessPreservative || sccsSt === 'fail' || inciSt === 'fail') {
       gateIndicator.textContent = 'BLOCKED (FAIL)';
       gateIndicator.className = 'gate-status-indicator badge-fail';
-      gateDesc.textContent = 'Formulation contains prohibited substances or preservative limits exceeded; submission blocked.';
+      gateDesc.textContent = 'Formulation contains prohibited substances (Annex II) or preservative limits exceeded (Annex V); submission blocked.';
     } else if (sccsSt === 'review' || inciSt === 'review') {
       gateIndicator.textContent = 'REVIEW NEEDED';
       gateIndicator.className = 'gate-status-indicator badge-review';
@@ -432,7 +438,7 @@ function renderDiagnostics(sccs, inci) {
 
 
 // ---------------------------------------------------------------------------
-// 6. AI Copilot Suggestions
+// 6. AI Copilot Suggestions & Interactive Dialogue
 // ---------------------------------------------------------------------------
 
 async function loadAssistantSuggestions() {
@@ -515,6 +521,90 @@ function applySuggestionPatch(patch) {
   }
 
   saveDraft();
+}
+
+async function sendChatMessage(customQuery = null) {
+  if (!STATE.token) return;
+  const inputEl = document.getElementById('input-chat-message');
+  const query = (customQuery || (inputEl ? inputEl.value : '')).trim();
+  if (!query) return;
+
+  if (inputEl) inputEl.value = '';
+
+  const messagesContainer = document.getElementById('chat-messages');
+  if (messagesContainer) {
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-bubble chat-user';
+    userBubble.innerHTML = `
+      <div class="chat-sender">🔬 Formulator</div>
+      <div class="chat-text">${escapeHtml(query)}</div>
+    `;
+    messagesContainer.appendChild(userBubble);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  setTelemetryStatus('node-gemini-assistant', 'REASONING', 'badge-running');
+
+  try {
+    const res = await fetch('/v1/assistant/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${STATE.token}`
+      },
+      body: JSON.stringify({
+        message: query,
+        product_name: STATE.draft ? STATE.draft.product_name : 'Formula',
+        ingredients: STATE.draft ? STATE.draft.ingredients : [],
+        exposure_scenario: STATE.draft ? STATE.draft.exposure_scenario : null
+      })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    if (messagesContainer) {
+      const botBubble = document.createElement('div');
+      botBubble.className = 'chat-bubble chat-bot';
+      const formattedReply = formatMarkdown(data.reply);
+      botBubble.innerHTML = `
+        <div class="chat-sender">✨ ${data.provider}</div>
+        <div class="chat-text">${formattedReply}</div>
+      `;
+      messagesContainer.appendChild(botBubble);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    setTelemetryStatus('node-gemini-assistant', 'READY', 'badge-pass');
+  } catch (err) {
+    console.error('Failed to send chat message:', err);
+    if (messagesContainer) {
+      const errBubble = document.createElement('div');
+      errBubble.className = 'chat-bubble chat-bot';
+      errBubble.innerHTML = `
+        <div class="chat-sender">⚠️ Gemini Advisor</div>
+        <div class="chat-text">Unable to complete query. Please try again.</div>
+      `;
+      messagesContainer.appendChild(errBubble);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    setTelemetryStatus('node-gemini-assistant', 'UNAVAILABLE', 'badge-review');
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n\* /g, '<br>• ')
+    .replace(/\n/g, '<br>');
 }
 
 
@@ -938,4 +1028,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnReturn = document.getElementById('btn-manager-return');
   if (btnAccept) btnAccept.addEventListener('click', () => decideProposal('approved'));
   if (btnReturn) btnReturn.addEventListener('click', () => decideProposal('returned'));
+
+  // Gemini Copilot Interactive Chat Listeners
+  const btnChatSend = document.getElementById('btn-chat-send');
+  const inputChatMsg = document.getElementById('input-chat-message');
+  if (btnChatSend) btnChatSend.addEventListener('click', () => sendChatMessage());
+  if (inputChatMsg) {
+    inputChatMsg.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+  }
+
+  document.querySelectorAll('.btn-prompt-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const prompt = chip.dataset.prompt;
+      if (prompt) sendChatMessage(prompt);
+    });
+  });
 });

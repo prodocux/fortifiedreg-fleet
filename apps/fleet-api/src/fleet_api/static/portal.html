@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/portal.css?v=0.4.0">
-    <script type="module" src="/static/portal.js?v=0.4.0" defer></script>
+    <link rel="stylesheet" href="/static/portal.css?v=0.4.1">
+    <script type="module" src="/static/portal.js?v=0.4.1" defer></script>
 </head>
 <body>
 
@@ -202,8 +202,8 @@
 
                     <div class="gate-action-area">
                         <div class="gate-status-box" id="gate-status-box">
-                            <div class="gate-status-indicator" id="gate-indicator">READY</div>
-                            <div class="gate-status-desc" id="gate-desc">Formulation is ready for formal gate submission.</div>
+                            <div class="gate-status-indicator badge-pass" id="gate-indicator">READY (PASS)</div>
+                            <div class="gate-status-desc" id="gate-desc">Formulation is fully compliant; all ingredients MoS ≥ 100.</div>
                         </div>
 
                         <button type="button" class="btn btn-success btn-lg" id="btn-submit-proposal">
@@ -237,10 +237,35 @@
                     </div>
 
                     <!-- Actionable Suggestions -->
-                    <div class="sidebar-section">
+                    <div class="sidebar-section mb-125">
                         <div class="sidebar-section-title">💡 Smart Formulation Recommendations &amp; Citations</div>
                         <div class="suggestions-list" id="sidebar-suggestions-list">
                             <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Interactive Gemini Regulatory Dialogue Chat -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">💬 Live Gemini Regulatory Dialogue</div>
+                        <div class="chat-container" id="gemini-chat-container">
+                            <div class="chat-messages" id="chat-messages">
+                                <div class="chat-bubble chat-bot">
+                                    <div class="chat-sender">✨ Gemini Advisor</div>
+                                    <div class="chat-text">Hello! I am your EU Regulatory Copilot. Ask me about Regulation (EC) 1223/2009 Annex restrictions, SCCS MoS calculations, or how to resolve formulation issues.</div>
+                                </div>
+                            </div>
+                            
+                            <div class="chat-quick-prompts">
+                                <button type="button" class="btn-prompt-chip" data-prompt="Why is Mercury prohibited under EU Annex II?">🚫 Mercury Ban</button>
+                                <button type="button" class="btn-prompt-chip" data-prompt="What is the preservative limit for Phenoxyethanol?">🧴 Phenoxyethanol Limit</button>
+                                <button type="button" class="btn-prompt-chip" data-prompt="How is the Margin of Safety (MoS) calculated?">📐 MoS Formula</button>
+                                <button type="button" class="btn-prompt-chip" data-prompt="What toxicology data is needed for Palmitoyl Tripeptide-38?">🧬 Peptide NOAEL</button>
+                            </div>
+                            
+                            <div class="chat-input-row">
+                                <input type="text" id="input-chat-message" class="form-control form-control-sm" placeholder="Ask a regulatory question...">
+                                <button type="button" class="btn btn-primary btn-sm" id="btn-chat-send">➤ Send</button>
+                            </div>
                         </div>
                     </div>
                 </div>

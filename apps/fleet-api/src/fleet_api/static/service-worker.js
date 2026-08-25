@@ -1,17 +1,17 @@
 /**
- * Service Worker for FortifiedReg Fleet PWA (v0.4.0).
+ * Service Worker for FortifiedReg Fleet PWA (v0.4.1).
  * Implements strict security-compliant caching:
  * - WHITELIST: Static application shell (HTML, CSS, JS, WebManifest, Icons, Golden Samples).
  * - FORBIDDEN: NEVER cache /v1/** API routes, JWT tokens, drafts, uploads, or AI responses.
- * - OFFLINE POLICY: Fail-closed; displays backend unavailable status when disconnected.
+ * - STRATEGY: Network-First for shell assets with offline fallback; aggressively flushes stale caches on update.
  */
 
-const CACHE_NAME = 'fortifiedreg-fleet-shell-v0.4.0';
+const CACHE_NAME = 'fortifiedreg-fleet-shell-v0.4.1';
 
 const STATIC_SHELL_ASSETS = [
   '/',
-  '/static/portal.css?v=0.4.0',
-  '/static/portal.js?v=0.4.0',
+  '/static/portal.css?v=0.4.1',
+  '/static/portal.js?v=0.4.1',
   '/static/manifest.webmanifest',
   '/static/samples.json',
   '/static/icons/icon-192.svg',
@@ -19,10 +19,11 @@ const STATIC_SHELL_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_SHELL_ASSETS);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -44,21 +45,19 @@ self.addEventListener('fetch', (event) => {
     return; // Pass through to browser network layer
   }
 
-  // Handle static assets with Stale-While-Revalidate or Cache-First
+  // Network-First Strategy for Application Shell
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch background update for static assets
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {
-          // Offline, use cached
-        });
-        return cachedResponse;
-      }
-      return fetch(event.request);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const resClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // Fallback to cache if offline
+        return caches.match(event.request);
+      })
   );
 });
