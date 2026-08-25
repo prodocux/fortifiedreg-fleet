@@ -439,12 +439,13 @@ def test_artifact_store_conflict_fails_closed(client):
     chk = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
     assert chk.status == CheckpointStatusEnum.PENDING
 
-    # Verify resume context status is marked failed/retryable with safe error code
+    # Verify resume context status is marked BLOCKED_REVIEW with safe error code (non-retryable)
     resume_store = get_resume_context_store()
     ctx = resume_store.get_context("tenant-demo", checkpoint_id)
     if ctx:
-        assert ctx.status == FleetExecutionStatus.RESUME_FAILED_RETRYABLE
-        assert ctx.last_error.get("safe_error_code") == "ARTIFACT_CONFLICT"
+        assert ctx.status == FleetExecutionStatus.BLOCKED_REVIEW
+        assert ctx.last_error.get("safe_error_code") == "ARTIFACT_CONFLICT_BLOCKED"
+        assert ctx.last_error.get("is_retryable") is False
 
 
 def test_pdx_resume_failure_fails_closed(client, monkeypatch):
@@ -653,3 +654,138 @@ def test_non_awaiting_approval_fails_closed_without_synthetic_checkpoint(client,
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
     assert prop_res.status_code == 422
     assert "did not reach a pending regulatory approval checkpoint" in prop_res.json()["detail"]
+
+
+def test_missing_approval_request_fails_closed_without_synthetic_fallback(client, monkeypatch):
+    """Verify that if awaiting_approval result lacks approval_request, proposal creation fails closed."""
+    from fleet_api.deps import get_orchestrator
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    orchestrator = get_orchestrator()
+    original_exec = orchestrator.execute_plan
+
+    # Mock execute_plan to return checkpoint but omit approval_request
+    def mock_exec_missing_req(plan, case_payload=None):
+        res = original_exec(plan, case_payload)
+        res.pop("approval_request", None)
+        return res
+
+    monkeypatch.setattr(orchestrator, "execute_plan", mock_exec_missing_req)
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    assert prop_res.status_code == 422
+    assert "did not reach a pending regulatory approval checkpoint and approval request" in prop_res.json()["detail"]
+
+
+def test_missing_or_mismatched_pdx_artifact_identity_fails_closed(client, monkeypatch):
+    """Verify that if PDX resume result lacks artifact_identity or has digest mismatch, resume fails closed."""
+    from fleet_api.deps import get_orchestrator
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+
+    orchestrator = get_orchestrator()
+    original_resume = orchestrator.resume_with_decision
+
+    # Mock resume_with_decision to return corrupted artifact_identity (digest mismatch)
+    def mock_resume_bad_ident(chk, dec):
+        res = original_resume(chk, dec)
+        res["artifact_identity"]["sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
+        return res
+
+    monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_bad_ident)
+
+    decide_res = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Testing identity validation."},
+    )
+    assert decide_res.status_code == 500
+    assert "Resume execution error" in decide_res.json()["detail"]
+
+
+def test_crash_window_after_artifact_write_retry_succeeds_with_single_outbox(client, monkeypatch):
+    """
+    Verify the crash window:
+    1. PDX resume succeeds.
+    2. Fleet canonical PIF artifact is written to ArtifactStore.
+    3. Server crashes right before mark_resume_completed.
+    4. On retry/restart: exact same approved_at and byte-identical artifact are reused (ALREADY_EXISTS_SAME_DIGEST).
+    5. mark_resume_completed executes and emits exactly ONE projection outbox record.
+    """
+    from fleet_api.deps import get_resume_context_store, get_checkpoint_store, get_artifact_store
+    from fleet_governance_core.models.approval import CheckpointStatusEnum, FleetExecutionStatus
+    from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+    checkpoint_id = prop_res.json()["proposal"]["checkpoint_id"]
+
+    resume_store = get_resume_context_store()
+    original_mark_completed = resume_store.mark_resume_completed
+
+    # 1. Attempt 1: Simulate crash during mark_resume_completed
+    attempt_count = {"count": 0}
+
+    def mock_mark_completed_crash(tenant_id, checkpoint_id, expected_version, lease_id, result_identity):
+        attempt_count["count"] += 1
+        if attempt_count["count"] == 1:
+            raise RuntimeError("Simulated node crash right after artifact write and before mark_resume_completed")
+        return original_mark_completed(tenant_id, checkpoint_id, expected_version, lease_id, result_identity)
+
+    monkeypatch.setattr(resume_store, "mark_resume_completed", mock_mark_completed_crash)
+
+    decide_res_1 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Crash window test."},
+    )
+    assert decide_res_1.status_code == 500
+
+    # Verify that the artifact was written to storage during attempt 1
+    artifact_store = get_artifact_store()
+    target_uri = f"artifact://tenant-demo/dossiers/{proposal_id}/finalized_pif_record.json"
+    written_bytes = artifact_store._uri_to_path(target_uri).read_bytes()
+    assert len(written_bytes) > 0
+
+    # Verify checkpoint is still pending and no outbox was emitted
+    checkpoint_store = get_checkpoint_store()
+    chk = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk.status == CheckpointStatusEnum.PENDING
+    assert len([r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]) == 0
+
+    # 2. Attempt 2 (Retry / Restart after crash)
+    decide_res_2 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Crash window test."},
+    )
+    assert decide_res_2.status_code == 200, f"Expected 200 on retry after crash, got {decide_res_2.text}"
+    decide_data = decide_res_2.json()
+    assert decide_data["status"] == "finalized"
+    product_id = decide_data["product_id"]
+    assert product_id in _APPROVED_PRODUCTS_STORE
+
+    # Verify that bytes and digest in storage were untouched / identical
+    persisted_bytes_after_retry = artifact_store._uri_to_path(target_uri).read_bytes()
+    assert persisted_bytes_after_retry == written_bytes
+
+    # Verify checkpoint transitioned to RESUMED
+    chk_resumed = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk_resumed.status == CheckpointStatusEnum.RESUMED
+
+    # Verify EXACTLY ONE outbox record exists for this checkpoint
+    matching_outbox = [r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]
+    assert len(matching_outbox) == 1
+    assert matching_outbox[0].target_pdx_status == "resumed"

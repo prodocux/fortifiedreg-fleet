@@ -455,11 +455,15 @@ async def submit_product_proposal(
     plan = orch.compile_execution_plan(case_payload)
     exec_result = orch.execute_plan(plan, case_payload)
 
-    # Fail-closed: Strictly require awaiting_approval from orchestrator (no synthetic fallback)
-    if exec_result.get("status") != "awaiting_approval" or "checkpoint" not in exec_result:
+    # Fail-closed: Strictly require awaiting_approval, checkpoint, and approval_request from orchestrator
+    if (
+        exec_result.get("status") != "awaiting_approval"
+        or "checkpoint" not in exec_result
+        or "approval_request" not in exec_result
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="PDX execution did not reach a pending regulatory approval checkpoint.",
+            detail="PDX execution did not reach a pending regulatory approval checkpoint and approval request.",
         )
 
     proposal_id = f"prop-{uuid.uuid4().hex[:8]}"
@@ -473,20 +477,8 @@ async def submit_product_proposal(
     case_digest = checkpoint.subject_digest
     plan_digest = checkpoint.plan_digest
 
-    if "approval_request" in exec_result:
-        req_dict = exec_result["approval_request"]
-        approval_req = PDXApprovalRequest.model_validate(req_dict)
-    else:
-        req_uuid = uuid.uuid4()
-        approval_req = PDXApprovalRequest(
-            approval_request_id=req_uuid,
-            checkpoint_id=checkpoint_id,
-            run_id=session_id,
-            subject_digest=case_digest,
-            plan_digest=plan_digest,
-            evidence_digests=checkpoint.evidence_digests,
-            summary="Regulatory safety dossier PIF approval request",
-        )
+    req_dict = exec_result["approval_request"]
+    approval_req = PDXApprovalRequest.model_validate(req_dict)
     checkpoint_store.save_approval_request(tenant_id, approval_req)
     req_uuid_str = str(approval_req.approval_request_id)
 
@@ -706,6 +698,22 @@ async def manager_decide_proposal(
             resume_result = orchestrator.resume_with_decision(checkpoint, pdx_decision)
             if resume_result.get("status") not in ("completed", "success"):
                 raise RuntimeError(f"PDX plan resume non-terminal status: {resume_result.get('status')}")
+
+            raw_pdx_ident = resume_result.get("artifact_identity")
+            if not raw_pdx_ident or not isinstance(raw_pdx_ident, dict):
+                raise RuntimeError("PDX resume result missing required artifact_identity.")
+
+            pdx_result_ident = ArtifactStorageIdentity.model_validate(raw_pdx_ident)
+
+            # Verify consistency between artifact_identity and resume_result metadata
+            manifest_sha = resume_result.get("manifest_sha256")
+            if manifest_sha and pdx_result_ident.sha256 != manifest_sha:
+                raise RuntimeError(f"PDX artifact identity SHA-256 mismatch: {pdx_result_ident.sha256} != {manifest_sha}")
+
+            artifact_uri = resume_result.get("artifact_uri")
+            if artifact_uri and pdx_result_ident.uri != artifact_uri:
+                raise RuntimeError(f"PDX artifact identity URI mismatch: {pdx_result_ident.uri} != {artifact_uri}")
+
         except Exception as exc:
             # Mark resume failed in state machine (retryable), keeping checkpoint pending
             try:
@@ -716,6 +724,7 @@ async def manager_decide_proposal(
                     lease_id=lease_id,
                     safe_error_code="RESUME_EXECUTION_ERROR",
                     request_id=proposal.approval_request_id,
+                    is_retryable=True,
                 )
             except Exception:
                 pass
@@ -726,8 +735,6 @@ async def manager_decide_proposal(
 
         # 4. Construct canonical finalized PIF record using IMMUTABLE decided_at from appr_record
         approved_at_iso = appr_record.decided_at
-        raw_pdx_ident = resume_result.get("artifact_identity", {})
-        pdx_result_ident = ArtifactStorageIdentity.model_validate(raw_pdx_ident) if raw_pdx_ident else None
 
         canonical_pif = {
             "tenant_id": tenant_id,
@@ -758,13 +765,15 @@ async def manager_decide_proposal(
         put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
         if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
             try:
+                # Mark failed with is_retryable=False to enter blocked_review and prevent infinite retry
                 resume_store.mark_resume_failed(
                     tenant_id=tenant_id,
                     checkpoint_id=proposal.checkpoint_id,
                     expected_version=cur_version,
                     lease_id=lease_id,
-                    safe_error_code="ARTIFACT_CONFLICT",
+                    safe_error_code="ARTIFACT_CONFLICT_BLOCKED",
                     request_id=proposal.approval_request_id,
+                    is_retryable=False,
                 )
             except Exception:
                 pass
@@ -774,14 +783,32 @@ async def manager_decide_proposal(
             )
 
         # 6. Mark completed in resume store using authentic PDX result identity & update checkpoint status
-        resume_store.mark_resume_completed(
-            tenant_id=tenant_id,
-            checkpoint_id=proposal.checkpoint_id,
-            expected_version=cur_version,
-            lease_id=lease_id,
-            result_identity=pdx_result_ident or art_storage,
-        )
-        checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
+        try:
+            resume_store.mark_resume_completed(
+                tenant_id=tenant_id,
+                checkpoint_id=proposal.checkpoint_id,
+                expected_version=cur_version,
+                lease_id=lease_id,
+                result_identity=pdx_result_ident,
+            )
+            checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
+        except Exception as exc:
+            try:
+                resume_store.mark_resume_failed(
+                    tenant_id=tenant_id,
+                    checkpoint_id=proposal.checkpoint_id,
+                    expected_version=cur_version,
+                    lease_id=lease_id,
+                    safe_error_code="RESUME_COMPLETION_ERROR",
+                    request_id=proposal.approval_request_id,
+                    is_retryable=True,
+                )
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Resume execution error: Transient processing error (state is retryable).",
+            ) from exc
 
         # 7. Create immutable ApprovedProductRecord upon complete success
         product_id = f"prod-{uuid.uuid4().hex[:8]}"

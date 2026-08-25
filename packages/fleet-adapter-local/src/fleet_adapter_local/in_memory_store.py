@@ -161,6 +161,7 @@ class InMemoryResumeContextStore(ResumeContextStorePort):
         lease_id: str,
         safe_error_code: str,
         request_id: str,
+        is_retryable: bool = True,
     ) -> ExecutionContextRecord:
         with self._lock:
             key = (tenant_id, checkpoint_id)
@@ -172,10 +173,15 @@ class InMemoryResumeContextStore(ResumeContextStorePort):
             if rec.lease_id != lease_id:
                 raise ValueError(f"Lease mismatch: expected {lease_id}, got {rec.lease_id}")
 
-            rec.status = FleetExecutionStatus.RESUME_FAILED_RETRYABLE
+            rec.status = (
+                FleetExecutionStatus.RESUME_FAILED_RETRYABLE
+                if is_retryable
+                else FleetExecutionStatus.BLOCKED_REVIEW
+            )
             rec.last_error = {
                 "safe_error_code": safe_error_code,
                 "request_id": request_id,
+                "is_retryable": is_retryable,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             rec.lease_id = None

@@ -28,6 +28,7 @@ class FleetExecutionStatus(str, Enum):
     RESUME_FAILED_RETRYABLE = "resume_failed_retryable"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
+    BLOCKED_REVIEW = "blocked_review"
 
 class ApprovalRequestStatusEnum(str, Enum):
     PENDING = "pending"

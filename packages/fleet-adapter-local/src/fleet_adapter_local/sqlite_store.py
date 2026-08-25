@@ -562,13 +562,20 @@ class SQLiteResumeContextStore(ResumeContextStorePort, CheckpointStorePort, Appr
         lease_id: str,
         safe_error_code: str,
         request_id: str,
+        is_retryable: bool = True,
     ) -> ExecutionContextRecord:
         now_iso = datetime.now(timezone.utc).isoformat()
         err_json = json.dumps({
             "safe_error_code": safe_error_code,
             "request_id": request_id,
+            "is_retryable": is_retryable,
             "timestamp": now_iso,
         })
+        target_status = (
+            FleetExecutionStatus.RESUME_FAILED_RETRYABLE.value
+            if is_retryable
+            else FleetExecutionStatus.BLOCKED_REVIEW.value
+        )
         with self._lock, self._connection() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cur = conn.execute(
@@ -595,7 +602,7 @@ class SQLiteResumeContextStore(ResumeContextStorePort, CheckpointStorePort, Appr
                     lease_expires_at = NULL, last_error = ?, updated_at = ?
                 WHERE tenant_id = ? AND checkpoint_id = ? AND version = ?
             """, (
-                FleetExecutionStatus.RESUME_FAILED_RETRYABLE.value,
+                target_status,
                 new_version,
                 err_json,
                 now_iso,

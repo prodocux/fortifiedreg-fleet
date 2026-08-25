@@ -79,10 +79,11 @@ class ResumeContextStorePort(Protocol):
         lease_id: str,
         safe_error_code: str,
         request_id: str,
+        is_retryable: bool = True,
     ) -> ExecutionContextRecord:
         """
-        Atomically verify version and lease_id, transition status to RESUME_FAILED_RETRYABLE,
-        record sanitized last_error, and release the lease without emitting any resumed projection.
+        Atomically verify version and lease_id, transition status to RESUME_FAILED_RETRYABLE (if retryable)
+        or BLOCKED_REVIEW (if non-retryable), record sanitized last_error, and release the lease without emitting any resumed projection.
         """
         ...
 
