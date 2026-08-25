@@ -196,7 +196,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "healthy",
         "service": "fortified-enterprise-fleet-api",
-        "version": "0.3.2",
+        "version": "0.4.0",
         "environment": FLEET_ENV,
         "runtime_mode": "local_memory_emulation",
         "adapters": {
@@ -252,7 +252,7 @@ def ready() -> JSONResponse:
         adapter_statuses["orchestrator"] = {
             "mode": "live",
             "status": "ready",
-            "pdx_core_version": "0.2.0a2",
+            "pdx_core_version": "0.3.0a1",
         }
     else:
         adapter_statuses["orchestrator"] = {"mode": "fake", "status": "ready"}
@@ -262,7 +262,7 @@ def ready() -> JSONResponse:
 
     resp_payload = {
         "status": "ready" if is_ready else "degraded",
-        "version": "0.3.2",
+        "version": "0.4.0",
         "adapters": adapter_statuses,
     }
 

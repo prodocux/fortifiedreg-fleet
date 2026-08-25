@@ -1,11 +1,218 @@
 {
   "evidence_type": "checksummed_remote_verification_evidence",
+  "verified_at": "2026-08-25T03:15:24.677253+00:00",
+  "target_url": "https://fortifiedreg-fleet-bhqx5rtmma-uc.a.run.app",
   "version": "0.4.0",
-  "status": "PENDING_V0_4_DEPLOYMENT",
-  "note": "Awaiting Cloud Run deployment of FortifiedReg Fleet v0.4.0 before executing verify_remote.py",
-  "expected_pins": {
+  "mode": "full_demo_lifecycle",
+  "provenance_attestation": {
+    "fleet_version": "0.4.0",
+    "fleet_commit": "c96ea4ba083cba9b7f43830b1f3dfd611e37d095",
+    "cloud_run_revision": "fortifiedreg-fleet-00015-42g",
+    "image_digest": "unavailable",
+    "gcp_control_plane_image_digest": "sha256:6aafe70a936f1a4e5dbf0205dcb68a03154b029a8b92784e0072b7ea5a16aa4d",
     "pdx_core_pin": "37e89752560b22dc8724d470dce96187f19e3f98",
     "prodocux_pin": "53c4784d4b2bae4437252a287193e897973e8474",
-    "compatibility_manifest_sha256": "9591ab363472db78efb64265e3050fa4626be43783f848d0888e732898486d2b"
-  }
+    "compatibility_manifest_sha256": "9591ab363472db78efb64265e3050fa4626be43783f848d0888e732898486d2b",
+    "adapter_modes": {
+      "intake": "live",
+      "orchestrator": "live"
+    },
+    "store_modes": {
+      "resume_context": "sqlite",
+      "artifact": "local_filesystem_ephemeral",
+      "audit": "in_memory",
+      "memory": "in_memory"
+    }
+  },
+  "probes": {
+    "health_probe": {
+      "status": "FAIL",
+      "error": "Expected version '0.4.0', got 0.3.2"
+    },
+    "readiness_probe": {
+      "status": "PASS",
+      "data": {
+        "status": "ready",
+        "version": "0.3.2",
+        "adapters": {
+          "intake": {
+            "mode": "live",
+            "status": "ready",
+            "schema_version": "prodocux_intake_capabilities_v1",
+            "kernel_version": "0.3.0rc1"
+          },
+          "orchestrator": {
+            "mode": "live",
+            "status": "ready",
+            "pdx_core_version": "0.2.0a2"
+          },
+          "stores": {
+            "mode": "in_memory",
+            "status": "ready"
+          }
+        }
+      }
+    },
+    "version_truth": {
+      "status": "PASS",
+      "data": {
+        "service": "fortified-enterprise-fleet-api",
+        "fleet_version": "0.4.0",
+        "fleet_commit": "c96ea4ba083cba9b7f43830b1f3dfd611e37d095",
+        "cloud_run_revision": "fortifiedreg-fleet-00015-42g",
+        "image_digest": "unavailable",
+        "pdx_core_pin": "37e89752560b22dc8724d470dce96187f19e3f98",
+        "prodocux_pin": "53c4784d4b2bae4437252a287193e897973e8474",
+        "compatibility_manifest_sha256": "9591ab363472db78efb64265e3050fa4626be43783f848d0888e732898486d2b",
+        "environment": "production",
+        "persistence_profile": "ephemeral_single_instance",
+        "persistence_constraints": {
+          "profile": "ephemeral_single_instance",
+          "architecture": "single_instance_demo",
+          "lifecycle_guarantee": "ephemeral (container restart or scale-down resets state)",
+          "durable_production_ready": false,
+          "crash_recovery_scope": "in_process_retry_safe (interrupted requests recoverable via CAS lease, not container restart safe)"
+        },
+        "adapter_modes": {
+          "intake": "live",
+          "orchestrator": "live"
+        },
+        "store_modes": {
+          "resume_context": "sqlite",
+          "artifact": "local_filesystem_ephemeral",
+          "audit": "in_memory",
+          "memory": "in_memory"
+        },
+        "security_scanner": "regex_prompt_scanner (local_emulation)"
+      }
+    },
+    "manifest_gates": {
+      "status": "PASS",
+      "data": {
+        "manifest_sha256": "9591ab363472db78efb64265e3050fa4626be43783f848d0888e732898486d2b",
+        "raw_manifest": {
+          "schema_version": "pdx_prodocux_compatibility_v3",
+          "status": "frozen",
+          "compatibility_base": {
+            "manifest": "pdx_prodocux_compatibility_v2.json",
+            "sha256": "c301aba7442b150b8186ce3b7cd8da99e9470ad0592c13f7f2818d38fd5f378e"
+          },
+          "prodocux": {
+            "distribution": "prodocux",
+            "version": "0.3.0rc1",
+            "api_version": "v1",
+            "pin": {
+              "repo": "prodocux/prodocux",
+              "commit": "53c4784d4b2bae4437252a287193e897973e8474"
+            },
+            "additive_operations": [
+              "GET /v1/render/capabilities",
+              "GET /v1/render/artifacts/{artifact_id}",
+              "POST /v1/content-blocks/validate",
+              "POST /v1/render/artifact",
+              "POST /v1/intake/extract-blocks"
+            ],
+            "schemas": {
+              "prodocux_content_blocks_v1.json": "6bd2a342a2cc8418bda35d7e1281f58e90b1be9890babd14bec415ff684f33c3",
+              "prodocux_render_capabilities_v1.json": "e09673f6751da831acad5a0f195d0dd533a8294cc6d3568de908ca92d936f1e2",
+              "prodocux_render_request_v1.json": "eed2c466ddbcd21b4b130e5fff93a30fca2232a28dc97e80d137aaf5637750a9",
+              "prodocux_render_result_v1.json": "a0450be002a9f4c67db4bd7fc840a6a5605c87387d3a156ea135436d22b9f20e"
+            }
+          },
+          "pdx_artifact_engine": {
+            "distribution": "pdx-artifact-engine",
+            "pin": {
+              "repo": "prodocux/pdx-artifact-engine",
+              "commit": "37e89752560b22dc8724d470dce96187f19e3f98"
+            },
+            "additive_tools": [
+              "prodocux.extract_content_blocks",
+              "prodocux.render_artifact"
+            ]
+          },
+          "g1a_conformance": {
+            "status": "frozen",
+            "synthetic": true,
+            "prodocux_fixtures": {
+              "examples/contracts/g1a/content_blocks.minimal.json": "13c689d348afc11a16b5876f57a2529db0de7ddfbcaced9612ac6364233018a4",
+              "examples/contracts/g1a/render_request.artifact.docx.json": "9ae9d043aaf94aad0065b75954c09df95f28dae2d877f7c1f99036f5d02bd14f",
+              "examples/contracts/g1a/render_request.inline.csv.json": "ce96d45208093988bfbe91ca17e31efa8ef86c8bd92e31dbced9eca36fbda33c",
+              "examples/contracts/g1a/render_request.reject.gs.json": "5cafb8a7b97ae2e846e5f6957019230689583c476695b5f4cfbeb4a4f40a8fa4",
+              "examples/contracts/g1a/render_request.reject.signed_url.json": "a45ab190566f4003d5adf744831c437c5c17000aef41b1cc34340b4f94771803",
+              "examples/contracts/g1a/render_result.artifact.docx.json": "fe9d09eee6c52c9d26e0af97f9df705f14929f80c8ee1ec66ebb7ff54183afff"
+            },
+            "pdx_fixtures": {
+              "adapters/prodocux/fixtures/g1a/step_receipt.render_artifact.json": "ee3193e75474989b054022a3414980f190c867dad3731275311829c8a59e75af",
+              "adapters/prodocux/fixtures/g1a/tool_request.render_artifact.json": "142eceb876e6951085c3ab02b2a9f8fa61dd2d660125386323a99eb35b6ff202",
+              "adapters/prodocux/fixtures/g1a/tool_result.render_artifact.json": "9ea43f0efb5a5f2352ffbe129b215ceca8d9144c4cfe7e4622b19b33dc4654bb"
+            }
+          },
+          "integration": {
+            "transport": "ProDocuX HTTP API v1 and PDX ProDocuX adapter",
+            "compatibility_policy": "Schemas, operations, and adapter tools are additive to the frozen compatibility v2 surface. v1 and v2 manifests remain byte-immutable.",
+            "publication_gate": "Render contract pins exist at the listed Commit A SHAs. Package versions remain 0.3.0rc1 / 0.3.0a1 until maintainer release review. Hosts must pin these commits before claiming live ProDocuX integration."
+          }
+        },
+        "verification_gates": {
+          "B1_schema_contract": "PASS_LOCAL",
+          "B2_domain_cosmetics": "PASS_LOCAL",
+          "B3_pdx_adapter": "PASS_LOCAL",
+          "B4_prodocux_adapter": "PASS_LOCAL",
+          "B5_google_adk_adapter": "PASS_LOCAL",
+          "B6_fleet_api": "PASS_LOCAL",
+          "B7_lifecycle_conformance": "PASS_LOCAL",
+          "B8_deployment_and_docker_gate": "PENDING_DOCKER",
+          "B9_docker_production_live_gate": "PENDING_DOCKER",
+          "B10_cloud_run_remote_gate": "PENDING_REMOTE"
+        }
+      }
+    },
+    "security_scanner": {
+      "status": "PASS",
+      "prompt_decision": "BLOCK",
+      "path_decision": "BLOCK"
+    },
+    "demo_session": {
+      "status": "PASS",
+      "tenant_id": "tenant-demo",
+      "sub": "demo-session-02ba733aa54c"
+    },
+    "full_lifecycle": {
+      "samples_loaded": {
+        "status": "PASS",
+        "formats": [
+          "pdf",
+          "docx",
+          "csv",
+          "xlsx",
+          "pptx"
+        ]
+      },
+      "parse_preview": {
+        "status": "PASS",
+        "tested_formats": [
+          "pdf",
+          "docx",
+          "csv",
+          "xlsx",
+          "pptx"
+        ]
+      },
+      "proposal_submission": {
+        "status": "PASS",
+        "proposal_id": "prop-f84221f9"
+      },
+      "manager_approval": {
+        "status": "PASS",
+        "product_id": "prod-ed10840f"
+      },
+      "export_and_render": {
+        "status": "PASS",
+        "product_id": "prod-ed10840f",
+        "pdf_rendered": true
+      }
+    }
+  },
+  "summary": "VERIFICATION_FAILED",
+  "evidence_sha256": "faad6d928f5eb4ed272468fcdb3bf145863f0954e38a54bcc9577bf553113508"
 }
