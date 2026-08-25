@@ -1,15 +1,15 @@
 {
   "evidence_type": "checksummed_remote_verification_evidence",
-  "verified_at": "2026-08-25T06:31:30.985416+00:00",
+  "verified_at": "2026-08-25T06:44:47.123515+00:00",
   "target_url": "https://fortifiedreg-fleet-bhqx5rtmma-uc.a.run.app",
   "version": "0.4.0",
   "mode": "full_demo_lifecycle",
   "provenance_attestation": {
     "fleet_version": "0.4.0",
-    "fleet_commit": "310dec679062c04af4f539caa5a86b664fe06383",
-    "cloud_run_revision": "fortifiedreg-fleet-00022-x8k",
+    "fleet_commit": "5862bb12e0bdd996994294cdc6e5dc68fe03ac0a",
+    "cloud_run_revision": "fortifiedreg-fleet-00023-kmr",
     "image_digest": "unavailable",
-    "gcp_control_plane_image_digest": "sha256:2bbba22784fb752eb556fa355c22958e0cd529c2ed6bfb762f36cf546d4983c7",
+    "gcp_control_plane_image_digest": "sha256:61a27ab7cf5df2768489dcc644b0d789572764919f272302f564b2a76688016a",
     "pdx_core_pin": "37e89752560b22dc8724d470dce96187f19e3f98",
     "prodocux_pin": "53c4784d4b2bae4437252a287193e897973e8474",
     "compatibility_manifest_sha256": "9591ab363472db78efb64265e3050fa4626be43783f848d0888e732898486d2b",
@@ -77,8 +77,8 @@
       "data": {
         "service": "fortified-enterprise-fleet-api",
         "fleet_version": "0.4.0",
-        "fleet_commit": "310dec679062c04af4f539caa5a86b664fe06383",
-        "cloud_run_revision": "fortifiedreg-fleet-00022-x8k",
+        "fleet_commit": "5862bb12e0bdd996994294cdc6e5dc68fe03ac0a",
+        "cloud_run_revision": "fortifiedreg-fleet-00023-kmr",
         "image_digest": "unavailable",
         "pdx_core_pin": "37e89752560b22dc8724d470dce96187f19e3f98",
         "prodocux_pin": "53c4784d4b2bae4437252a287193e897973e8474",
@@ -194,7 +194,7 @@
     "demo_session": {
       "status": "PASS",
       "tenant_id": "tenant-demo",
-      "sub": "demo-session-9c96af03e1fb"
+      "sub": "demo-session-1ca420e5dcf7"
     },
     "full_lifecycle": {
       "samples_loaded": {
@@ -219,19 +219,19 @@
       },
       "proposal_submission": {
         "status": "PASS",
-        "proposal_id": "prop-54028d23"
+        "proposal_id": "prop-4db8d357"
       },
       "manager_approval": {
         "status": "PASS",
-        "product_id": "prod-8a04b828"
+        "product_id": "prod-48d70d18"
       },
       "export_and_render": {
         "status": "PASS",
-        "product_id": "prod-8a04b828",
+        "product_id": "prod-48d70d18",
         "pdf_rendered": true
       }
     }
   },
   "summary": "ALL_CHECKS_PASSED",
-  "evidence_sha256": "67308b24d5e424deb4aaa01c3a56a56b71c093d5fc09a66762acf0ffedac88d3"
+  "evidence_sha256": "7f8f40c35f7cb183c722ed6c57d2d98172168fe3aa257dc1780ca59fddbff946"
 }
