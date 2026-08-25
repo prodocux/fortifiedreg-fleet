@@ -455,99 +455,76 @@ async def submit_product_proposal(
     plan = orch.compile_execution_plan(case_payload)
     exec_result = orch.execute_plan(plan, case_payload)
 
+    # Fail-closed: Strictly require awaiting_approval from orchestrator (no synthetic fallback)
+    if exec_result.get("status") != "awaiting_approval" or "checkpoint" not in exec_result:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="PDX execution did not reach a pending regulatory approval checkpoint.",
+        )
+
     proposal_id = f"prop-{uuid.uuid4().hex[:8]}"
     checkpoint_store = get_checkpoint_store()
     resume_context_store = get_resume_context_store()
 
-    if exec_result.get("status") == "awaiting_approval":
-        chk_dict = exec_result["checkpoint"]
-        checkpoint = PDXWorkflowCheckpoint.model_validate(chk_dict)
-        checkpoint_store.save_checkpoint(tenant_id, checkpoint)
-        checkpoint_id = checkpoint.checkpoint_id
-        case_digest = checkpoint.subject_digest
-        plan_digest = checkpoint.plan_digest
+    chk_dict = exec_result["checkpoint"]
+    checkpoint = PDXWorkflowCheckpoint.model_validate(chk_dict)
+    checkpoint_store.save_checkpoint(tenant_id, checkpoint)
+    checkpoint_id = checkpoint.checkpoint_id
+    case_digest = checkpoint.subject_digest
+    plan_digest = checkpoint.plan_digest
 
-        if "approval_request" in exec_result:
-            req_dict = exec_result["approval_request"]
-            approval_req = PDXApprovalRequest.model_validate(req_dict)
-            checkpoint_store.save_approval_request(tenant_id, approval_req)
-            req_uuid_str = str(approval_req.approval_request_id)
-        else:
-            req_uuid = uuid.uuid4()
-            req_uuid_str = str(req_uuid)
-            approval_req = PDXApprovalRequest(
-                approval_request_id=req_uuid,
-                checkpoint_id=checkpoint_id,
-                run_id=session_id,
-                subject_digest=case_digest,
-                plan_digest=plan_digest,
-                evidence_digests={"sccs_digest": sccs_res.rule_digest},
-                summary="Regulatory safety dossier PIF approval request",
-            )
-            checkpoint_store.save_approval_request(tenant_id, approval_req)
-
-        # Save resume context in store for LivePDXCoreOrchestrator and lease management
-        if resume_context_store:
-            plan_ident = ArtifactStorageIdentity(
-                uri=f"artifact://{tenant_id}/plans/{session_id}.json",
-                sha256=plan_digest,
-                size_bytes=64,
-                media_type="application/json",
-            )
-            case_ident = ArtifactStorageIdentity(
-                uri=f"artifact://{tenant_id}/cases/{session_id}.json",
-                sha256=case_digest,
-                size_bytes=64,
-                media_type="application/json",
-            )
-            ctx_record = ExecutionContextRecord(
-                tenant_id=tenant_id,
-                run_id=session_id,
-                checkpoint_id=checkpoint_id,
-                case_digest=case_digest,
-                case_storage_identity=case_ident,
-                plan_digest=plan_digest,
-                plan_storage_identity=plan_ident,
-                plan_summary=PlanSummary(
-                    request_id=f"req-plan-{proposal_id}",
-                    schema_version="pdx_execution_plan_v1",
-                    step_count=len(plan.get("steps", [])),
-                    step_ids=[s.get("id", "") for s in plan.get("steps", [])],
-                    has_approval_step=True,
-                    product_name=draft.product_name,
-                    jurisdiction="EU",
-                ),
-                approval_request=approval_req,
-                evidence_digests=checkpoint.evidence_digests,
-            )
-            resume_context_store.save_context(ctx_record)
+    if "approval_request" in exec_result:
+        req_dict = exec_result["approval_request"]
+        approval_req = PDXApprovalRequest.model_validate(req_dict)
     else:
-        case_digest = draft.compute_case_digest()
-        plan_digest = compute_data_sha256(f"pdx-plan-{draft.draft_id}-rev{draft.revision}-{case_digest}".encode("utf-8"))
-        checkpoint_id = f"chk-{uuid.uuid4().hex[:12]}"
         req_uuid = uuid.uuid4()
-        req_uuid_str = str(req_uuid)
-
-        checkpoint = PDXWorkflowCheckpoint(
-            checkpoint_id=checkpoint_id,
-            run_id=session_id,
-            status=CheckpointStatusEnum.PENDING,
-            subject_digest=case_digest,
-            plan_digest=plan_digest,
-            evidence_digests={"sccs_digest": sccs_res.rule_digest},
-        )
-        checkpoint_store.save_checkpoint(tenant_id, checkpoint)
-
-        approval_request = PDXApprovalRequest(
+        approval_req = PDXApprovalRequest(
             approval_request_id=req_uuid,
             checkpoint_id=checkpoint_id,
             run_id=session_id,
             subject_digest=case_digest,
             plan_digest=plan_digest,
-            evidence_digests={"sccs_digest": sccs_res.rule_digest},
+            evidence_digests=checkpoint.evidence_digests,
             summary="Regulatory safety dossier PIF approval request",
         )
-        checkpoint_store.save_approval_request(tenant_id, approval_request)
+    checkpoint_store.save_approval_request(tenant_id, approval_req)
+    req_uuid_str = str(approval_req.approval_request_id)
+
+    # Save resume context in store for LivePDXCoreOrchestrator and lease management
+    if resume_context_store:
+        plan_ident = ArtifactStorageIdentity(
+            uri=f"artifact://{tenant_id}/plans/{session_id}.json",
+            sha256=plan_digest,
+            size_bytes=64,
+            media_type="application/json",
+        )
+        case_ident = ArtifactStorageIdentity(
+            uri=f"artifact://{tenant_id}/cases/{session_id}.json",
+            sha256=case_digest,
+            size_bytes=64,
+            media_type="application/json",
+        )
+        ctx_record = ExecutionContextRecord(
+            tenant_id=tenant_id,
+            run_id=session_id,
+            checkpoint_id=checkpoint_id,
+            case_digest=case_digest,
+            case_storage_identity=case_ident,
+            plan_digest=plan_digest,
+            plan_storage_identity=plan_ident,
+            plan_summary=PlanSummary(
+                request_id=f"req-plan-{proposal_id}",
+                schema_version="pdx_execution_plan_v1",
+                step_count=len(plan.get("steps", [])),
+                step_ids=[s.get("id", "") for s in plan.get("steps", [])],
+                has_approval_step=True,
+                product_name=draft.product_name,
+                jurisdiction="EU",
+            ),
+            approval_request=approval_req,
+            evidence_digests=checkpoint.evidence_digests,
+        )
+        resume_context_store.save_context(ctx_record)
 
     # Create Proposal Record
     proposal = ProductProposal(
@@ -628,8 +605,8 @@ async def manager_decide_proposal(
 ) -> Dict[str, Any]:
     """
     Product Manager decisions via formal ApprovalWorkflowService and Lease-Fenced PDX Orchestrator Resume:
-    - 'approved': Validates 3-way digests, acquires resume lease, atomically publishes canonical PIF to ArtifactStore
-                  with conflict checking, executes PDX resume, updates outbox/projections, and returns immutable ApprovedProductRecord.
+    - 'approved': Validates 3-way digests, acquires resume lease, executes PDX resume, atomically publishes canonical PIF
+                  to ArtifactStore with immutable approved_at, updates outbox/projections, and returns immutable ApprovedProductRecord.
     - 'returned': Returns proposal with comments to Formulator for Revision N+1, cancelling checkpoint and notifying PDX orchestrator.
     """
     tenant_id, actor = auth_context
@@ -724,69 +701,13 @@ async def manager_decide_proposal(
                 detail="Checkpoint lease concurrency conflict: Unable to acquire resume lease.",
             ) from exc
 
-        # 3. Construct canonical finalized PIF record
-        approved_at_iso = datetime.now(timezone.utc).isoformat()
-        canonical_pif = {
-            "tenant_id": tenant_id,
-            "session_id": proposal.session_id,
-            "proposal_id": proposal.proposal_id,
-            "product_name": proposal.product_name,
-            "revision": proposal.revision,
-            "case_digest": proposal.case_digest,
-            "plan_digest": proposal.plan_digest,
-            "ingredients": proposal.ingredients_summary,
-            "sccs_summary": proposal.sccs_evaluation_summary,
-            "approved_by": actor.sub,
-            "approved_at": approved_at_iso,
-        }
-        canonical_pif_bytes = canonical_json_dumps(canonical_pif).encode("utf-8")
-        art_sha = hashlib.sha256(canonical_pif_bytes).hexdigest()
-        art_storage = ArtifactStorageIdentity(
-            artifact_id=f"art-prod-{proposal.proposal_id}",
-            uri=f"artifact://{tenant_id}/dossiers/{proposal.proposal_id}/finalized_pif_record.json",
-            sha256=art_sha,
-            size_bytes=len(canonical_pif_bytes),
-            media_type="application/json",
-        )
-
-        # 4. Atomic write to ArtifactStore under lease WITH conflict checking
-        put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
-        if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
-            # Mark resume failed in state machine (retryable/reviewable), keeping checkpoint pending
-            try:
-                resume_store.mark_resume_failed(
-                    tenant_id=tenant_id,
-                    checkpoint_id=proposal.checkpoint_id,
-                    expected_version=cur_version,
-                    lease_id=lease_id,
-                    safe_error_code="ARTIFACT_CONFLICT",
-                    request_id=proposal.approval_request_id,
-                )
-            except Exception:
-                pass
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Artifact storage conflict: an artifact with a conflicting digest already exists.",
-            )
-
-        # 5. Execute PDX resume and projection synchronization
+        # 3. Execute PDX resume first to obtain authentic PDX execution outputs
         try:
             resume_result = orchestrator.resume_with_decision(checkpoint, pdx_decision)
             if resume_result.get("status") not in ("completed", "success"):
                 raise RuntimeError(f"PDX plan resume non-terminal status: {resume_result.get('status')}")
-
-            # Mark completed in resume store & update checkpoint status
-            resume_store.mark_resume_completed(
-                tenant_id=tenant_id,
-                checkpoint_id=proposal.checkpoint_id,
-                expected_version=cur_version,
-                lease_id=lease_id,
-                result_identity=art_storage,
-            )
-            checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
-
         except Exception as exc:
-            # Mark resume failed in state machine (retryable)
+            # Mark resume failed in state machine (retryable), keeping checkpoint pending
             try:
                 resume_store.mark_resume_failed(
                     tenant_id=tenant_id,
@@ -803,7 +724,66 @@ async def manager_decide_proposal(
                 detail="Resume execution error: Transient processing error (state is retryable).",
             ) from exc
 
-        # 6. Create immutable ApprovedProductRecord upon complete success
+        # 4. Construct canonical finalized PIF record using IMMUTABLE decided_at from appr_record
+        approved_at_iso = appr_record.decided_at
+        raw_pdx_ident = resume_result.get("artifact_identity", {})
+        pdx_result_ident = ArtifactStorageIdentity.model_validate(raw_pdx_ident) if raw_pdx_ident else None
+
+        canonical_pif = {
+            "tenant_id": tenant_id,
+            "session_id": proposal.session_id,
+            "proposal_id": proposal.proposal_id,
+            "product_name": proposal.product_name,
+            "revision": proposal.revision,
+            "case_digest": proposal.case_digest,
+            "plan_digest": proposal.plan_digest,
+            "ingredients": proposal.ingredients_summary,
+            "sccs_summary": proposal.sccs_evaluation_summary,
+            "pdx_manifest_digest": resume_result.get("manifest_sha256"),
+            "pdx_artifact_uri": resume_result.get("artifact_uri"),
+            "approved_by": actor.sub,
+            "approved_at": approved_at_iso,
+        }
+        canonical_pif_bytes = canonical_json_dumps(canonical_pif).encode("utf-8")
+        art_sha = hashlib.sha256(canonical_pif_bytes).hexdigest()
+        art_storage = ArtifactStorageIdentity(
+            artifact_id=f"art-prod-{proposal.proposal_id}",
+            uri=f"artifact://{tenant_id}/dossiers/{proposal.proposal_id}/finalized_pif_record.json",
+            sha256=art_sha,
+            size_bytes=len(canonical_pif_bytes),
+            media_type="application/json",
+        )
+
+        # 5. Atomically write canonical PIF record to host-injected ArtifactStore with conflict checking
+        put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
+        if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
+            try:
+                resume_store.mark_resume_failed(
+                    tenant_id=tenant_id,
+                    checkpoint_id=proposal.checkpoint_id,
+                    expected_version=cur_version,
+                    lease_id=lease_id,
+                    safe_error_code="ARTIFACT_CONFLICT",
+                    request_id=proposal.approval_request_id,
+                )
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Artifact storage conflict: an artifact with a conflicting digest already exists.",
+            )
+
+        # 6. Mark completed in resume store using authentic PDX result identity & update checkpoint status
+        resume_store.mark_resume_completed(
+            tenant_id=tenant_id,
+            checkpoint_id=proposal.checkpoint_id,
+            expected_version=cur_version,
+            lease_id=lease_id,
+            result_identity=pdx_result_ident or art_storage,
+        )
+        checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
+
+        # 7. Create immutable ApprovedProductRecord upon complete success
         product_id = f"prod-{uuid.uuid4().hex[:8]}"
         approved_product = ApprovedProductRecord(
             product_id=product_id,
@@ -821,6 +801,8 @@ async def manager_decide_proposal(
                 "approved_at": approved_at_iso,
                 "rationale": req.rationale or "Approved by Product Manager.",
                 "sha256_checksum": art_sha,
+                "pdx_artifact_uri": resume_result.get("artifact_uri"),
+                "pdx_manifest_sha256": resume_result.get("manifest_sha256"),
             },
         )
         _APPROVED_PRODUCTS_STORE[product_id] = approved_product

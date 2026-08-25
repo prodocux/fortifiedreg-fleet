@@ -570,3 +570,86 @@ def test_deploy_script_strict_impersonation_requirement():
     assert "Fallback to current authenticated principal" not in content
     # Assert fail-closed error message on missing impersonated token
     assert "Unable to acquire GCP identity token via service account impersonation" in content
+
+
+def test_approval_decision_retry_reuses_immutable_timestamp_and_same_digest(client, monkeypatch):
+    """Verify that retrying an approval after a transient failure reuses the immutable approved_at timestamp and idempotent artifact digest."""
+    import time
+    from fleet_api.deps import get_orchestrator, get_checkpoint_store
+    from fleet_governance_core.models.approval import CheckpointStatusEnum
+    from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+    checkpoint_id = prop_res.json()["proposal"]["checkpoint_id"]
+
+    orchestrator = get_orchestrator()
+    original_resume = orchestrator.resume_with_decision
+
+    # 1. First attempt: Mock orchestrator resume to fail transiently
+    call_count = {"count": 0}
+
+    def mock_resume_flaky(chk, dec):
+        call_count["count"] += 1
+        if call_count["count"] == 1:
+            raise RuntimeError("Transient network timeout during PDX plan resume")
+        return original_resume(chk, dec)
+
+    monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_flaky)
+
+    decide_res_1 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "First attempt with transient fault."},
+    )
+    assert decide_res_1.status_code == 500
+    assert "Resume execution error" in decide_res_1.json()["detail"]
+
+    # Verify no product was created on failed attempt
+    checkpoint_store = get_checkpoint_store()
+    chk = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk.status == CheckpointStatusEnum.PENDING
+
+    # Wait briefly to ensure wall-clock time would have advanced if dynamically re-computed
+    time.sleep(0.05)
+
+    # 2. Second attempt (Retry): Should succeed cleanly by reusing immutable approved_at and same artifact digest
+    decide_res_2 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "First attempt with transient fault."},
+    )
+    assert decide_res_2.status_code == 200, f"Expected 200 on retry, got {decide_res_2.text}"
+    decide_data = decide_res_2.json()
+    assert decide_data["status"] == "finalized"
+    product_id = decide_data["product_id"]
+    assert product_id in _APPROVED_PRODUCTS_STORE
+
+    # Verify checkpoint status transitioned to RESUMED
+    chk_resumed = checkpoint_store.get_checkpoint("tenant-demo", checkpoint_id)
+    assert chk_resumed.status == CheckpointStatusEnum.RESUMED
+
+
+def test_non_awaiting_approval_fails_closed_without_synthetic_checkpoint(client, monkeypatch):
+    """Verify that non-awaiting_approval orchestrator results fail closed without generating synthetic checkpoints."""
+    from fleet_api.deps import get_orchestrator
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    orchestrator = get_orchestrator()
+
+    # Mock execute_plan to return completed (e.g. fully autonomous plan with no HitL step)
+    def mock_exec_no_approval(plan, case_payload=None):
+        return {"status": "completed", "completed_steps": ["step_verify_inci"]}
+
+    monkeypatch.setattr(orchestrator, "execute_plan", mock_exec_no_approval)
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    assert prop_res.status_code == 422
+    assert "did not reach a pending regulatory approval checkpoint" in prop_res.json()["detail"]
