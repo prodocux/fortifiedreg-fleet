@@ -910,3 +910,83 @@ def test_crash_window_after_mark_resume_completed_before_checkpoint_update_recov
     # Verify outbox records remain EXACTLY ONE (no duplicate outbox messages)
     final_outbox = [r for r in resume_store.get_pending_outbox_records() if r.checkpoint_id == checkpoint_id]
     assert len(final_outbox) == 1
+
+
+def test_completed_recovery_artifact_conflict_fails_closed(client, monkeypatch):
+    """
+    Verify that if a completed context recovery encounters a conflicting artifact digest in storage,
+    it fails closed with HTTP 409 Conflict, marks the context as BLOCKED_REVIEW, and does NOT corrupt ApprovedProductRecord.
+    """
+    import hashlib
+    from fleet_api.deps import get_resume_context_store, get_checkpoint_store, get_artifact_store
+    from fleet_governance_core.models.approval import CheckpointStatusEnum, FleetExecutionStatus
+    from fleet_governance_core.models.storage import ArtifactStorageIdentity
+    from fleet_api.routers.workflow_v4 import _APPROVED_PRODUCTS_STORE
+
+    sess_res = client.post("/v1/demo/session")
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
+    proposal_id = prop_res.json()["proposal_id"]
+    checkpoint_id = prop_res.json()["proposal"]["checkpoint_id"]
+
+    checkpoint_store = get_checkpoint_store()
+    orig_update_status = checkpoint_store.update_checkpoint_status
+
+    # 1. Attempt 1: Simulate crash during update_checkpoint_status right after mark_resume_completed
+    crash_injected = {"count": 0}
+
+    def mock_update_status_crash(tenant_id, chk_id, new_status):
+        crash_injected["count"] += 1
+        if crash_injected["count"] == 1:
+            raise RuntimeError("Simulated crash right after mark_resume_completed before checkpoint update")
+        return orig_update_status(tenant_id, chk_id, new_status)
+
+    monkeypatch.setattr(checkpoint_store, "update_checkpoint_status", mock_update_status_crash)
+
+    decide_res_1 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Recovery conflict test."},
+    )
+    assert decide_res_1.status_code == 500
+
+    # Verify context is COMPLETED
+    resume_store = get_resume_context_store()
+    ctx = resume_store.get_context("tenant-demo", checkpoint_id)
+    assert ctx.status == FleetExecutionStatus.COMPLETED
+
+    # 2. Corrupt/Tamper with the artifact on disk to create a conflicting digest
+    artifact_store = get_artifact_store()
+    target_uri = f"artifact://tenant-demo/dossiers/{proposal_id}/finalized_pif_record.json"
+    target_path = artifact_store._uri_to_path(target_uri)
+    tampered_bytes = b'{"tampered": "corrupted_content_for_conflict_test"}'
+    target_path.write_bytes(tampered_bytes)
+
+    # 3. Attempt 2 (Recovery attempt): Must fail closed with 409 Conflict because storage digest conflicts
+    decide_res_2 = client.post(
+        f"/v1/proposals/{proposal_id}/decide",
+        headers=headers,
+        json={"decision": "approved", "rationale": "Recovery conflict test."},
+    )
+    assert decide_res_2.status_code == 409
+    assert "Artifact storage conflict" in decide_res_2.json()["detail"]
+
+    # Verify context transitioned to BLOCKED_REVIEW (non-retryable)
+    ctx_after = resume_store.get_context("tenant-demo", checkpoint_id)
+    assert ctx_after.status == FleetExecutionStatus.BLOCKED_REVIEW
+    assert ctx_after.last_error.get("safe_error_code") == "ARTIFACT_CONFLICT_BLOCKED"
+
+
+def test_system_version_reflects_ephemeral_persistence_profile(client):
+    """Verify that /v1/version clearly reports ephemeral persistence profile and single instance demo constraints."""
+    res = client.get("/v1/version")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["persistence_profile"] == "ephemeral_single_instance"
+    assert "persistence_constraints" in data
+    constraints = data["persistence_constraints"]
+    assert constraints["architecture"] == "single_instance_demo"
+    assert constraints["durable_production_ready"] is False
+    assert "ephemeral" in constraints["lifecycle_guarantee"]

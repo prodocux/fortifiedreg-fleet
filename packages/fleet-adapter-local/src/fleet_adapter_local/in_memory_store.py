@@ -170,7 +170,7 @@ class InMemoryResumeContextStore(ResumeContextStorePort):
                 raise ValueError(f"ExecutionContext not found for {key}")
             if rec.version != expected_version:
                 raise ValueError(f"CAS Conflict: expected version {expected_version}, got {rec.version}")
-            if rec.lease_id != lease_id:
+            if rec.lease_id is not None and rec.lease_id != lease_id:
                 raise ValueError(f"Lease mismatch: expected {lease_id}, got {rec.lease_id}")
 
             rec.status = (

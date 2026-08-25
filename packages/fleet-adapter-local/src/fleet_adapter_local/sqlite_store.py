@@ -591,7 +591,7 @@ class SQLiteResumeContextStore(ResumeContextStorePort, CheckpointStorePort, Appr
                 conn.rollback()
                 raise ValueError(f"CAS Conflict: expected version {expected_version}, got {row['version']}")
 
-            if row["lease_id"] != lease_id:
+            if row["lease_id"] is not None and row["lease_id"] != lease_id:
                 conn.rollback()
                 raise ValueError(f"Lease mismatch: expected {lease_id}, got {row['lease_id']}")
 

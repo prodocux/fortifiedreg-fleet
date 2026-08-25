@@ -46,7 +46,7 @@
 </header>
 
 <div class="disclaimer-banner">
-    <span>💡 <strong>Demo Role Simulation:</strong> 目前由單一評審於同一 Session 中模擬配方師與產品主管雙重視角。生產環境由企業 IdP / SSO 提供獨立 RBAC 與職責分離。</span>
+    <span>💡 <strong>Demo Simulation & Persistence Profile:</strong> 目前由單一評審於同一 Session 中模擬配方師與產品主管雙重視角。運行架構為<strong>單一實例短效展示（Single-Instance Ephemeral Demo）</strong>，容器重啟將重置工作階段，非生產持久化架構；請求中斷已實作原子化 CAS 與冪等重試防護。</span>
 </div>
 
 <div id="offline-banner" class="alert-banner alert-warning hidden">

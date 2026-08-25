@@ -53,6 +53,8 @@ def get_system_version() -> Dict[str, Any]:
     db_path = os.getenv("FLEET_DB_PATH", "")
     has_sqlite = bool(db_path and (os.path.exists(db_path) or db_path.endswith(".db")))
 
+    persistence_profile = os.getenv("FLEET_PERSISTENCE_PROFILE", "ephemeral_single_instance")
+
     return {
         "service": "fortified-enterprise-fleet-api",
         "fleet_version": "0.4.0",
@@ -63,6 +65,14 @@ def get_system_version() -> Dict[str, Any]:
         "prodocux_pin": "53c4784d4b2bae4437252a287193e897973e8474",
         "compatibility_manifest_sha256": _get_manifest_digest(),
         "environment": FLEET_ENV,
+        "persistence_profile": persistence_profile,
+        "persistence_constraints": {
+            "profile": persistence_profile,
+            "architecture": "single_instance_demo",
+            "lifecycle_guarantee": "ephemeral (container restart or scale-down resets state)",
+            "durable_production_ready": False,
+            "crash_recovery_scope": "in_process_retry_safe (interrupted requests recoverable via CAS lease, not container restart safe)",
+        },
         "adapter_modes": {
             "intake": INTAKE_MODE,
             "orchestrator": PDX_MODE,

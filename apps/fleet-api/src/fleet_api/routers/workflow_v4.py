@@ -678,9 +678,6 @@ async def manager_decide_proposal(
 
         # Crash recovery path: if context is already COMPLETED (e.g. previous attempt completed mark_resume_completed but crashed before updating checkpoint or returning product)
         if ctx and ctx.status == FleetExecutionStatus.COMPLETED:
-            # Replay checkpoint projection synchronization
-            checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
-
             approved_at_iso = appr_record.decided_at
             canonical_pif = {
                 "tenant_id": tenant_id,
@@ -706,7 +703,27 @@ async def manager_decide_proposal(
                 size_bytes=len(canonical_pif_bytes),
                 media_type="application/json",
             )
-            artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
+            put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
+            if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
+                try:
+                    resume_store.mark_resume_failed(
+                        tenant_id=tenant_id,
+                        checkpoint_id=proposal.checkpoint_id,
+                        expected_version=ctx.version,
+                        lease_id=ctx.lease_id or "",
+                        safe_error_code="ARTIFACT_CONFLICT_BLOCKED",
+                        request_id=proposal.approval_request_id,
+                        is_retryable=False,
+                    )
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Artifact storage conflict: an artifact with a conflicting digest already exists during completed recovery.",
+                )
+
+            # Replay checkpoint projection synchronization
+            checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.RESUMED)
 
             existing_prod = next(
                 (p for p in _APPROVED_PRODUCTS_STORE.values() if p.proposal_id == proposal.proposal_id and p.tenant_id == tenant_id),
