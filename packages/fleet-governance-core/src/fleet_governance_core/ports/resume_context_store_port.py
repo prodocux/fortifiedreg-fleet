@@ -27,6 +27,10 @@ class ResumeContextStorePort(Protocol):
         """Retrieve execution context record by tenant and checkpoint ID."""
         ...
 
+    def invalidate_context(self, tenant_id: str, checkpoint_id: str) -> None:
+        """Cancel and invalidate execution context for a superseded checkpoint."""
+        ...
+
     def record_decision_and_transition(
         self,
         tenant_id: str,

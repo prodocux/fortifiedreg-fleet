@@ -1,12 +1,135 @@
 """
 Fleet Export Spec Mapper (v0.4.0).
-Maps immutable ApprovedProductRecord into ProDocuX universal render specifications
+Maps immutable ApprovedProductRecord or provisional DraftRenderSpec into ProDocuX universal render specifications
 and compiles individual prodocux_render_request_v1 payloads conforming to prodocux_content_blocks_v1 schema.
 Strictly does NOT import any binary renderers (docx, openpyxl, pptx, reportlab).
 """
 import uuid
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 from fleet_governance_core.models.workflow_v4 import ApprovedProductRecord
+
+
+def sanitize_csv_cell(val: Any) -> str:
+    """Neutralize spreadsheet formula injection by prefixing quote if starting with =, +, -, @, \\t, \\r."""
+    s = str(val if val is not None else "")
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{s}"
+    return s
+
+
+class DraftRenderSpec(BaseModel):
+    """
+    Provisional working draft render specification.
+    Strictly forbids approved_by, approved_at, and compliance sign-off claims.
+    """
+    document_status: str = "draft"
+    approval_status: str = "not_submitted"  # not_submitted or pending_review
+    product_name: str
+    revision: int
+    case_digest: str
+    watermark: str = "DRAFT WORKING COPY — NOT APPROVED — NOT A COMPLIANCE CERTIFICATE"
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    ingredients: List[Dict[str, Any]] = Field(default_factory=list)
+    sccs_summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+def map_draft_to_render_bundle(draft_spec: DraftRenderSpec) -> Dict[str, Any]:
+    """
+    Creates a dedicated draft render bundle specification for ProDocuX embedding
+    mandatory visible draft watermarks and neutral claims across all 5 formats.
+    """
+    ingredients = draft_spec.ingredients
+    sccs_summary = draft_spec.sccs_summary
+
+    return {
+        "bundle_version": "1.0.0",
+        "is_draft": True,
+        "document_status": "draft",
+        "product_name": draft_spec.product_name,
+        "revision": draft_spec.revision,
+        "case_digest": draft_spec.case_digest,
+        "watermark": draft_spec.watermark,
+        "generated_at": draft_spec.generated_at,
+        "specs": {
+            "pdf_report": {
+                "template_id": "tpl-cosmetics-draft-spec-v1",
+                "title": f"[DRAFT] Working Formulation — {draft_spec.product_name} (Rev {draft_spec.revision})",
+                "subtitle": draft_spec.watermark,
+                "sections": [
+                    {"heading": "1. Preliminary Formulation Items", "items": ingredients},
+                    {"heading": "2. Provisional SCCS Evaluation", "data": sccs_summary},
+                    {"heading": "3. Notice", "text": "This is an unapproved working draft. Do not use for commercial or regulatory submission."},
+                ],
+            },
+            "docx_document": {
+                "template_id": "tpl-cosmetics-draft-spec-v1",
+                "title": f"[DRAFT] Specification — {draft_spec.product_name}",
+                "subtitle": draft_spec.watermark,
+                "tables": [
+                    {
+                        "name": "Draft Ingredients Table",
+                        "headers": ["INCI Name", "Concentration (%)", "CAS Number", "NOAEL (mg/kg/day)"],
+                        "rows": [
+                            [
+                                sanitize_csv_cell(item.get("inci_name", "")),
+                                str(item.get("concentration_pct", "")),
+                                sanitize_csv_cell(item.get("cas_number", "") or "—"),
+                                str(item.get("noael_mg_kg_day", "") or "—"),
+                            ]
+                            for item in ingredients
+                        ],
+                    }
+                ],
+            },
+            "csv_table": {
+                "template_id": "tpl-cosmetics-draft-formula-v1",
+                "filename": "draft_formulation_matrix.csv",
+                "headers": ["# DRAFT FORMULATION — NOT APPROVED — NOT A COMPLIANCE CERTIFICATE", "", "", ""],
+                "rows": [
+                    ["INCI_NAME", "CONCENTRATION_PCT", "CAS_NUMBER", "NOAEL_MG_KG_DAY"]
+                ] + [
+                    [
+                        sanitize_csv_cell(item.get("inci_name", "")),
+                        str(item.get("concentration_pct", "")),
+                        sanitize_csv_cell(item.get("cas_number", "") or ""),
+                        str(item.get("noael_mg_kg_day", "") or ""),
+                    ]
+                    for item in ingredients
+                ],
+            },
+            "xlsx_workbook": {
+                "template_id": "tpl-cosmetics-draft-toxicology-v1",
+                "filename": "draft_toxicology_study.xlsx",
+                "sheets": [
+                    {
+                        "sheet_name": "Draft Toxicology & MoS",
+                        "headers": ["INCI Name", "Concentration %", "SED (mg/kg/day)", "NOAEL", "Margin of Safety", "Status"],
+                        "rows": [
+                            [
+                                sanitize_csv_cell(item.get("inci_name", "")),
+                                str(item.get("concentration_pct", 0.0)),
+                                str(item.get("systemic_exposure_dose_mg_kg_day", 0.0)),
+                                str(item.get("noael_mg_kg_day", 0.0)),
+                                str(item.get("margin_of_safety", 0.0)),
+                                str(item.get("verifier_status", "PROVISIONAL_DRAFT")),
+                            ]
+                            for item in ingredients
+                        ],
+                    }
+                ],
+            },
+            "pptx_presentation": {
+                "template_id": "tpl-cosmetics-draft-review-v1",
+                "filename": "draft_compliance_deck.pptx",
+                "slides": [
+                    {"title": f"[DRAFT] Review: {draft_spec.product_name}", "bullet_points": [f"Working Revision {draft_spec.revision}", "Status: UNAPPROVED DRAFT — NOT A COMPLIANCE CERTIFICATE"]},
+                    {"title": "Provisional Toxicology Observations", "bullet_points": ["Pending Final Regulatory Gate Review", "Human-in-the-Loop Sign-off Required"]},
+                ],
+            },
+        },
+    }
 
 
 def map_approved_product_to_render_bundle(

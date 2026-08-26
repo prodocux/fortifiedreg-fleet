@@ -27,6 +27,7 @@ from fleet_api.deps import (
     intake_adapter,
     orchestrator,
 )
+from fleet_api.middleware.request_limits import ContentLengthLimitMiddleware
 from fleet_api.routers import approvals, assistant, audit, auth, dossiers, security, system, workflow_v4
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -37,6 +38,8 @@ app = FastAPI(
     description="Autonomous Multi-Agent Regulatory Fleet with Human-in-the-Loop Verification & Immutable Audit Trail",
 )
 
+# Enforce 12 MiB ASGI streaming limit as outer middleware
+app.add_middleware(ContentLengthLimitMiddleware, max_body_bytes=12 * 1024 * 1024)
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -73,10 +76,10 @@ app.include_router(audit.router)
 
 @app.get("/", response_class=FileResponse, tags=["Portal"])
 def index() -> FileResponse:
-    """Enterprise Web Portal & Verification Center (v0.3.2)."""
+    """Enterprise Web Portal & Verification Center (v0.4.0)."""
     portal_file = STATIC_DIR / "portal.html"
     if not portal_file.exists():
-        return HTMLResponse(content="<!DOCTYPE html><html><body>Fleet Portal v0.3.2</body></html>", status_code=200)
+        return HTMLResponse(content="<!DOCTYPE html><html><body>Fleet Portal v0.4.0</body></html>", status_code=200)
 
     return FileResponse(
         portal_file,

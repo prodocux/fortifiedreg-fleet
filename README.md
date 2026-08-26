@@ -1,4 +1,4 @@
-# FortifiedReg Fleet (v0.3.0)
+# FortifiedReg Fleet (v0.4.0)
 
 *Governed dossier production for regulated products*
 

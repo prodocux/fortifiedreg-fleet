@@ -619,8 +619,23 @@ body {
 }
 .btn-secondary:hover:not(:disabled) { background-color: var(--bg-card-hover); }
 
+.btn-xs { padding: 0.2rem 0.45rem; font-size: 0.6875rem; border-radius: 4px; }
 .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
 .btn-lg { padding: 0.75rem 1.25rem; font-size: 0.9375rem; }
+
+.btn-outline-cyan {
+  background-color: rgba(6, 182, 212, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.btn-outline-cyan:hover:not(:disabled) {
+  background-color: rgba(6, 182, 212, 0.25);
+  color: #ffffff;
+}
+
+.border-emerald { border-color: var(--accent-emerald) !important; }
+.text-cyan { color: var(--accent-cyan) !important; }
+.p-1 { padding: 1rem !important; }
 
 /* Forms */
 .form-group {
@@ -871,4 +886,180 @@ body {
   color: #ffffff;
   border-color: var(--accent-blue);
   transform: translateY(-1px);
+}
+
+/* Preset 5-Format Evidence Download Bar */
+.preset-download-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background-color: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.btn-dl-sample {
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: var(--accent-cyan);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-dl-sample:hover {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border-color: var(--accent-blue);
+  transform: translateY(-1px);
+}
+
+/* Total Concentration Balance Bar */
+.concentration-balance-bar {
+  padding: 0.6rem 0.85rem;
+  background-color: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+/* Alert Banners */
+.alert-banner {
+  padding: 0.85rem 1.25rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.alert-warning {
+  background-color: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* ProDocuX Binary Evidence Accordion & Pre */
+.evidence-accordion {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background-color: rgba(10, 14, 23, 0.6);
+}
+
+.evidence-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(15, 23, 42, 0.8);
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.evidence-raw-pre {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Preset Card Wrap & Download Button */
+.preset-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.btn-card-dl {
+  background-color: rgba(30, 41, 59, 0.7);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.btn-card-dl:hover {
+  background-color: var(--accent-blue);
+  color: #ffffff;
+  border-style: solid;
+  border-color: var(--accent-blue);
+}
+
+/* Revision History Control */
+.revision-control-wrap select {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--accent-cyan);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.revision-control-wrap select:focus {
+  border-color: var(--border-focus);
+}
+
+/* ProDocuX Live Render Export Panel */
+.render-export-panel {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.btn-outline-cyan {
+  background: transparent;
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-outline-cyan:hover {
+  background: var(--accent-cyan);
+  color: #0a0e17;
+  transform: translateY(-1px);
+}
+
+.btn-xs {
+  font-size: 0.6875rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+/* Thinking Indicator */
+.thinking-bubble {
+  background-color: rgba(30, 41, 59, 0.7) !important;
+  border-left: 3px solid var(--accent-cyan) !important;
+}
+
+.spinner-pulse {
+  display: inline-block;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.6; }
 }

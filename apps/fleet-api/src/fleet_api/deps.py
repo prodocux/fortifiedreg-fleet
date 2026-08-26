@@ -30,7 +30,7 @@ from fleet_adapter_prodocux import (
     FakeProDocuXIntakeAdapter,
     ProDocuXHttpIntakeAdapter,
 )
-from fleet_api.security import get_current_actor_and_tenant, require_roles
+from fleet_api.security import get_current_actor_and_tenant, get_optional_tenant_and_actor, require_roles
 from fleet_governance_core.models.approval import AuthenticatedActor
 from fleet_governance_core.ports.artifact_content_resolver_port import ArtifactContentResolverPort
 from fleet_governance_core.ports.artifact_store_port import ArtifactStorePort

@@ -77,7 +77,12 @@ def test_pdx_core_local_development_provenance():
         head_commit = subprocess.check_output(
             ["git", "-C", str(PDX_REPO), "rev-parse", "HEAD"], text=True
         ).strip()
-        assert head_commit in [PIN_PDX_COMMIT, "e93ab4d607dc1a98354677da624a11d681f5fbd4", "18dee84a9655799b7cf77137656659fa55a96893"]
+        assert head_commit in [
+            PIN_PDX_COMMIT,
+            "e93ab4d607dc1a98354677da624a11d681f5fbd4",
+            "18dee84a9655799b7cf77137656659fa55a96893",
+            "5347dba4e9397bfe1d1b1ae658f14bf53eab789d",
+        ]
 
 def test_pdx_core_release_git_provenance():
     """Verify distribution direct_url.json VCS commit provenance in release environments."""

@@ -133,9 +133,24 @@ class FakeProDocuXIntakeAdapter(IntakePort):
     def render_artifact(
         self, render_request: Dict[str, Any]
     ) -> Dict[str, Any]:
-        fmt = render_request.get("format", "pdf")
+        fmt = (render_request.get("target_format") or render_request.get("format") or "pdf").lower()
         title = render_request.get("title", "Rendered Artifact")
-        dummy_content = f"DUMMY_RENDERED_{fmt.upper()}_CONTENT_FOR_{title}".encode("utf-8")
+        if fmt == "pdf":
+            dummy_content = f"%PDF-1.4 DUMMY_RENDERED_PDF_CONTENT_FOR_{title}".encode("utf-8")
+        elif fmt in ("docx", "xlsx", "pptx"):
+            dummy_content = b"PK\x03\x04" + f"DUMMY_{fmt.upper()}_CONTENT_FOR_{title}".encode("utf-8")
+        elif fmt == "csv":
+            dummy_content = f"title,format\n{title},{fmt}\n".encode("utf-8")
+        else:
+            dummy_content = f"DUMMY_RENDERED_{fmt.upper()}_CONTENT_FOR_{title}".encode("utf-8")
+        mime_map = {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "csv": "text/csv",
+        }
+        mime = mime_map.get(fmt, "application/octet-stream")
         sha256 = hashlib.sha256(dummy_content).hexdigest()
         import base64
         return {
@@ -143,6 +158,8 @@ class FakeProDocuXIntakeAdapter(IntakePort):
             "schema_version": "prodocux_render_result_v1",
             "format": fmt,
             "title": title,
+            "media_type": mime,
+            "mime": mime,
             "sha256": sha256,
             "size_bytes": len(dummy_content),
             "content_b64": base64.b64encode(dummy_content).decode("ascii"),

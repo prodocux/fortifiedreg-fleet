@@ -299,6 +299,15 @@ class SQLiteResumeContextStore(ResumeContextStorePort, CheckpointStorePort, Appr
                 return None
             return self._row_to_record(row)
 
+    def invalidate_context(self, tenant_id: str, checkpoint_id: str) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connection() as conn:
+            conn.execute(
+                "UPDATE execution_contexts SET status = ?, lease_id = NULL, lease_owner = NULL, updated_at = ? WHERE tenant_id = ? AND checkpoint_id = ?",
+                (FleetExecutionStatus.CANCELLED.value, now_iso, tenant_id, checkpoint_id),
+            )
+            conn.commit()
+
     def _row_to_record(self, row: sqlite3.Row) -> ExecutionContextRecord:
         case_ident = json.loads(row["case_storage_identity"]) if row["case_storage_identity"] else None
         plan_ident = json.loads(row["plan_storage_identity"]) if row["plan_storage_identity"] else None

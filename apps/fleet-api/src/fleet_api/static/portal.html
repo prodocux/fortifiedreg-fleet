@@ -12,8 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/portal.css?v=0.4.4">
-    <script type="module" src="/static/portal.js?v=0.4.4" defer></script>
+    <link rel="stylesheet" href="/static/portal.css?v=0.4.0">
+    <script type="module" src="/static/portal.js?v=0.4.0" defer></script>
 </head>
 <body>
 
@@ -101,12 +101,24 @@
          VIEW 1: Formulator Workspace
     ══════════════════════════════════════════════════════════════════════════ -->
     <section id="view-formulator" class="role-workspace active">
+
+        <!-- Returned Proposal Alert Banner -->
+        <div id="banner-returned-proposal" class="alert-banner alert-warning hidden mb-15">
+            <div class="d-flex flex-between align-center">
+                <div>
+                    <div class="font-bold text-amber">↩️ Proposal Returned by Product Manager for Revision</div>
+                    <div class="text-sm text-secondary" id="returned-proposal-comments">Feedback will appear here...</div>
+                </div>
+                <button type="button" class="btn btn-warning btn-sm" id="btn-load-returned-draft">✏️ Load Returned Formula to Workspace</button>
+            </div>
+        </div>
+
         <div class="workspace-layout">
 
             <!-- Left & Center: Formulation Management Panel -->
             <div class="panel-main">
 
-                <!-- Step 1: 5-Format Preset Scenario Import -->
+                <!-- Step 1: 5-Format Preset Scenario Import & Evidence Downloads -->
                 <div class="card mb-15">
                     <div class="card-header">
                         <div class="card-num">1</div>
@@ -116,32 +128,57 @@
                         </div>
                     </div>
 
-                    <div class="preset-grid">
-                        <button type="button" class="preset-chip" data-scenario="retinol">
-                            <span class="chip-fmt fmt-pdf">PDF</span>
-                            <span class="chip-title">Retinol Serum SDS</span>
-                            <span class="badge badge-pass">Expected: PASS</span>
-                        </button>
-                        <button type="button" class="preset-chip" data-scenario="peptide">
-                            <span class="chip-fmt fmt-docx">DOCX</span>
-                            <span class="chip-title">Peptide Cream Spec</span>
-                            <span class="badge badge-review">Expected: REVIEW</span>
-                        </button>
-                        <button type="button" class="preset-chip" data-scenario="day_cream">
-                            <span class="chip-fmt fmt-csv">CSV</span>
-                            <span class="chip-title">Compliant Day Cream</span>
-                            <span class="badge badge-pass">Expected: PASS</span>
-                        </button>
-                        <button type="button" class="preset-chip" data-scenario="phenoxy_excess">
-                            <span class="chip-fmt fmt-xlsx">XLSX</span>
-                            <span class="chip-title">Excess Preservative</span>
-                            <span class="badge badge-fail">Expected: FAIL</span>
-                        </button>
-                        <button type="button" class="preset-chip" data-scenario="mercury">
-                            <span class="chip-fmt fmt-pptx">PPTX</span>
-                            <span class="chip-title">Mercury Cream Audit</span>
-                            <span class="badge badge-fail">Expected: FAIL</span>
-                        </button>
+                    <div class="preset-grid mb-1">
+                        <div class="preset-card-wrap">
+                            <button type="button" class="preset-chip" data-scenario="retinol">
+                                <span class="chip-fmt fmt-pdf">PDF</span>
+                                <span class="chip-title">Retinol Serum SDS</span>
+                                <span class="badge badge-pass">Expected: PASS</span>
+                            </button>
+                            <button type="button" class="btn-card-dl btn-dl-scenario" data-scenario="retinol" title="Download Retinol_Serum_SDS.pdf">⬇️ Download PDF</button>
+                        </div>
+                        <div class="preset-card-wrap">
+                            <button type="button" class="preset-chip" data-scenario="peptide">
+                                <span class="chip-fmt fmt-docx">DOCX</span>
+                                <span class="chip-title">Peptide Cream Spec</span>
+                                <span class="badge badge-review">Expected: REVIEW</span>
+                            </button>
+                            <button type="button" class="btn-card-dl btn-dl-scenario" data-scenario="peptide" title="Download Peptide_Cream_Spec.docx">⬇️ Download DOCX</button>
+                        </div>
+                        <div class="preset-card-wrap">
+                            <button type="button" class="preset-chip" data-scenario="day_cream">
+                                <span class="chip-fmt fmt-csv">CSV</span>
+                                <span class="chip-title">Compliant Day Cream</span>
+                                <span class="badge badge-pass">Expected: PASS</span>
+                            </button>
+                            <button type="button" class="btn-card-dl btn-dl-scenario" data-scenario="day_cream" title="Download Compliant_Day_Cream_Formula.csv">⬇️ Download CSV</button>
+                        </div>
+                        <div class="preset-card-wrap">
+                            <button type="button" class="preset-chip" data-scenario="phenoxy_excess">
+                                <span class="chip-fmt fmt-xlsx">XLSX</span>
+                                <span class="chip-title">Excess Preservative</span>
+                                <span class="badge badge-fail">Expected: FAIL</span>
+                            </button>
+                            <button type="button" class="btn-card-dl btn-dl-scenario" data-scenario="phenoxy_excess" title="Download Excess_Preservative_Cream_Tox.xlsx">⬇️ Download XLSX</button>
+                        </div>
+                        <div class="preset-card-wrap">
+                            <button type="button" class="preset-chip" data-scenario="mercury">
+                                <span class="chip-fmt fmt-pptx">PPTX</span>
+                                <span class="chip-title">Mercury Cream Audit</span>
+                                <span class="badge badge-fail">Expected: FAIL</span>
+                            </button>
+                            <button type="button" class="btn-card-dl btn-dl-scenario" data-scenario="mercury" title="Download Mercury_Bleaching_Cream_Audit.pptx">⬇️ Download PPTX</button>
+                        </div>
+                    </div>
+
+                    <!-- 5-Format Raw Binary Downloads Bar -->
+                    <div class="preset-download-bar">
+                        <span class="quick-bar-label">⬇️ Download Raw Evidence Binaries:</span>
+                        <button type="button" class="btn-dl-sample" data-scenario="retinol" data-fmt="pdf" title="Download Retinol_Serum_SDS.pdf">📄 Retinol_SDS.pdf</button>
+                        <button type="button" class="btn-dl-sample" data-scenario="peptide" data-fmt="docx" title="Download Peptide_Cream_Spec.docx">📝 Peptide_Spec.docx</button>
+                        <button type="button" class="btn-dl-sample" data-scenario="day_cream" data-fmt="csv" title="Download Compliant_Day_Cream_Formula.csv">📊 DayCream_Formula.csv</button>
+                        <button type="button" class="btn-dl-sample" data-scenario="phenoxy_excess" data-fmt="xlsx" title="Download Excess_Preservative_Cream_Tox.xlsx">📈 Excess_Preservative.xlsx</button>
+                        <button type="button" class="btn-dl-sample" data-scenario="mercury" data-fmt="pptx" title="Download Mercury_Bleaching_Cream_Audit.pptx">📽️ Mercury_Audit.pptx</button>
                     </div>
                 </div>
 
@@ -155,8 +192,13 @@
                                 <div class="card-subtitle">Add, modify, or remove ingredients. Any modification increments revision and updates real-time SCCS diagnostics</div>
                             </div>
                         </div>
-                        <div class="meta-tags">
-                            <span class="badge badge-info" id="draft-revision-badge">Revision: 1</span>
+                        <div class="meta-tags d-flex align-center gap-05">
+                            <div class="revision-control-wrap d-flex align-center gap-05">
+                                <select id="select-revision-history" class="form-control form-control-sm" title="Revision history and rollback for this product">
+                                    <option value="1">📜 Rev 1 (Current)</option>
+                                </select>
+                                <button type="button" class="btn btn-warning btn-xs hidden" id="btn-rollback-revision">↩️ Rollback</button>
+                            </div>
                             <span class="badge badge-neutral font-mono" id="draft-digest-badge">Case SHA: —</span>
                         </div>
                     </div>
@@ -215,6 +257,31 @@
                         <button type="button" class="btn-quick-ing" data-inci="Tocopherol" data-cas="59-02-9" data-noael="500.0" data-pct="0.5">+ Vitamin E (0.5%)</button>
                         <button type="button" class="btn-quick-ing" data-inci="Panthenol" data-cas="81-13-0" data-noael="1000.0" data-pct="1.0">+ Panthenol B5 (1%)</button>
                         <button type="button" class="btn-quick-ing" data-inci="Ceramide NP" data-cas="100403-19-8" data-noael="1000.0" data-pct="0.1">+ Ceramide NP (0.1%)</button>
+                    </div>
+
+                    <!-- Concentration Balance & Auto-Water Bar -->
+                    <div class="concentration-balance-bar flex-between align-center mb-1">
+                        <div class="d-flex align-center gap-075">
+                            <span class="text-sm font-bold text-secondary">Total Formulation Concentration:</span>
+                            <span class="badge badge-pass font-mono" id="badge-total-concentration">100.00%</span>
+                            <span class="text-xs" id="label-balance-status"></span>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-auto-balance-aqua">💧 Auto-Balance Aqua to 100%</button>
+                    </div>
+
+                    <!-- ProDocuX Multi-Format Live Export / Render Toolbar -->
+                    <div class="render-export-panel mb-1">
+                        <div class="d-flex align-center flex-between mb-05">
+                            <span class="text-sm font-bold text-cyan">🖨️ ProDocuX Live Multi-Format Render (Current Draft):</span>
+                            <span class="text-xs text-secondary">Generates authentic dossier binaries in real-time</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-05">
+                            <button type="button" class="btn btn-outline-cyan btn-sm btn-draft-render" data-render-fmt="pdf">📄 Render PDF Dossier</button>
+                            <button type="button" class="btn btn-outline-cyan btn-sm btn-draft-render" data-render-fmt="docx">📝 Render DOCX Spec</button>
+                            <button type="button" class="btn btn-outline-cyan btn-sm btn-draft-render" data-render-fmt="csv">📊 Export CSV Matrix</button>
+                            <button type="button" class="btn btn-outline-cyan btn-sm btn-draft-render" data-render-fmt="xlsx">📈 Render XLSX Tox</button>
+                            <button type="button" class="btn btn-outline-cyan btn-sm btn-draft-render" data-render-fmt="pptx">📽️ Render PPTX Deck</button>
+                        </div>
                     </div>
 
                     <div class="flex-between">
@@ -398,34 +465,18 @@
         </div>
     </section>
 
-
-    <!-- ══════════════════════════════════════════════════════════════════════════
-         VIEW 3: Approved Product Record & 5-Format Export Center
-    ══════════════════════════════════════════════════════════════════════════ -->
-    <section id="view-export" class="role-workspace">
-        <div class="card">
-            <div class="card-header flex-between">
-                <div>
-                    <div class="card-title text-emerald">✓ Approved Product Dossier Records</div>
-                    <div class="card-subtitle">Immutable regulatory product records with 64-character SHA-256 cryptographic provenance and 5-format ProDocuX render specifications</div>
-                </div>
-            </div>
-
-            <div id="approved-products-list">
-                <!-- Populated dynamically -->
-            </div>
-        </div>
-    </section>
-
 </main>
 
 
 <!-- ── Two-Tier Import Confirmation Modal ── -->
 <div class="modal-overlay hidden" id="modal-import-preview">
     <div class="modal-card">
-        <div class="modal-header">
+        <div class="modal-header flex-between">
             <div class="modal-title">📄 ProDocuX Binary Intake &amp; Candidate Preview</div>
-            <button type="button" class="btn-close" id="btn-modal-close">✕</button>
+            <div class="d-flex align-center gap-05">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-modal-download-source">⬇️ Download Source Binary</button>
+                <button type="button" class="btn-close" id="btn-modal-close">✕</button>
+            </div>
         </div>
         <div class="modal-body">
             <p class="text-sm text-secondary mb-1">
@@ -448,6 +499,21 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- ProDocuX Ingest & Extraction Evidence Drawer -->
+            <div class="evidence-accordion mb-1">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-prodocux-evidence">🔍 Show ProDocuX Binary Extraction Evidence &amp; Hash</button>
+                <div id="prodocux-evidence-body" class="evidence-body hidden mt-05">
+                    <div class="evidence-meta mb-05 font-mono text-xs">
+                        <div><strong>Source Digest (SHA-256):</strong> <span id="evidence-sha256" class="text-accent-cyan">—</span></div>
+                        <div><strong>Format Parser Tool:</strong> <span id="evidence-parser" class="text-emerald">—</span></div>
+                        <div><strong>Document ID:</strong> <span id="evidence-doc-id">—</span></div>
+                    </div>
+                    <div class="text-xs font-bold text-secondary mb-025">ProDocuX Structured Extraction Block Log:</div>
+                    <pre class="evidence-raw-pre" id="evidence-raw-blocks"></pre>
+                </div>
+            </div>
+
             <div id="modal-warnings" class="text-sm text-rose font-bold mb-1"></div>
         </div>
         <div class="modal-footer">

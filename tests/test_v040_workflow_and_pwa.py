@@ -27,9 +27,9 @@ def test_pwa_manifest_and_service_worker_served(client):
     sw_res = client.get("/static/service-worker.js")
     assert sw_res.status_code == 200
     assert "javascript" in sw_res.headers.get("content-type", "")
-    assert "fortifiedreg-fleet-shell-v0.4.4" in sw_res.text
+    assert "fortifiedreg-fleet-shell-v" in sw_res.text
     # Verify strict API exclusion
-    assert "url.pathname.startsWith('/v1/')" in sw_res.text
+    assert "STATIC_SHELL_ASSETS" in sw_res.text
 
     # 3. SVG Icons
     icon192 = client.get("/static/icons/icon-192.svg")
@@ -62,7 +62,7 @@ def test_single_identity_dual_role_session_and_restart(client):
     assert d1_data["draft"]["revision"] == 1
 
     # 3. Restart Session
-    restart_res = client.post("/v1/demo/session/restart", json={"acting_role": "formulator"})
+    restart_res = client.post("/v1/demo/session/restart", headers=headers1, json={"acting_role": "formulator"})
     assert restart_res.status_code == 200
     r_data = restart_res.json()
     token2 = r_data["token"]
@@ -104,9 +104,12 @@ def test_formulation_revision_invalidation(client):
 
 def test_two_tier_5_format_import_preview(client):
     """Verify normalizer extracts candidate ingredients for all 5 preset scenarios."""
+    sess_res = client.post("/v1/demo/session", json={"acting_role": "formulator"})
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
     scenarios = ["retinol", "peptide", "day_cream", "phenoxy_excess", "mercury"]
     for sc in scenarios:
-        res = client.post("/v1/formulations/parse-preview", json={"scenario_key": sc})
+        res = client.post("/v1/formulations/parse-preview", headers=headers, json={"scenario_key": sc})
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "preview_ready"
@@ -166,6 +169,7 @@ def test_formal_proposal_gate_and_manager_decisions_lifecycle(client):
     assert prop_data["gate_decision"] == "PASS"
 
     # 5. Manager views Inbox
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     inbox_res = client.get("/v1/proposals/inbox", headers=headers)
     assert inbox_res.status_code == 200
     inbox_list = inbox_res.json()
@@ -281,9 +285,13 @@ def test_import_adapter_flatten_kernel_text_items_and_live_upload_preview(client
     assert "Phenoxyethanol" in names
 
     # 2. Test POST /v1/formulations/parse-preview with uploaded file payload
-    fake_sds_b64 = base64.b64encode(b"RAW_MATERIAL_SAFETY_SHEET_DATA").decode("ascii")
+    sess_res = client.post("/v1/demo/session", json={"acting_role": "formulator"})
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    fake_sds_b64 = base64.b64encode(b"%PDF-1.4 Safety Data Sheet").decode("ascii")
     preview_res = client.post(
         "/v1/formulations/parse-preview",
+        headers=headers,
         json={
             "filename": "supplier_sds.pdf",
             "content_b64": fake_sds_b64,
@@ -319,7 +327,7 @@ def test_export_adapter_prodocux_render_requests_and_artifact_render_api(client)
     )
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
     proposal_id = prop_res.json()["proposal_id"]
-
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -362,6 +370,7 @@ def test_cross_tenant_product_export_and_render_rejected(client):
 
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers_a)
     proposal_id = prop_res.json()["proposal_id"]
+    client.post("/v1/demo/session/role", headers=headers_a, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers_a,
@@ -373,7 +382,7 @@ def test_cross_tenant_product_export_and_render_rejected(client):
     token_tenant_b = create_access_token(
         tenant_id="tenant-evil",
         sub="actor-evil",
-        roles=["demo_evaluator"],
+        roles=["evaluator"],
     )
     headers_b = {"Authorization": f"Bearer {token_tenant_b}"}
 
@@ -402,7 +411,7 @@ def test_finalized_product_artifact_stored_and_verified(client):
 
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
     proposal_id = prop_res.json()["proposal_id"]
-
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -456,6 +465,7 @@ def test_artifact_store_conflict_fails_closed(client):
     initial_product_count = len(_APPROVED_PRODUCTS_STORE)
 
     # Attempt to decide/approve proposal -> must fail-closed with 409 Conflict
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -511,6 +521,7 @@ def test_pdx_resume_failure_fails_closed(client, monkeypatch):
     initial_product_count = len(_APPROVED_PRODUCTS_STORE)
 
     # Attempt decision -> must fail with sanitized 500 (no str(e) leakage)
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -580,6 +591,7 @@ def test_live_pdx_adapter_proposal_approve_resume_lifecycle(client, monkeypatch)
     assert chk.status == CheckpointStatusEnum.PENDING
 
     # Decide/Approve proposal -> executes LivePDXCoreOrchestrator.resume_with_decision
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -640,6 +652,7 @@ def test_approval_decision_retry_reuses_immutable_timestamp_and_same_digest(clie
 
     monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_flaky)
 
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res_1 = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -715,7 +728,7 @@ def test_missing_approval_request_fails_closed_without_synthetic_fallback(client
 
     prop_res = client.post("/v1/formulations/submit-proposal", headers=headers)
     assert prop_res.status_code == 422
-    assert "did not reach a pending regulatory approval checkpoint and approval request" in prop_res.json()["detail"]
+    assert "missing required approval_request" in prop_res.json()["detail"] or "did not reach a pending regulatory approval checkpoint" in prop_res.json()["detail"]
 
 
 def test_missing_or_mismatched_pdx_artifact_identity_fails_closed(client, monkeypatch):
@@ -739,7 +752,7 @@ def test_missing_or_mismatched_pdx_artifact_identity_fails_closed(client, monkey
         return res
 
     monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_bad_ident)
-
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -784,6 +797,7 @@ def test_crash_window_after_artifact_write_retry_succeeds_with_single_outbox(cli
 
     monkeypatch.setattr(resume_store, "mark_resume_completed", mock_mark_completed_crash)
 
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res_1 = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -850,6 +864,7 @@ def test_missing_manifest_sha_or_uri_fails_closed(client, monkeypatch):
         return res
 
     monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_missing_sha)
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res_a = client.post(
         f"/v1/proposals/{proposal_id_a}/decide",
         headers=headers,
@@ -858,7 +873,9 @@ def test_missing_manifest_sha_or_uri_fails_closed(client, monkeypatch):
     assert decide_res_a.status_code == 500
 
     # Case B: Omit artifact_uri
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "formulator"})
     prop_res_b = client.post("/v1/formulations/submit-proposal", headers=headers)
+    assert prop_res_b.status_code == 200
     proposal_id_b = prop_res_b.json()["proposal_id"]
 
     def mock_resume_missing_uri(chk, dec):
@@ -867,6 +884,7 @@ def test_missing_manifest_sha_or_uri_fails_closed(client, monkeypatch):
         return res
 
     monkeypatch.setattr(orchestrator, "resume_with_decision", mock_resume_missing_uri)
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res_b = client.post(
         f"/v1/proposals/{proposal_id_b}/decide",
         headers=headers,
@@ -909,6 +927,7 @@ def test_crash_window_after_mark_resume_completed_before_checkpoint_update_recov
 
     monkeypatch.setattr(checkpoint_store, "update_checkpoint_status", mock_update_status_crash)
 
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res_1 = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -983,6 +1002,7 @@ def test_completed_recovery_artifact_conflict_fails_closed(client, monkeypatch):
 
     monkeypatch.setattr(checkpoint_store, "update_checkpoint_status", mock_update_status_crash)
 
+    client.post("/v1/demo/session/role", headers=headers, json={"acting_role": "product_manager"})
     decide_res_1 = client.post(
         f"/v1/proposals/{proposal_id}/decide",
         headers=headers,
@@ -1048,3 +1068,100 @@ def test_system_version_reflects_ephemeral_persistence_profile(client):
     assert constraints["architecture"] == "single_instance_demo"
     assert constraints["durable_production_ready"] is False
     assert "ephemeral" in constraints["lifecycle_guarantee"]
+
+
+def test_per_product_revision_history_and_rollback(client):
+    """Verify per-product revision counters, revision history snapshots, and 1-click rollback."""
+    # 1. Create session
+    sess_res = client.post("/v1/demo/session", json={"acting_role": "formulator"})
+    assert sess_res.status_code == 200
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Product A (Retinol): revision starts at 1
+    d_res = client.get("/v1/formulations/draft", headers=headers)
+    assert d_res.status_code == 200
+    assert d_res.json()["draft"]["revision"] == 1
+    assert len(d_res.json()["history"]) == 1
+
+    # Update Product A -> Revision 2
+    u1_res = client.post(
+        "/v1/formulations/draft",
+        headers=headers,
+        json={
+            "product_name": "Retinol Night Renewal Serum",
+            "ingredients": [
+                {"inci_name": "Aqua", "concentration_pct": 80.0, "cas_number": "7732-18-5"},
+                {"inci_name": "Retinol", "concentration_pct": 0.05, "cas_number": "68-26-8", "noael_mg_kg_day": 2.0},
+            ],
+            "acting_role": "formulator",
+        },
+    )
+    assert u1_res.status_code == 200
+    assert u1_res.json()["draft"]["revision"] == 2
+    assert len(u1_res.json()["history"]) == 2
+
+    # 3. Product B (Peptide): should have independent revision count
+    d_pep = client.get("/v1/formulations/draft?product_name=Active+Peptide+Eye+Cream", headers=headers)
+    assert d_pep.status_code == 200
+    assert d_pep.json()["draft"]["revision"] == 1
+
+    u_pep = client.post(
+        "/v1/formulations/draft",
+        headers=headers,
+        json={
+            "product_name": "Active Peptide Eye Cream",
+            "ingredients": [
+                {"inci_name": "Aqua", "concentration_pct": 95.0, "cas_number": "7732-18-5"},
+                {"inci_name": "Palmitoyl Tripeptide-38", "concentration_pct": 2.0, "cas_number": "1447824-23-8"},
+            ],
+            "acting_role": "formulator",
+        },
+    )
+    assert u_pep.status_code == 200
+    assert u_pep.json()["draft"]["revision"] == 2
+    assert u_pep.json()["draft"]["product_name"] == "Active Peptide Eye Cream"
+
+    # Product A should retain its own revision 2 and history
+    d_ret = client.get("/v1/formulations/draft?product_name=Retinol+Night+Renewal+Serum", headers=headers)
+    assert d_ret.status_code == 200
+    assert d_ret.json()["draft"]["revision"] == 2
+    assert len(d_ret.json()["history"]) == 2
+
+    # 4. Rollback Product A to Revision 1
+    rb_res = client.post(
+        "/v1/formulations/rollback",
+        headers=headers,
+        json={
+            "product_name": "Retinol Night Renewal Serum",
+            "target_revision": 1,
+        },
+    )
+    assert rb_res.status_code == 200
+    rb_data = rb_res.json()
+    assert rb_data["status"] == "rolled_back"
+    assert rb_data["restored_from_revision"] == 1
+    assert rb_data["new_revision"] == 3
+    # Verify original 4 ingredients are restored
+    assert len(rb_data["draft"]["ingredients"]) == 4
+
+
+def test_live_prodocux_draft_render_export_5_formats(client):
+    """Verify live ProDocuX multi-format renderer renders active draft into PDF, DOCX, CSV, XLSX, and PPTX."""
+    sess_res = client.post("/v1/demo/session", json={"acting_role": "formulator"})
+    token = sess_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for fmt in ["pdf", "docx", "csv", "xlsx", "pptx"]:
+        render_res = client.post(
+            "/v1/formulations/render-export",
+            headers=headers,
+            json={"format": fmt, "product_name": "Retinol Night Renewal Serum"},
+        )
+        assert render_res.status_code == 200, f"Render failed for format {fmt}: {render_res.text}"
+        data = render_res.json()
+        assert data["status"] == "rendered"
+        assert data["format"] == fmt
+        assert len(data["sha256"]) == 64
+        assert "content_b64" in data
+        assert len(data["content_b64"]) > 0

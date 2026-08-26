@@ -33,6 +33,30 @@ class ProposalStatusEnum(str, Enum):
     RETURNED = "returned"
     APPROVED = "approved"
     REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+
+
+class GovernanceInvalidationRecord(BaseModel):
+    """Tracks atomic-style recoverable Saga invalidation of earlier proposals and checkpoints."""
+    invalidation_id: str = Field(default_factory=lambda: f"inv-{uuid.uuid4().hex[:8]}")
+    idempotency_key: str
+    tenant_id: str = "tenant-demo"
+    session_id: str
+    product_name: str
+    source_revision: int
+    source_digest: str
+    target_revision: int
+    target_digest: str
+    target_draft_payload: Dict[str, Any] = Field(default_factory=dict)
+    step_proposals_superseded: bool = False
+    step_checkpoints_cancelled: bool = False
+    step_resume_invalidated: bool = False
+    step_audit_emitted: bool = False
+    step_draft_persisted: bool = False
+    status: str = "in_progress"  # in_progress, completed, failed
+    error_message: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    completed_at: Optional[str] = None
 
 
 class GateDecisionEnum(str, Enum):

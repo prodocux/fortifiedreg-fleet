@@ -1,4 +1,4 @@
-# FortifiedReg Fleet (v0.3.1) - Verification Manual for Judges & Evaluators
+# FortifiedReg Fleet (v0.4.0) - Verification Manual for Judges & Evaluators
 
 **Hackathon Track**: Track 3 - Fortified Enterprise Fleet  
 **Live Cloud Run Service**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app`](https://fortifiedreg-fleet-251114662133.us-central1.run.app)  

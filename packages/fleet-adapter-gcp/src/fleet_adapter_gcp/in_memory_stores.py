@@ -98,6 +98,8 @@ class InMemoryAuditLog(AuditLogPort):
     def append_audit_event(self, event: AuditEvent) -> None:
         with self._lock:
             tenant_events = self._log_db.setdefault(event.tenant_id, [])
+            if any(e.event_id == event.event_id for e in tenant_events):
+                return
             tenant_events.append(event)
 
     def list_events_for_run(self, tenant_id: str, run_id: str) -> List[AuditEvent]:

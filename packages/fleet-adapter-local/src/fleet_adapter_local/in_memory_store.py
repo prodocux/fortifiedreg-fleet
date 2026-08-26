@@ -35,6 +35,15 @@ class InMemoryResumeContextStore(ResumeContextStorePort):
             record = self._contexts.get(key)
             return record.model_copy(deep=True) if record else None
 
+    def invalidate_context(self, tenant_id: str, checkpoint_id: str) -> None:
+        with self._lock:
+            key = (tenant_id, checkpoint_id)
+            rec = self._contexts.get(key)
+            if rec:
+                rec.status = FleetExecutionStatus.CANCELLED
+                rec.lease_id = None
+                rec.lease_owner = None
+
     def record_decision_and_transition(
         self,
         tenant_id: str,

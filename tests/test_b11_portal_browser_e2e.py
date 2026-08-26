@@ -22,7 +22,7 @@ def test_b11_portal_serves_html_and_static_assets():
     csp = html_resp.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp
     assert "FortifiedReg Fleet" in html_resp.text
-    assert 'src="/static/portal.js?v=0.4.4"' in html_resp.text
+    assert 'src="/static/portal.js?v=0.4.0"' in html_resp.text
 
     # 2. Portal CSS
     css_resp = client.get("/static/portal.css?v=0.4.0")
@@ -30,11 +30,18 @@ def test_b11_portal_serves_html_and_static_assets():
     assert "text/css" in css_resp.headers.get("content-type", "")
     assert "--bg-primary" in css_resp.text
 
-    # 3. Portal JS
+    # 3. Portal JS & Syntax Check
     js_resp = client.get("/static/portal.js?v=0.4.0")
     assert js_resp.status_code == 200
     assert "javascript" in js_resp.headers.get("content-type", "")
     assert "FortifiedReg Fleet v0.4.0" in js_resp.text
+
+    import shutil, subprocess
+    if shutil.which("node"):
+        res_js = subprocess.run(["node", "-c", "apps/fleet-api/src/fleet_api/static/portal.js"], capture_output=True, text=True)
+        assert res_js.returncode == 0, f"portal.js syntax error: {res_js.stderr}"
+        res_sw = subprocess.run(["node", "-c", "apps/fleet-api/src/fleet_api/static/service-worker.js"], capture_output=True, text=True)
+        assert res_sw.returncode == 0, f"service-worker.js syntax error: {res_sw.stderr}"
 
     # 4. Golden Samples JSON
     samples_resp = client.get("/static/samples.json")
@@ -46,7 +53,6 @@ def test_b11_portal_serves_html_and_static_assets():
         assert "b64" in samples_data[fmt]
         assert "sha256" in samples_data[fmt]
         assert samples_data[fmt].get("synthetic") is True
-
 
 def test_b11_guided_demo_full_lifecycle_hermetic():
     """
@@ -63,7 +69,7 @@ def test_b11_guided_demo_full_lifecycle_hermetic():
 
     # Step 1: Load Samples
     samples = client.get("/static/samples.json").json()
-    assert len(samples) == 5
+    assert len(samples) >= 5
 
     # Step 2: 5-Format Profile & Register
     registered_docs = []

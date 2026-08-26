@@ -1,17 +1,17 @@
 /**
- * Service Worker for FortifiedReg Fleet PWA (v0.4.1).
+ * Service Worker for FortifiedReg Fleet PWA (v0.4.0).
  * Implements strict security-compliant caching:
- * - WHITELIST: Static application shell (HTML, CSS, JS, WebManifest, Icons, Golden Samples).
+ * - WHITELIST: Static application shell only.
  * - FORBIDDEN: NEVER cache /v1/** API routes, JWT tokens, drafts, uploads, or AI responses.
- * - STRATEGY: Network-First for shell assets with offline fallback; aggressively flushes stale caches on update.
+ * - STRATEGY: Network-First for allowlisted shell assets with offline fallback; flushes stale caches on activate.
  */
 
-const CACHE_NAME = 'fortifiedreg-fleet-shell-v0.4.4';
+const CACHE_NAME = 'fortifiedreg-fleet-shell-v0.4.0';
 
 const STATIC_SHELL_ASSETS = [
   '/',
-  '/static/portal.css?v=0.4.4',
-  '/static/portal.js?v=0.4.4',
+  '/static/portal.css?v=0.4.0',
+  '/static/portal.js?v=0.4.0',
   '/static/manifest.webmanifest',
   '/static/samples.json',
   '/static/icons/icon-192.svg',
@@ -40,9 +40,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // STRICT RULE: All /v1/** API calls must go directly to network and NEVER be cached
-  if (url.pathname.startsWith('/v1/') || url.pathname.startsWith('/docs') || url.pathname.startsWith('/openapi.json')) {
-    return; // Pass through to browser network layer
+  // STRICT RULE: Only GET requests for exact STATIC_SHELL_ASSETS allowlist may interact with cache
+  const isAllowlisted = STATIC_SHELL_ASSETS.some((asset) => {
+    return url.pathname === asset || (url.pathname + url.search) === asset;
+  });
+
+  if (event.request.method !== 'GET' || !isAllowlisted) {
+    return; // Pass directly to browser network layer without caching
   }
 
   // Network-First Strategy for Application Shell
@@ -56,7 +60,6 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(() => {
-        // Fallback to cache if offline
         return caches.match(event.request);
       })
   );

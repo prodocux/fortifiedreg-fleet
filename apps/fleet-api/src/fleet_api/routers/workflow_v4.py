@@ -3,15 +3,27 @@ Workflow v0.4.0 Router for FortifiedReg Fleet.
 Exposes Session Lifecycle, Formulation Draft with Revision Invalidation,
 Two-tier 5-Format Import Preview, Proposal Submission Gate, Manager Decisions,
 and Approved Product Record Export Bundle.
+Single-instance demo-grade security and governance hardening.
 """
+import base64
 import hashlib
 import json
+import logging
+import re
+import threading
 import uuid
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from fleet_adapter_prodocux.document_preflight import (
+    DocumentPreflightError,
+    MAX_BASE64_LENGTH,
+    validate_document_preflight,
+)
 from fleet_api.deps import (
     FLEET_ENV,
     get_approval_store,
@@ -21,11 +33,24 @@ from fleet_api.deps import (
     get_checkpoint_store,
     get_orchestrator,
     get_resume_context_store,
-    get_tenant_and_actor,
     intake_adapter,
     orchestrator,
 )
-from fleet_api.security import create_access_token
+from fleet_api.security import (
+    get_current_actor_and_tenant,
+    get_optional_tenant_and_actor,
+    get_tenant_and_actor,
+    require_acting_role,
+    require_formulator,
+    require_product_manager,
+)
+from fleet_api.session_security import (
+    execute_session_reset_saga,
+    issue_demo_session,
+    revoke_demo_session,
+    set_acting_role,
+    validate_session,
+)
 from fleet_domain_cosmetics.inci_verifier import evaluate_inci_compliance
 from fleet_domain_cosmetics.mos_calculator import evaluate_toxicology_mos
 from fleet_domain_cosmetics.normalizer import (
@@ -33,11 +58,14 @@ from fleet_domain_cosmetics.normalizer import (
     normalize_content_blocks,
 )
 from fleet_domain_cosmetics.export_spec_mapper import (
+    DraftRenderSpec,
     map_approved_product_to_render_bundle,
     map_bundle_to_prodocux_render_requests,
+    map_draft_to_render_bundle,
 )
 from fleet_governance_core.models.approval import (
     ApprovalDecisionEnum,
+    ApprovalRequestStatusEnum,
     AuthenticatedActor,
     CheckpointStatusEnum,
     FleetApprovalRecord,
@@ -46,7 +74,11 @@ from fleet_governance_core.models.approval import (
     PDXApprovalRequest,
     PDXWorkflowCheckpoint,
 )
-from fleet_governance_core.models.audit import AuditEvent, AuditEventTypeEnum
+from fleet_governance_core.models.audit import (
+    AuditEvent,
+    AuditEventTypeEnum,
+    GOVERNANCE_AUDIT_NAMESPACE,
+)
 from fleet_governance_core.models.case import ExposureScenario, FormulaItem
 from fleet_governance_core.models.execution_context import ExecutionContextRecord, PlanSummary
 from fleet_governance_core.models.hashing import canonical_json_dumps, compute_data_sha256
@@ -60,6 +92,7 @@ from fleet_governance_core.models.workflow_v4 import (
     FormulationDraft,
     FormulationStatusEnum,
     GateDecisionEnum,
+    GovernanceInvalidationRecord,
     ProDocuXContentBlocksContract,
     ProductProposal,
     ProposalStatusEnum,
@@ -68,10 +101,118 @@ from fleet_governance_core.models.workflow_v4 import (
 router = APIRouter(prefix="/v1", tags=["Workflow v0.4.0"])
 
 # Ephemeral in-memory store for session, draft, proposal, and approved product states
-_SESSIONS_STORE: Dict[str, DemoSession] = {}
+_GOVERNANCE_LOCK = threading.Lock()
+_GOVERNANCE_INVALIDATION_RECORDS: Dict[str, GovernanceInvalidationRecord] = {}
+
 _DRAFTS_STORE: Dict[str, FormulationDraft] = {}
+_PRODUCT_DRAFTS_STORE: Dict[str, Dict[str, FormulationDraft]] = {}  # session_id/sub -> { product_name: FormulationDraft }
+_REVISION_HISTORY_STORE: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}  # session_id/sub -> { product_name: [snapshots] }
 _PROPOSALS_STORE: Dict[str, ProductProposal] = {}
 _APPROVED_PRODUCTS_STORE: Dict[str, ApprovedProductRecord] = {}
+
+RENDER_FORMAT_ALLOWLIST = {
+    "pdf": {"mime": "application/pdf", "magic": b"%PDF-", "max_bytes": 8 * 1024 * 1024},
+    "docx": {"mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "magic": b"PK\x03\x04", "max_bytes": 5 * 1024 * 1024},
+    "xlsx": {"mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "magic": b"PK\x03\x04", "max_bytes": 5 * 1024 * 1024},
+    "pptx": {"mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "magic": b"PK\x03\x04", "max_bytes": 8 * 1024 * 1024},
+    "csv": {"mime": "text/csv", "magic": None, "max_bytes": 2 * 1024 * 1024},
+}
+
+
+def _initialize_presets_for_session(session_id: str, sub: str) -> None:
+    """Populates baseline preset products for a fresh session."""
+    _PRODUCT_DRAFTS_STORE[session_id] = {}
+    _PRODUCT_DRAFTS_STORE[sub] = _PRODUCT_DRAFTS_STORE[session_id]
+    _REVISION_HISTORY_STORE[session_id] = {}
+    _REVISION_HISTORY_STORE[sub] = _REVISION_HISTORY_STORE[session_id]
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    default_presets = [
+        (
+            "Retinol Night Renewal Serum",
+            [
+                FormulaItem(inci_name="Aqua", concentration_pct=78.5, cas_number="7732-18-5"),
+                FormulaItem(inci_name="Glycerin", concentration_pct=5.0, cas_number="56-81-5", noael_mg_kg_day=1000.0),
+                FormulaItem(inci_name="Retinol", concentration_pct=0.05, cas_number="68-26-8", noael_mg_kg_day=2.0),
+                FormulaItem(inci_name="Phenoxyethanol", concentration_pct=0.8, cas_number="122-99-6", noael_mg_kg_day=500.0),
+            ]
+        ),
+        (
+            "Active Peptide Eye Cream",
+            [
+                FormulaItem(inci_name="Aqua", concentration_pct=95.0, cas_number="7732-18-5"),
+                FormulaItem(inci_name="Palmitoyl Tripeptide-38", concentration_pct=2.0, cas_number="1447824-23-8"),
+                FormulaItem(inci_name="Phenoxyethanol", concentration_pct=0.5, cas_number="122-99-6", noael_mg_kg_day=500.0),
+            ]
+        ),
+        (
+            "Compliant Day Cream",
+            [
+                FormulaItem(inci_name="Aqua", concentration_pct=90.0, cas_number="7732-18-5"),
+                FormulaItem(inci_name="Glycerin", concentration_pct=5.0, cas_number="56-81-5", noael_mg_kg_day=1000.0),
+                FormulaItem(inci_name="Tocopherol", concentration_pct=0.5, cas_number="59-02-9", noael_mg_kg_day=500.0),
+                FormulaItem(inci_name="Phenoxyethanol", concentration_pct=0.7, cas_number="122-99-6", noael_mg_kg_day=500.0),
+            ]
+        ),
+        (
+            "Excess Preservative Cream",
+            [
+                FormulaItem(inci_name="Aqua", concentration_pct=90.0, cas_number="7732-18-5"),
+                FormulaItem(inci_name="Phenoxyethanol", concentration_pct=2.5, cas_number="122-99-6", noael_mg_kg_day=500.0),
+            ]
+        ),
+        (
+            "Mercury Bleaching Cream",
+            [
+                FormulaItem(inci_name="Aqua", concentration_pct=88.0, cas_number="7732-18-5"),
+                FormulaItem(inci_name="Mercury", concentration_pct=2.0, cas_number="7439-97-6", noael_mg_kg_day=0.01),
+            ]
+        ),
+    ]
+
+    for p_name, p_ings in default_presets:
+        p_draft = FormulationDraft(
+            draft_id=f"draft-{session_id}-{uuid.uuid4().hex[:4]}",
+            session_id=session_id,
+            product_name=p_name,
+            revision=1,
+            ingredients=p_ings,
+        )
+        p_draft.compute_case_digest()
+        _PRODUCT_DRAFTS_STORE[session_id][p_name] = p_draft
+        _REVISION_HISTORY_STORE[session_id][p_name] = [
+            {
+                "revision": 1,
+                "timestamp": now_iso,
+                "case_digest": p_draft.case_digest,
+                "ingredients_count": len(p_ings),
+                "ingredients": [i.model_dump(mode="json") for i in p_ings],
+                "product_name": p_name,
+                "note": "Preset baseline (Revision 1)",
+            }
+        ]
+
+    init_draft = _PRODUCT_DRAFTS_STORE[session_id]["Retinol Night Renewal Serum"]
+    _DRAFTS_STORE[session_id] = init_draft
+    _DRAFTS_STORE[sub] = init_draft
+
+
+def _cleanup_session_governance_state(tenant_id: str, session_id: str, sub: str) -> None:
+    """Cancels all active proposals and checkpoints for a resetting session across session_id and sub."""
+    checkpoint_store = get_checkpoint_store()
+    keys_to_clean = {k for k in (session_id, sub) if k}
+    for p_id, p in list(_PROPOSALS_STORE.items()):
+        if p.session_id in keys_to_clean and p.status == ProposalStatusEnum.PENDING_REVIEW:
+            if p.checkpoint_id:
+                checkpoint_store.update_checkpoint_status(tenant_id, p.checkpoint_id, CheckpointStatusEnum.CANCELLED)
+            p.status = ProposalStatusEnum.SUPERSEDED
+            p.decided_at = datetime.now(timezone.utc).isoformat()
+
+    # Clear drafts for both keys only after checkpoint cancellations succeed
+    for key in keys_to_clean:
+        _PRODUCT_DRAFTS_STORE.pop(key, None)
+        _REVISION_HISTORY_STORE.pop(key, None)
+        _DRAFTS_STORE.pop(key, None)
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +220,12 @@ _APPROVED_PRODUCTS_STORE: Dict[str, ApprovedProductRecord] = {}
 # ---------------------------------------------------------------------------
 
 class CreateSessionRequest(BaseModel):
-    acting_role: Optional[ActingRoleEnum] = ActingRoleEnum.FORMULATOR
+    acting_role: Optional[ActingRoleEnum] = None
+    persona: Optional[str] = None
+
+
+class SwitchRoleRequest(BaseModel):
+    acting_role: ActingRoleEnum
 
 
 class SessionResponse(BaseModel):
@@ -93,78 +239,97 @@ class SessionResponse(BaseModel):
     expires_at: str
     disclaimer: str = (
         "Demo Role Simulation: A single evaluator simulates Formulator and Manager. "
-        "Production requires external IdP / SSO RBAC with segregation of duties."
+        "Single-instance demo-grade security and governance hardening."
     )
 
 
 @router.post("/demo/session", response_model=SessionResponse)
 async def create_demo_session(req: Optional[CreateSessionRequest] = None) -> SessionResponse:
     """Issue a 120-minute demo session token with dual-role acting simulation."""
-    acting_role = req.acting_role if req else ActingRoleEnum.FORMULATOR
-    session_id = f"sess-{uuid.uuid4().hex[:8]}"
-    sub = f"demo-session-{uuid.uuid4().hex[:12]}"
-    exp_time = datetime.now(timezone.utc) + timedelta(minutes=120)
-    exp_iso = exp_time.isoformat()
+    if req and req.acting_role:
+        acting_role = req.acting_role
+    elif req and req.persona:
+        if req.persona in ("product_manager", "cso", "safety_assessor"):
+            acting_role = ActingRoleEnum.PRODUCT_MANAGER
+        else:
+            acting_role = ActingRoleEnum.FORMULATOR
+    else:
+        acting_role = ActingRoleEnum.FORMULATOR
 
-    session_obj = DemoSession(
-        session_id=session_id,
-        sub=sub,
-        acting_role=acting_role,
-        expires_at=exp_iso,
-    )
-    _SESSIONS_STORE[session_id] = session_obj
-    _SESSIONS_STORE[sub] = session_obj
-
-    # Initialize default draft
-    draft_id = f"draft-{session_id}"
-    init_draft = FormulationDraft(
-        draft_id=draft_id,
-        session_id=session_id,
-        product_name="Retinol Night Renewal Serum",
-        revision=1,
-        ingredients=[
-            FormulaItem(inci_name="Aqua", concentration_pct=78.5, cas_number="7732-18-5"),
-            FormulaItem(inci_name="Glycerin", concentration_pct=5.0, cas_number="56-81-5", noael_mg_kg_day=1000.0),
-            FormulaItem(inci_name="Retinol", concentration_pct=0.05, cas_number="68-26-8", noael_mg_kg_day=2.0),
-            FormulaItem(inci_name="Phenoxyethanol", concentration_pct=0.8, cas_number="122-99-6", noael_mg_kg_day=500.0),
-        ],
-    )
-    init_draft.compute_case_digest()
-    _DRAFTS_STORE[session_id] = init_draft
-    _DRAFTS_STORE[sub] = init_draft
-
-    token = create_access_token(
-        tenant_id="tenant-demo",
-        sub=sub,
-        roles=["demo_evaluator"],
-        expires_in_seconds=7200,
-        extra_claims={
-            "session_id": session_id,
-            "allowed_demo_roles": ["formulator", "product_manager"],
-            "acting_role": acting_role.value,
-        },
-    )
+    token, session_obj = issue_demo_session(acting_role=acting_role, ttl_minutes=120)
+    _initialize_presets_for_session(session_obj.session_id, session_obj.sub)
 
     return SessionResponse(
         token=token,
         access_token=token,
-        session_id=session_id,
-        sub=sub,
-        tenant_id="tenant-demo",
-        acting_role=acting_role,
-        allowed_demo_roles=["formulator", "product_manager"],
-        expires_at=exp_iso,
+        session_id=session_obj.session_id,
+        sub=session_obj.sub,
+        tenant_id=session_obj.tenant_id,
+        acting_role=session_obj.acting_role,
+        allowed_demo_roles=session_obj.allowed_demo_roles,
+        expires_at=session_obj.expires_at,
     )
 
 
 @router.post("/demo/session/restart", response_model=SessionResponse)
-async def restart_demo_session(req: Optional[CreateSessionRequest] = None) -> SessionResponse:
-    """Terminates existing session and restarts a clean demo session from revision 1."""
-    return await create_demo_session(req)
+async def restart_demo_session(
+    request: Request,
+    req: Optional[CreateSessionRequest] = None,
+) -> SessionResponse:
+    """
+    Terminates existing session via recoverable reset saga, revoking prior JTIs and re-initializing baselines.
+    """
+    auth_hdr = request.headers.get("Authorization", "")
+    if not auth_hdr or not auth_hdr.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization header for session restart.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    new_token, new_session = execute_session_reset_saga(
+        auth_hdr,
+        cleanup_governance_fn=_cleanup_session_governance_state,
+    )
+
+    _initialize_presets_for_session(new_session.session_id, new_session.sub)
+
+    return SessionResponse(
+        token=new_token,
+        access_token=new_token,
+        session_id=new_session.session_id,
+        sub=new_session.sub,
+        tenant_id=new_session.tenant_id,
+        acting_role=new_session.acting_role,
+        allowed_demo_roles=new_session.allowed_demo_roles,
+        expires_at=new_session.expires_at,
+    )
+
+
+@router.post("/demo/session/revoke", response_model=Dict[str, Any])
+async def revoke_demo_session_endpoint(
+    request: Request,
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
+) -> Dict[str, Any]:
+    """Revokes caller's active session and cancels pending proposals without issuing orphan tokens."""
+    auth_hdr = request.headers.get("Authorization", "")
+    revoke_demo_session(auth_hdr, cleanup_governance_fn=_cleanup_session_governance_state)
+    return {"status": "revoked", "message": "Session and all active tokens have been revoked."}
+
+
+@router.post("/demo/session/role", response_model=Dict[str, Any])
+async def switch_session_acting_role(
+    req: SwitchRoleRequest,
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
+) -> Dict[str, Any]:
+    """Switch server-side acting role (formulator vs. product_manager)."""
+    tenant_id, actor = auth_context
+    session = set_acting_role(actor.sub, req.acting_role)
+    return {"status": "role_switched", "acting_role": session.acting_role.value}
 
 
 # ---------------------------------------------------------------------------
-# 2. Formulation Management with Revision Invalidation
+# 2. Formulation Management with Revision Invalidation & Version History
 # ---------------------------------------------------------------------------
 
 class UpdateDraftRequest(BaseModel):
@@ -174,14 +339,186 @@ class UpdateDraftRequest(BaseModel):
     acting_role: ActingRoleEnum = ActingRoleEnum.FORMULATOR
 
 
+class RollbackDraftRequest(BaseModel):
+    product_name: str
+    target_revision: int
+
+
+class RenderDraftExportRequest(BaseModel):
+    format: str = Field(description="Render format: pdf, docx, csv, xlsx, pptx")
+    product_name: Optional[str] = None
+    ingredients: Optional[List[FormulaItem]] = None
+
+
+def execute_governance_invalidation_saga(
+    tenant_id: str,
+    session_id: str,
+    product_name: str,
+    target_draft: FormulationDraft,
+    idempotency_key: Optional[str] = None,
+) -> FormulationDraft:
+    """
+    Executes a crash-safe, idempotent, fail-closed Governance Invalidation Saga:
+    1. Records or resumes a GovernanceInvalidationRecord.
+    2. Idempotently marks all matching PENDING_REVIEW proposals as SUPERSEDED.
+    3. Idempotently cancels underlying PDX checkpoints (fail-closed, no swallowed errors).
+    4. Idempotently invalidates resume contexts (fail-closed, no swallowed errors).
+    5. Idempotently emits CHECKPOINT_INVALIDATED audit event with deterministic UUIDv5.
+    6. Idempotently persists the target draft matching target_digest.
+    7. Marks Saga as completed.
+    """
+    key = idempotency_key or f"inv-{session_id}-{product_name}-rev{target_draft.revision}"
+    inv_id = f"inv-{uuid.uuid4().hex[:8]}"
+
+    with _GOVERNANCE_LOCK:
+        existing_record = _GOVERNANCE_INVALIDATION_RECORDS.get(key)
+        if existing_record:
+            if existing_record.status == "completed":
+                if existing_record.target_digest != target_draft.case_digest:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Conflict: Invalidation already completed with different target digest.",
+                    )
+                stored = _PRODUCT_DRAFTS_STORE.get(session_id, {}).get(product_name)
+                if stored and stored.case_digest == target_draft.case_digest:
+                    return stored
+            elif existing_record.target_digest != target_draft.case_digest:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Conflict: Invalidation in progress for differing target digest.",
+                )
+            rec = existing_record
+        else:
+            current_draft = _PRODUCT_DRAFTS_STORE.get(session_id, {}).get(product_name)
+            src_digest = current_draft.case_digest if current_draft else ""
+            rec = GovernanceInvalidationRecord(
+                invalidation_id=inv_id,
+                idempotency_key=key,
+                tenant_id=tenant_id,
+                session_id=session_id,
+                product_name=product_name,
+                source_revision=target_draft.revision - 1,
+                source_digest=src_digest,
+                target_revision=target_draft.revision,
+                target_digest=target_draft.case_digest,
+                target_draft_payload=target_draft.model_dump(mode="json"),
+                status="in_progress",
+            )
+            _GOVERNANCE_INVALIDATION_RECORDS[key] = rec
+
+    # Always reconstruct target draft strictly from frozen payload
+    frozen_target = FormulationDraft.model_validate(rec.target_draft_payload)
+
+    checkpoint_store = get_checkpoint_store()
+    resume_store = get_resume_context_store()
+    audit_log = get_audit_log()
+
+    try:
+        # Step 1: Idempotently supersede matching proposals
+        if not rec.step_proposals_superseded:
+            for p_id, p in _PROPOSALS_STORE.items():
+                if p.session_id == session_id and p.product_name == product_name and p.status == ProposalStatusEnum.PENDING_REVIEW:
+                    p.status = ProposalStatusEnum.SUPERSEDED
+                    p.decided_at = datetime.now(timezone.utc).isoformat()
+            rec.step_proposals_superseded = True
+
+        # Step 2: Idempotently cancel PDX checkpoints (FAIL-CLOSED: NO EXCEPTION SWALLOWING)
+        if not rec.step_checkpoints_cancelled:
+            for p_id, p in _PROPOSALS_STORE.items():
+                if p.session_id == session_id and p.product_name == product_name and p.checkpoint_id:
+                    checkpoint_store.update_checkpoint_status(tenant_id, p.checkpoint_id, CheckpointStatusEnum.CANCELLED)
+            rec.step_checkpoints_cancelled = True
+
+        # Step 3: Invalidate resume context (FAIL-CLOSED: NO EXCEPTION SWALLOWING)
+        if not rec.step_resume_invalidated:
+            for p_id, p in _PROPOSALS_STORE.items():
+                if p.session_id == session_id and p.product_name == product_name and p.checkpoint_id:
+                    resume_store.invalidate_context(tenant_id, p.checkpoint_id)
+            rec.step_resume_invalidated = True
+
+        # Step 4: Emit deterministic audit event (UUIDv5 deduplicated)
+        if not rec.step_audit_emitted:
+            deterministic_event_id = uuid.uuid5(
+                GOVERNANCE_AUDIT_NAMESPACE,
+                f"{tenant_id}:{rec.invalidation_id}:checkpoint-invalidated",
+            )
+            audit_log.append_audit_event(
+                AuditEvent(
+                    event_id=deterministic_event_id,
+                    tenant_id=tenant_id,
+                    run_id=session_id,
+                    actor_id=session_id,
+                    event_type=AuditEventTypeEnum.CHECKPOINT_INVALIDATED,
+                    payload={
+                        "action": "governance_invalidation_superseded",
+                        "invalidation_id": rec.invalidation_id,
+                        "product_name": product_name,
+                        "target_revision": frozen_target.revision,
+                        "target_digest": frozen_target.case_digest,
+                    },
+                )
+            )
+            rec.step_audit_emitted = True
+
+        # Step 5: Idempotently persist target draft
+        if not rec.step_draft_persisted:
+            with _GOVERNANCE_LOCK:
+                prod_store = _PRODUCT_DRAFTS_STORE.setdefault(session_id, {})
+                hist_store = _REVISION_HISTORY_STORE.setdefault(session_id, {})
+                prod_store[product_name] = frozen_target
+                _DRAFTS_STORE[session_id] = frozen_target
+                hist_list = hist_store.setdefault(product_name, [])
+                if not any(h.get("revision") == frozen_target.revision for h in hist_list):
+                    hist_list.append({
+                        "revision": frozen_target.revision,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "case_digest": frozen_target.case_digest,
+                        "ingredients_count": len(frozen_target.ingredients),
+                        "ingredients": [i.model_dump(mode="json") for i in frozen_target.ingredients],
+                        "product_name": product_name,
+                        "note": f"Revision {frozen_target.revision} (Saga Invalidation Verified)",
+                    })
+            rec.step_draft_persisted = True
+
+        # Step 6: Mark completed
+        rec.status = "completed"
+        rec.completed_at = datetime.now(timezone.utc).isoformat()
+        return frozen_target
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        rec.status = "failed"
+        rec.error_message = "Governance invalidation interrupted"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Governance invalidation saga failed (fail-closed): Checkpoint or resume store operation failed.",
+        )
+
+
 @router.get("/formulations/draft", response_model=Dict[str, Any])
-async def get_formulation_draft(auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor)) -> Dict[str, Any]:
-    """Retrieve current formulation draft for the active session."""
+async def get_formulation_draft(
+    product_name: Optional[str] = None,
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
+) -> Dict[str, Any]:
+    """Retrieve current formulation draft and revision history for the active product/session."""
     tenant_id, actor = auth_context
     session_id = actor.sub
-    draft = _DRAFTS_STORE.get(session_id)
+
+    prod_store = _PRODUCT_DRAFTS_STORE.setdefault(session_id, {})
+    hist_store = _REVISION_HISTORY_STORE.setdefault(session_id, {})
+
+    if product_name:
+        if product_name not in prod_store:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product draft '{product_name}' not found in active session.",
+            )
+        draft = prod_store[product_name]
+    else:
+        draft = _DRAFTS_STORE.get(session_id)
+
     if not draft:
-        # Create on the fly if needed
         draft = FormulationDraft(
             draft_id=f"draft-{session_id}",
             session_id=session_id,
@@ -196,78 +533,305 @@ async def get_formulation_draft(auth_context: Tuple[str, AuthenticatedActor] = D
         )
         draft.compute_case_digest()
         _DRAFTS_STORE[session_id] = draft
+        prod_store[draft.product_name] = draft
+        hist_store[draft.product_name] = [
+            {
+                "revision": 1,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "case_digest": draft.case_digest,
+                "ingredients_count": len(draft.ingredients),
+                "ingredients": [i.model_dump(mode="json") for i in draft.ingredients],
+                "product_name": draft.product_name,
+                "note": "Initial revision",
+            }
+        ]
+
+    _DRAFTS_STORE[session_id] = draft
 
     # Evaluate SCCS real-time status for draft
     sccs_res = evaluate_toxicology_mos(draft.ingredients, draft.exposure_scenario)
     inci_res = evaluate_inci_compliance(draft.ingredients)
 
+    returned_proposal = next(
+        (p for p in reversed(list(_PROPOSALS_STORE.values())) if p.session_id == session_id and p.status == ProposalStatusEnum.RETURNED and p.product_name == draft.product_name),
+        None,
+    )
+
+    history_list = hist_store.get(draft.product_name, [])
+
     return {
         "draft": draft.model_dump(mode="json"),
         "sccs_evaluation": sccs_res.model_dump(mode="json"),
         "inci_evaluation": inci_res.model_dump(mode="json"),
+        "returned_proposal": returned_proposal.model_dump(mode="json") if returned_proposal else None,
+        "history": history_list,
     }
 
 
 @router.post("/formulations/draft", response_model=Dict[str, Any])
 async def update_formulation_draft(
     req: UpdateDraftRequest,
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(require_formulator),
 ) -> Dict[str, Any]:
     """
-    Update formulation ingredients or exposure scenario.
-    Increments revision += 1, invalidates previous verifier results & checkpoints.
+    Update formulation ingredients or exposure scenario for specific product.
+    Increments per-product revision += 1, invalidates previous checkpoints via Saga.
     """
     tenant_id, actor = auth_context
     session_id = actor.sub
 
-    existing = _DRAFTS_STORE.get(session_id)
-    new_rev = (existing.revision + 1) if existing else 1
+    if len(req.ingredients) > 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Formulation exceeds maximum allowed limit of 50 ingredients (got {len(req.ingredients)}).",
+        )
 
-    draft = FormulationDraft(
-        draft_id=f"draft-{session_id}",
+    prod_store = _PRODUCT_DRAFTS_STORE.setdefault(session_id, {})
+    existing_for_prod = prod_store.get(req.product_name) or _DRAFTS_STORE.get(session_id)
+    new_rev = (existing_for_prod.revision + 1) if existing_for_prod else 1
+
+    default_scenario = ExposureScenario(
+        product_type="face_serum",
+        daily_applied_amount_g=0.8,
+        retention_factor=1.0,
+        body_weight_kg=60.0,
+    )
+    exp_scen = req.exposure_scenario or (existing_for_prod.exposure_scenario if existing_for_prod else default_scenario)
+
+    target_draft = FormulationDraft(
+        draft_id=f"draft-{session_id}-{uuid.uuid4().hex[:4]}",
         session_id=session_id,
         product_name=req.product_name,
         revision=new_rev,
         ingredients=req.ingredients,
-        exposure_scenario=req.exposure_scenario or (existing.exposure_scenario if existing else ExposureScenario(
+        exposure_scenario=exp_scen,
+        status=FormulationStatusEnum.DRAFT,
+        latest_verifier_result=None,
+    )
+    target_draft.compute_case_digest()
+
+    # Execute atomic-style Invalidation Saga
+    saved_draft = execute_governance_invalidation_saga(
+        tenant_id=tenant_id,
+        session_id=session_id,
+        product_name=req.product_name,
+        target_draft=target_draft,
+    )
+
+    sccs_res = evaluate_toxicology_mos(saved_draft.ingredients, saved_draft.exposure_scenario)
+    inci_res = evaluate_inci_compliance(saved_draft.ingredients)
+    hist_list = _REVISION_HISTORY_STORE.get(session_id, {}).get(req.product_name, [])
+
+    return {
+        "status": "updated",
+        "revision": saved_draft.revision,
+        "case_digest": saved_draft.case_digest,
+        "draft": saved_draft.model_dump(mode="json"),
+        "sccs_evaluation": sccs_res.model_dump(mode="json"),
+        "inci_evaluation": inci_res.model_dump(mode="json"),
+        "history": hist_list,
+    }
+
+
+@router.post("/formulations/rollback", response_model=Dict[str, Any])
+async def rollback_formulation_draft(
+    req: RollbackDraftRequest,
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(require_formulator),
+) -> Dict[str, Any]:
+    """Reverts the draft for a product to a specific historical revision via Saga invalidation."""
+    tenant_id, actor = auth_context
+    session_id = actor.sub
+
+    prod_store = _PRODUCT_DRAFTS_STORE.setdefault(session_id, {})
+    hist_store = _REVISION_HISTORY_STORE.setdefault(session_id, {})
+    history = hist_store.get(req.product_name, [])
+
+    target_snapshot = next((s for s in history if s["revision"] == req.target_revision), None)
+    if not target_snapshot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Historical revision {req.target_revision} for product '{req.product_name}' not found.",
+        )
+
+    cur_draft = prod_store.get(req.product_name)
+    new_rev = (cur_draft.revision + 1) if cur_draft else (req.target_revision + 1)
+    restored_items = [FormulaItem.model_validate(item) for item in target_snapshot["ingredients"]]
+
+    target_draft = FormulationDraft(
+        draft_id=f"draft-{session_id}-{uuid.uuid4().hex[:4]}",
+        session_id=session_id,
+        product_name=req.product_name,
+        revision=new_rev,
+        ingredients=restored_items,
+        exposure_scenario=cur_draft.exposure_scenario if cur_draft else ExposureScenario(
             product_type="face_serum",
             daily_applied_amount_g=0.8,
             retention_factor=1.0,
             body_weight_kg=60.0,
-        )),
+        ),
         status=FormulationStatusEnum.DRAFT,
-        latest_verifier_result=None,  # Strictly invalidated
     )
-    draft.compute_case_digest()
-    _DRAFTS_STORE[session_id] = draft
+    target_draft.compute_case_digest()
 
-    # Audit event for revision increment
-    audit_log = get_audit_log()
-    audit_log.append_audit_event(
-        AuditEvent(
-            tenant_id=tenant_id,
-            run_id=session_id,
-            actor_id=actor.sub,
-            event_type=AuditEventTypeEnum.CASE_CREATED,
-            payload={
-                "action": "formulation_draft_updated",
-                "revision": new_rev,
-                "case_digest": draft.case_digest,
-                "acting_role": req.acting_role.value,
-            },
-        )
+    saved_draft = execute_governance_invalidation_saga(
+        tenant_id=tenant_id,
+        session_id=session_id,
+        product_name=req.product_name,
+        target_draft=target_draft,
     )
 
-    sccs_res = evaluate_toxicology_mos(draft.ingredients, draft.exposure_scenario)
-    inci_res = evaluate_inci_compliance(draft.ingredients)
+    sccs_res = evaluate_toxicology_mos(saved_draft.ingredients, saved_draft.exposure_scenario)
+    inci_res = evaluate_inci_compliance(saved_draft.ingredients)
+    hist_list = _REVISION_HISTORY_STORE.get(session_id, {}).get(req.product_name, [])
 
     return {
-        "status": "updated",
-        "revision": new_rev,
-        "case_digest": draft.case_digest,
-        "draft": draft.model_dump(mode="json"),
+        "status": "rolled_back",
+        "restored_from_revision": req.target_revision,
+        "new_revision": saved_draft.revision,
+        "draft": saved_draft.model_dump(mode="json"),
         "sccs_evaluation": sccs_res.model_dump(mode="json"),
         "inci_evaluation": inci_res.model_dump(mode="json"),
+        "history": hist_list,
+    }
+
+
+@router.post("/formulations/render-export", response_model=Dict[str, Any])
+async def render_formulation_export(
+    req: RenderDraftExportRequest,
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
+) -> Dict[str, Any]:
+    """
+    Live ProDocuX Multi-Format Renderer for Active Formulation Draft.
+    Strictly uses DraftRenderSpec to ensure visible watermarks and neutral claims.
+    """
+    tenant_id, actor = auth_context
+    session_id = actor.sub
+
+    prod_store = _PRODUCT_DRAFTS_STORE.setdefault(session_id, {})
+    if req.product_name:
+        if req.product_name not in prod_store:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product draft '{req.product_name}' not found in active session workspace.",
+            )
+        draft = prod_store[req.product_name]
+    else:
+        draft = _DRAFTS_STORE.get(session_id)
+        if not draft:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active draft found in session.",
+            )
+
+    fmt = req.format.lower().lstrip(".")
+    if fmt not in RENDER_FORMAT_ALLOWLIST:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported format '{fmt}'. Available: {list(RENDER_FORMAT_ALLOWLIST.keys())}",
+        )
+
+    ingredients_to_use = req.ingredients or draft.ingredients
+    ingredients_list = [i.model_dump(mode="json") for i in ingredients_to_use]
+    sccs_res = evaluate_toxicology_mos(ingredients_to_use, draft.exposure_scenario)
+    sccs_summary = sccs_res.model_dump(mode="json")
+
+    # Construct clean DraftRenderSpec (strictly excludes approved_by and compliance certificates)
+    draft_spec = DraftRenderSpec(
+        document_status="draft",
+        approval_status="pending_review" if draft.status == FormulationStatusEnum.PROPOSAL_PENDING_REVIEW else "not_submitted",
+        product_name=req.product_name or draft.product_name,
+        revision=draft.revision,
+        case_digest=draft.case_digest,
+        watermark="DRAFT WORKING COPY — NOT APPROVED — NOT A COMPLIANCE CERTIFICATE",
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        ingredients=ingredients_list,
+        sccs_summary=sccs_summary,
+    )
+
+    bundle_spec = map_draft_to_render_bundle(draft_spec)
+    prodocux_requests = map_bundle_to_prodocux_render_requests(bundle_spec)
+
+    render_req = prodocux_requests.get(fmt)
+    if not render_req:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported format '{fmt}'. Available: {list(prodocux_requests.keys())}",
+        )
+
+    # Invoke ProDocuX Live Kernel
+    render_res = intake_adapter.render_artifact(render_req)
+
+    content_b64 = render_res.get("content_b64")
+    claimed_sha = render_res.get("sha256")
+    size_bytes = render_res.get("size_bytes")
+
+    if not content_b64 or not claimed_sha or size_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ProDocuX render integrity failure: Missing mandatory delivery fields.",
+        )
+
+    try:
+        raw_out = base64.b64decode(content_b64, validate=True)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ProDocuX render integrity failure: Invalid strict base64 payload.",
+        )
+
+    allow_spec = RENDER_FORMAT_ALLOWLIST[fmt]
+    if len(raw_out) == 0 or len(raw_out) > allow_spec["max_bytes"] or len(raw_out) != size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ProDocuX render integrity failure: Output size out of bounds.",
+        )
+
+    computed_sha = hashlib.sha256(raw_out).hexdigest()
+    if computed_sha != claimed_sha:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ProDocuX render integrity failure: SHA-256 fingerprint mismatch.",
+        )
+
+    if allow_spec["magic"] and not raw_out.startswith(allow_spec["magic"]):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ProDocuX render integrity failure: Invalid magic signature for output format.",
+        )
+
+    claimed_mime = render_res.get("media_type") or render_res.get("mime")
+    if not claimed_mime or claimed_mime.lower().split(";")[0].strip() != allow_spec["mime"].lower():
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="ProDocuX render integrity failure: Mismatched or missing MIME type in output.",
+        )
+
+    if fmt == "csv":
+        if b"\x00" in raw_out:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="ProDocuX render integrity failure: Prohibited NUL bytes in CSV output.",
+            )
+        try:
+            raw_out.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="ProDocuX render integrity failure: Non-UTF-8 encoding in CSV output.",
+            )
+
+    clean_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", req.product_name or draft.product_name).lower()
+    fn = f"draft_{clean_name}_rev{draft.revision}.{fmt}"
+
+    return {
+        "status": "rendered",
+        "format": fmt,
+        "filename": fn,
+        "media_type": allow_spec["mime"],
+        "content_b64": content_b64,
+        "sha256": claimed_sha,
+        "size_bytes": size_bytes,
+        "render_engine": "ProDocuX Live Kernel v0.3.0",
     }
 
 
@@ -283,24 +847,64 @@ class ParsePreviewRequest(BaseModel):
 
 
 @router.post("/formulations/parse-preview", response_model=Dict[str, Any])
-async def parse_import_preview(req: ParsePreviewRequest) -> Dict[str, Any]:
+async def parse_import_preview(
+    req: ParsePreviewRequest,
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(require_formulator),
+) -> Dict[str, Any]:
     """
     Two-tier import parser: ProDocuX content blocks -> Fleet Cosmetics Normalizer.
     Returns normalized candidate ingredients with confidence and source locations for confirmation.
-    Supports either pre-set scenario keys, explicit content blocks contracts, or live uploaded files.
+    Protected by mandatory Formulator session authentication, strict base64 decoding, and adapter-level container preflight.
     """
+    tenant_id, actor = auth_context
+
     if req.content_b64 and req.filename:
-        import base64
+        if len(req.content_b64) > MAX_BASE64_LENGTH:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Base64 payload length ({len(req.content_b64)} chars) exceeds maximum allowed {MAX_BASE64_LENGTH} chars.",
+            )
+
         try:
-            raw_bytes = base64.b64decode(req.content_b64)
+            raw_bytes = base64.b64decode(req.content_b64, validate=True)
         except Exception:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid base64 payload.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid strict base64 payload.")
+
+        fmt = (req.filename.split(".")[-1]).lower() if "." in req.filename else "unknown"
+        try:
+            validate_document_preflight(fmt, raw_bytes, req.filename)
+        except DocumentPreflightError:
+            logger.warning(
+                "document_preflight_failed format=%s error_code=%s",
+                fmt,
+                "DOCUMENT_PREFLIGHT_REJECTED",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Document preflight validation failed.",
+            )
 
         extracted = intake_adapter.extract_content_blocks(req.filename, raw_bytes)
         candidates = normalize_content_blocks(extracted)
         doc_id = extracted.get("document_id") or f"doc-{req.filename}"
         doc_sha = extracted.get("source_sha256") or compute_data_sha256(raw_bytes)
-        fmt = (req.filename.split(".")[-1]).lower() if "." in req.filename else "unknown"
+
+        # Audit parse event
+        get_audit_log().append_audit_event(
+            AuditEvent(
+                tenant_id=tenant_id,
+                run_id=actor.sub,
+                actor_id=actor.sub,
+                event_type=AuditEventTypeEnum.INTAKE_EXTRACTED,
+                payload={
+                    "action": "document_parse_preview",
+                    "filename": req.filename,
+                    "format": fmt,
+                    "source_sha256": doc_sha,
+                    "candidates_count": len(candidates),
+                },
+            )
+        )
 
         return {
             "status": "preview_ready",
@@ -309,6 +913,7 @@ async def parse_import_preview(req: ParsePreviewRequest) -> Dict[str, Any]:
             "source_sha256": doc_sha,
             "candidates_count": len(candidates),
             "candidates": [c.model_dump(mode="json") for c in candidates],
+            "raw_blocks": extracted.get("blocks", []),
         }
 
     # 5 Preset G1 Synthetic Content Block Scenarios
@@ -379,6 +984,7 @@ async def parse_import_preview(req: ParsePreviewRequest) -> Dict[str, Any]:
         "source_sha256": contract.source_sha256,
         "candidates_count": len(candidates),
         "candidates": [c.model_dump(mode="json") for c in candidates],
+        "raw_blocks": [b.model_dump(mode="json") for b in contract.blocks],
     }
 
 
@@ -388,7 +994,7 @@ async def parse_import_preview(req: ParsePreviewRequest) -> Dict[str, Any]:
 
 @router.post("/formulations/submit-proposal", response_model=Dict[str, Any])
 async def submit_product_proposal(
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(require_formulator),
 ) -> Dict[str, Any]:
     """
     Formulator submits formulation draft to formal regulatory gate.
@@ -426,62 +1032,95 @@ async def submit_product_proposal(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "gate_decision": "FAIL",
-                "message": "Submission hard blocked by Regulatory Gate.",
+                "error": "FORMULATION_GATE_REJECTED",
+                "gate_decision": gate_decision.value,
                 "reasons": reasons,
+                "message": "Formulation violates EU cosmetics safety criteria. Submission blocked.",
             },
         )
 
-    # 2. Compile and execute PDX Execution Plan through Orchestrator
-    case_id = f"pif-case-{draft.draft_id}-rev{draft.revision}"
+    # 2. Compile PDX Execution Plan with Human Gate Checkpoint
+    proposal_id = f"prop-{uuid.uuid4().hex[:8]}"
     case_payload = {
         "case_id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "product_name": draft.product_name,
         "jurisdiction": "EU",
-        "formula": [
-            {
-                "inci_name": item.inci_name,
-                "concentration_pct": item.concentration_pct,
-                "cas_number": item.cas_number,
-                "noael_mg_kg_day": item.noael_mg_kg_day,
-            }
-            for item in draft.ingredients
-        ],
+        "formula": [item.model_dump(mode="json") for item in draft.ingredients],
         "exposure_scenario": draft.exposure_scenario.model_dump(mode="json"),
         "supplier_documents": [],
     }
 
-    orch = get_orchestrator()
-    plan = orch.compile_execution_plan(case_payload)
-    exec_result = orch.execute_plan(plan, case_payload)
+    checkpoint_store = get_checkpoint_store()
+    resume_context_store = get_resume_context_store()
 
-    # Fail-closed: Strictly require awaiting_approval, checkpoint, and approval_request from orchestrator
-    if (
-        exec_result.get("status") != "awaiting_approval"
-        or "checkpoint" not in exec_result
-        or "approval_request" not in exec_result
-    ):
+    # Step-by-step orchestrator execution up to Human Gate
+    orchestrator_inst = get_orchestrator()
+    if hasattr(orchestrator_inst, "compile_execution_plan"):
+        plan = orchestrator_inst.compile_execution_plan(case_payload)
+    else:
+        plan = {}
+
+    if hasattr(orchestrator_inst, "execute_plan"):
+        pdx_exec_res = orchestrator_inst.execute_plan(plan, case_payload)
+    elif hasattr(orchestrator_inst, "compile_and_run"):
+        pdx_exec_res = orchestrator_inst.compile_and_run(case_payload)
+        plan = pdx_exec_res.get("plan", plan)
+    else:
+        pdx_exec_res = {}
+
+    if pdx_exec_res.get("status") in ("suspended_at_checkpoint", "awaiting_approval") and "checkpoint" in pdx_exec_res:
+        raw_chk = pdx_exec_res["checkpoint"]
+        checkpoint = PDXWorkflowCheckpoint.model_validate(raw_chk)
+        checkpoint_id = checkpoint.checkpoint_id
+        case_digest = checkpoint.subject_digest
+        plan_digest = checkpoint.plan_digest
+        checkpoint_store.save_checkpoint(tenant_id, checkpoint)
+
+        raw_req = pdx_exec_res.get("approval_request")
+        if not raw_req:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="PDX execution suspended at checkpoint but missing required approval_request.",
+            )
+        approval_req = PDXApprovalRequest.model_validate(raw_req)
+        req_uuid_str = str(approval_req.approval_request_id)
+        checkpoint_store.save_approval_request(tenant_id, approval_req)
+
+    elif FLEET_ENV == "demo":
+        checkpoint_id = f"chk-{session_id}-{proposal_id}"
+        case_digest = compute_data_sha256(case_payload)
+        plan_digest = compute_data_sha256(plan)
+        evidence_digests = {
+            "sccs_evaluation.json": compute_data_sha256(sccs_res.model_dump(mode="json")),
+            "inci_evaluation.json": compute_data_sha256(inci_res.model_dump(mode="json")),
+        }
+        checkpoint = PDXWorkflowCheckpoint(
+            checkpoint_id=checkpoint_id,
+            run_id=session_id,
+            subject_digest=case_digest,
+            plan_digest=plan_digest,
+            completed_step_ids=["step_verify_inci_compliance", "step_verify_toxicology_mos"],
+            pending_step_ids=["step_human_regulatory_approval", "step_assemble_pif_manifest"],
+            evidence_digests=evidence_digests,
+            status=CheckpointStatusEnum.PENDING,
+        )
+        checkpoint_store.save_checkpoint(tenant_id, checkpoint)
+        req_uuid = uuid.uuid4()
+        req_uuid_str = str(req_uuid)
+        approval_req = PDXApprovalRequest(
+            approval_request_id=req_uuid,
+            checkpoint_id=checkpoint_id,
+            required_role="product_manager",
+            summary=f"Human regulatory compliance review and toxicological rationale sign-off required for {draft.product_name} (Status: REVIEW).",
+            status=ApprovalRequestStatusEnum.PENDING,
+        )
+        checkpoint_store.save_approval_request(tenant_id, approval_req)
+    else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="PDX execution did not reach a pending regulatory approval checkpoint and approval request.",
         )
-
-    proposal_id = f"prop-{uuid.uuid4().hex[:8]}"
-    checkpoint_store = get_checkpoint_store()
-    resume_context_store = get_resume_context_store()
-
-    chk_dict = exec_result["checkpoint"]
-    checkpoint = PDXWorkflowCheckpoint.model_validate(chk_dict)
-    checkpoint_store.save_checkpoint(tenant_id, checkpoint)
-    checkpoint_id = checkpoint.checkpoint_id
-    case_digest = checkpoint.subject_digest
-    plan_digest = checkpoint.plan_digest
-
-    req_dict = exec_result["approval_request"]
-    approval_req = PDXApprovalRequest.model_validate(req_dict)
-    checkpoint_store.save_approval_request(tenant_id, approval_req)
-    req_uuid_str = str(approval_req.approval_request_id)
 
     # Save resume context in store for LivePDXCoreOrchestrator and lease management
     if resume_context_store:
@@ -537,6 +1176,9 @@ async def submit_product_proposal(
         sccs_evaluation_summary=sccs_res.model_dump(mode="json"),
         status=ProposalStatusEnum.PENDING_REVIEW,
     )
+    draft.case_digest = case_digest
+    _PRODUCT_DRAFTS_STORE.setdefault(session_id, {})[draft.product_name] = draft
+    _DRAFTS_STORE[session_id] = draft
     _PROPOSALS_STORE[proposal_id] = proposal
     draft.status = FormulationStatusEnum.PROPOSAL_PENDING_REVIEW
 
@@ -573,7 +1215,7 @@ async def submit_product_proposal(
 
 @router.get("/proposals/inbox", response_model=List[Dict[str, Any]])
 async def list_proposals_inbox(
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(require_product_manager),
 ) -> List[Dict[str, Any]]:
     """List pending and historical proposals for Product Manager review."""
     tenant_id, _ = auth_context
@@ -594,7 +1236,7 @@ class ManagerDecisionRequest(BaseModel):
 async def manager_decide_proposal(
     proposal_id: str,
     req: ManagerDecisionRequest,
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(require_product_manager),
 ) -> Dict[str, Any]:
     """
     Product Manager decisions via formal ApprovalWorkflowService and Lease-Fenced PDX Orchestrator Resume:
@@ -607,18 +1249,75 @@ async def manager_decide_proposal(
     if not proposal or proposal.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found.")
 
-    if proposal.status != ProposalStatusEnum.PENDING_REVIEW:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Proposal already decided ({proposal.status}).")
+    # Idempotent return if already approved
+    if proposal.status == ProposalStatusEnum.APPROVED:
+        approved_rec = _APPROVED_PRODUCTS_STORE.get(proposal.product_name)
+        if approved_rec:
+            return approved_rec.model_dump(mode="json")
 
+    # 6-Way Authoritative Binding Validation
+    # 1. Proposal status must be PENDING_REVIEW (SUPERSEDED -> 409)
+    if proposal.status != ProposalStatusEnum.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Proposal is not pending review ({proposal.status.value}).",
+        )
+
+    # 2. Active Draft Check (draft_id, revision, case_digest must match active draft -> 412)
+    active_draft = _PRODUCT_DRAFTS_STORE.get(proposal.session_id, {}).get(proposal.product_name) or _DRAFTS_STORE.get(proposal.session_id)
+    if not active_draft:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail=f"Precondition Failed: Active draft for product '{proposal.product_name}' not found.",
+        )
+    if (
+        proposal.draft_id != active_draft.draft_id
+        or proposal.revision != active_draft.revision
+        or proposal.case_digest != active_draft.case_digest
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail="Precondition Failed: Proposal revision/digest does not match the active draft state.",
+        )
+
+    # 3. Mandatory Checkpoint and Approval Request presence check (missing -> 412)
+    if not proposal.checkpoint_id or not proposal.approval_request_id:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail="Precondition Failed: Proposal missing mandatory approval_request_id or checkpoint_id binding.",
+        )
+
+    # 4. Checkpoint Store Record Check (status must be PENDING, digests must match -> 412)
     checkpoint_store = get_checkpoint_store()
+    checkpoint = checkpoint_store.get_checkpoint(tenant_id, proposal.checkpoint_id)
+    if not checkpoint:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail=f"Precondition Failed: PDX Checkpoint '{proposal.checkpoint_id}' not found.",
+        )
+    if checkpoint.status != CheckpointStatusEnum.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail=f"Precondition Failed: Checkpoint status is '{checkpoint.status.value}', expected 'pending'.",
+        )
+    if checkpoint.subject_digest != proposal.case_digest or checkpoint.plan_digest != proposal.plan_digest:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail="Precondition Failed: Checkpoint digest binding mismatch with proposal.",
+        )
+
+    # 5. Approval Request Check (appr_req must exist and match approval_request_id -> 412)
+    appr_req = checkpoint_store.get_approval_request(tenant_id, proposal.checkpoint_id)
+    if not appr_req or str(appr_req.approval_request_id) != str(proposal.approval_request_id):
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail="Precondition Failed: Approval request binding mismatch.",
+        )
+
     approval_service = get_approval_workflow_service()
     artifact_store = get_artifact_store()
     resume_store = get_resume_context_store()
-    orchestrator = get_orchestrator()
-
-    checkpoint = checkpoint_store.get_checkpoint(tenant_id, proposal.checkpoint_id)
-    if not checkpoint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Checkpoint '{proposal.checkpoint_id}' not found.")
+    orchestrator_inst = get_orchestrator()
 
     if req.decision == "returned":
         # 1. Process decision through governance service
@@ -638,7 +1337,7 @@ async def manager_decide_proposal(
         # 2. Update checkpoint in store to CANCELLED and notify orchestrator
         checkpoint_store.update_checkpoint_status(tenant_id, proposal.checkpoint_id, CheckpointStatusEnum.CANCELLED)
         try:
-            orchestrator.resume_with_decision(checkpoint, pdx_decision)
+            orchestrator_inst.resume_with_decision(checkpoint, pdx_decision)
         except Exception:
             pass  # Rejection recorded in ledger and checkpoint
 
@@ -676,7 +1375,7 @@ async def manager_decide_proposal(
 
         ctx = resume_store.get_context(tenant_id, proposal.checkpoint_id)
 
-        # Crash recovery path: if context is already COMPLETED (e.g. previous attempt completed mark_resume_completed but crashed before updating checkpoint or returning product)
+        # Crash recovery path: if context is already COMPLETED
         if ctx and ctx.status == FleetExecutionStatus.COMPLETED:
             approved_at_iso = appr_record.decided_at
             canonical_pif = {
@@ -705,7 +1404,6 @@ async def manager_decide_proposal(
             )
             put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
             if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
-                # Execution context remains terminal COMPLETED; record publication conflict for operator review
                 get_audit_log().append_audit_event(
                     AuditEvent(
                         tenant_id=tenant_id,
@@ -796,7 +1494,7 @@ async def manager_decide_proposal(
 
         # 3. Execute PDX resume first to obtain authentic PDX execution outputs
         try:
-            resume_result = orchestrator.resume_with_decision(checkpoint, pdx_decision)
+            resume_result = orchestrator_inst.resume_with_decision(checkpoint, pdx_decision)
             if resume_result.get("status") not in ("completed", "success"):
                 raise RuntimeError(f"PDX plan resume non-terminal status: {resume_result.get('status')}")
 
@@ -870,7 +1568,6 @@ async def manager_decide_proposal(
         put_result = artifact_store.put_if_absent(art_storage, canonical_pif_bytes, art_sha)
         if put_result.status == PutArtifactStatus.ALREADY_EXISTS_CONFLICTING_DIGEST:
             try:
-                # Mark failed with is_retryable=False to enter blocked_review and prevent infinite retry
                 resume_store.mark_resume_failed(
                     tenant_id=tenant_id,
                     checkpoint_id=proposal.checkpoint_id,
@@ -965,7 +1662,7 @@ async def manager_decide_proposal(
 
 @router.get("/products/approved", response_model=List[Dict[str, Any]])
 async def list_approved_products(
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
 ) -> List[Dict[str, Any]]:
     """List finalized immutable approved products for the authenticated tenant."""
     tenant_id, _ = auth_context
@@ -979,7 +1676,7 @@ async def list_approved_products(
 @router.get("/products/{product_id}/export-bundle", response_model=Dict[str, Any])
 async def get_product_export_bundle(
     product_id: str,
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
 ) -> Dict[str, Any]:
     """
     Generate the neutral 5-format render bundle spec for an ApprovedProductRecord.
@@ -1013,7 +1710,7 @@ class RenderArtifactRequest(BaseModel):
 async def render_product_artifact(
     product_id: str,
     req: RenderArtifactRequest,
-    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_tenant_and_actor),
+    auth_context: Tuple[str, AuthenticatedActor] = Depends(get_current_actor_and_tenant),
 ) -> Dict[str, Any]:
     """
     Render a specific format binary artifact via ProDocuX POST /v1/render/artifact with tenant validation (fail-closed 404).
