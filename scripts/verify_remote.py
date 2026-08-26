@@ -318,14 +318,19 @@ def run_remote_verification(
                 print(f" [FAIL] 9. Proposal Submission Gate                     : FAIL ({e})")
                 all_passed = False
 
-            # Step 4: Manager Decision & Product Finalization
+            # Step 4: Manager Decision & Product Finalization (Requires product_manager role)
             product_id = None
             if proposal_id:
                 try:
+                    r_mgr_sess = requests.post(f"{base_url}/v1/demo/session", json={"acting_role": "product_manager"}, timeout=15)
+                    check(r_mgr_sess.status_code == 200, f"Manager demo session creation failed: {r_mgr_sess.text}")
+                    mgr_token = r_mgr_sess.json().get("access_token") or r_mgr_sess.json().get("token")
+                    mgr_headers = {"Authorization": f"Bearer {mgr_token}"}
+
                     r_dec = requests.post(
                         f"{base_url}/v1/proposals/{proposal_id}/decide",
                         json={"decision": "approved", "rationale": "Automated remote verification approval."},
-                        headers=headers,
+                        headers=mgr_headers,
                         timeout=20,
                     )
                     check(r_dec.status_code == 200, f"Manager decision failed: {r_dec.text}")

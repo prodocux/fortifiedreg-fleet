@@ -21,7 +21,7 @@ MAX_BASE64_LENGTH = 11_200_000  # Enforces ~8 MiB max encoded payload
 
 ZIP_MAX_ENTRIES = 100
 ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024  # 25 MiB
-ZIP_MAX_COMPRESSION_RATIO = 20.0  # Rev 5 threshold for OOXML XML entries
+ZIP_MAX_COMPRESSION_RATIO = 100.0  # Threshold for OOXML XML entries allowing standard repetitive style schemas while blocking zip-bombs
 
 
 class DocumentPreflightError(ValueError):
