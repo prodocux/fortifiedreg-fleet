@@ -59,6 +59,11 @@ Explore and execute live REST requests directly in the Swagger documentation:
 
 FortifiedReg Fleet is built on **Hexagonal Architecture (Ports & Adapters)**, decoupling pure regulatory domain logic from concrete Google Cloud infrastructure and external kernels.
 
+![FortifiedReg Fleet Architecture](docs/architecture.jpg)
+
+<details>
+<summary><b>📐 Click to expand Mermaid Flowchart Source</b></summary>
+
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'Inter, system-ui, sans-serif', 'darkMode': true }}}%%
 flowchart TD
@@ -105,6 +110,7 @@ flowchart TD
     SM -.-> ID
     MEM -.-> CL
 ```
+</details>
 
 ### Multi-Agent Fleet Specialization & Architecture
 In regulated enterprise compliance (such as EU Cosmetic Regulation EC No 1223/2009), unconstrained conversational multi-agent swarms pose unacceptable hallucination and liability risks. FortifiedReg Fleet implements an **Institutional Multi-Agent Architecture (Governed Agent Fleet)** where specialized autonomous agents collaborate across strict boundaries:
