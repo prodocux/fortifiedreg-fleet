@@ -2,6 +2,8 @@
 
 *Autonomous Multi-Agent Enterprise Regulatory Compliance Fleet with Human-in-the-Loop Cryptographic Verification*
 
+![FortifiedReg Fleet Hero Cover](docs/hero_cover.jpg)
+
 - 🏆 **Hackathon Track**: **All Things Agentic Hackathon** — **Track 3: The Fortified Enterprise Fleet**
 - 🌐 **Live Cloud Run Service**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app`](https://fortifiedreg-fleet-251114662133.us-central1.run.app)
 - 🖥️ **Interactive Web Portal & Verification Center**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/)
