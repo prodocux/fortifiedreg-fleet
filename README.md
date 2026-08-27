@@ -4,6 +4,8 @@
 
 ![FortifiedReg Fleet Hero Cover](docs/hero_cover.jpg)
 
+> 💡 **Component-Based Architecture**: FortifiedReg Fleet is engineered as a **modular, plug-and-play component system (Hexagonal Ports & Adapters)**. Rather than forcing enterprises to replace existing Product Lifecycle Management (PLM), LIMS, or ERP systems, its decoupled domain kernels, document intake pipelines, and toxicology engines can be embedded directly as secure sidecars or microservices within an organization's existing software stack. The public web interface serves as an **interactive simulation and demonstration harness** modeling end-to-end multi-persona management workflows and showcasing core engine capabilities.
+
 - 🏆 **Hackathon Track**: **All Things Agentic Hackathon** — **Track 3: The Fortified Enterprise Fleet**
 - 🌐 **Live Cloud Run Service**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app`](https://fortifiedreg-fleet-251114662133.us-central1.run.app)
 - 🖥️ **Interactive Web Portal & Verification Center**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/)
@@ -23,7 +25,7 @@
 | **Architecture Diagram & Spin-Up Guide** | ✅ **Yes**. Complete Mermaid architecture diagram and automated deployment (`deploy/cloudrun/deploy.sh`, `deploy/cloudrun/deploy.ps1`) and zero-cost teardown (`destroy.sh`) included in Sections 3 and 6 below. |
 | **Hosted Project URL & Testing Access** | ✅ **Yes**. Publicly accessible on Google Cloud Run at [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/). Zero setup or login required (auto-issued scoped demo JWTs for 4 roles: Formulator, QA Manager, Safety Assessor, CSO). |
 | **Google SDK & Start Date** | ✅ **Google GenAI SDK / Agent Development Kit (ADK)** + **Google Cloud Client Libraries**. Project start date: **August 19, 2026**. |
-| **Features & Tech Stack** | ✅ Hexagonal multi-agent architecture, EU Cosmetics Regulation (EC) No 1223/2009 & SCCS 12th Notes toxicology engine, 5-format binary document parser (PDF, DOCX, CSV, XLSX, PPTX), Google Model Armor prompt/path injection protection, deterministic UUIDv5 audit deduplication. |
+| **Features & Tech Stack** | ✅ Modular component-based architecture, EU Cosmetics Regulation (EC) No 1223/2009 & SCCS 12th Notes toxicology engine, 5-format binary document parser (PDF, DOCX, CSV, XLSX, PPTX), Google Model Armor prompt/path injection protection, deterministic UUIDv5 audit deduplication. |
 | **Data Sources** | ✅ Official EU SCCS Notes of Guidance (12th Revision), EU CosIng database, and EU Cosmetic Annexes II & V. |
 | **What We Learned** | ✅ Decoupling regulatory domain logic via Hexagonal Architecture enables strict fail-closed governance, robust state machine lease fencing, and zero-credential-leak auditability in autonomous agent fleets. |
 | **Pre-existing / 3rd Party Code Disclosure** | ✅ Pure Python standard libraries, FastAPI, Pydantic, PyMuPDF (fitz), python-docx, openpyxl, python-pptx, and PDX Core transform specifications. |
@@ -33,7 +35,7 @@
 
 ## 2. Quick Testing Guide for Hackathon Judges
 
-Judges can test FortifiedReg Fleet through any of three independent channels:
+The public web portal and API endpoints serve as an **interactive verification harness and simulation sandbox**, modeling real-world 4-persona workflows and demonstrating the underlying modular engine capabilities. Judges can test FortifiedReg Fleet through any of three independent channels:
 
 ### 🌟 Channel 1: Zero-Setup Interactive Web Portal (Recommended)
 Open [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/) in any modern browser:
