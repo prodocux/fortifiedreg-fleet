@@ -14,7 +14,7 @@
 
 | Submission Requirement | Status & Implementation Details |
 |---|---|
-| **New Project Built During Submission Period** | ✅ **Yes**. Initiated in August 2026 for the *All Things Agentic Hackathon*. Built with **Gemini 3.5 Flash**, **Google Agent Development Kit (ADK) / GenAI SDK**, **Google Model Armor**, and **Google Cloud Run**. |
+| **New Project Built During Submission Period** | ✅ **Yes**. Initiated in August 2026 for the *All Things Agentic Hackathon*. Built with **Gemini 2.0 Flash / Gemini 1.5 Pro**, **Google Agent Development Kit (ADK) / GenAI SDK**, **Google Model Armor**, and **Google Cloud Run**. |
 | **Category Selection** | ✅ **Track 3: The Fortified Enterprise Fleet** (Institutional Multi-Agent Governance, Role-Based Access Control, Cryptographic Checkpoints, and Immutable Audit Ledgers). |
 | **Demo Video** | ✅ **Yes**. Public video under 4 minutes demonstrating autonomous multi-agent pipeline, Model Armor guardrails, HitL approval gate, and live Cloud Run production backend. |
 | **Code Repository Link** | ✅ **Yes**. Public GitHub repository at [`https://github.com/prodocux/fortifiedreg-fleet`](https://github.com/prodocux/fortifiedreg-fleet) under standard **Apache-2.0** license. |
