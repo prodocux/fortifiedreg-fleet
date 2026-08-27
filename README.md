@@ -60,45 +60,60 @@ Explore and execute live REST requests directly in the Swagger documentation:
 FortifiedReg Fleet is built on **Hexagonal Architecture (Ports & Adapters)**, decoupling pure regulatory domain logic from concrete Google Cloud infrastructure and external kernels.
 
 ```mermaid
-graph TD
-    subgraph "Google Cloud Infrastructure"
-        CR["Google Cloud Run<br>(Serverless Autoscaling)"]
-        SM["Google Secret Manager<br>(fleet-jwt-secret)"]
-        AR["Artifact Registry<br>(OCI Image Digest Pinned)"]
-        CL["Cloud Logging & Trace<br>(Sanitized Audit Sink)"]
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'Inter, system-ui, sans-serif', 'darkMode': true }}}%%
+flowchart TD
+    classDef gcp fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc,font-size:15px;
+    classDef sec fill:#2e1065,stroke:#a855f7,stroke-width:2px,color:#f8fafc,font-size:15px;
+    classDef agent fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc,font-size:15px;
+    classDef core fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#f8fafc,font-size:15px;
+
+    subgraph GCP ["  ☁️ 1. Google Cloud Serverless Backbone  "]
+        CR["<b>Google Cloud Run</b><br/>(Serverless Autoscaling & Zero-Cost Scale)"]:::gcp
+        SM["<b>Google Secret Manager</b><br/>(HMAC Keys & Model Credentials)"]:::gcp
+        AR["<b>Artifact Registry</b><br/>(OCI Digest & Build Pinning)"]:::gcp
+        CL["<b>Cloud Logging & Trace</b><br/>(Sanitized Audit Sink)"]:::gcp
     end
 
-    subgraph "Agent Security & Governance Gateway"
-        GW["Agent Gateway & Router<br>(Fail-Closed RBAC)"]
-        MA["Google Model Armor<br>(Injection & PII Guardrail)"]
-        ID["Agent Identity<br>(Cryptographic HMAC JWT)"]
+    subgraph SEC ["  🛡️ 2. Security & Governance Gateway  "]
+        GW["<b>Agent Gateway & Router</b><br/>(Fail-Closed RBAC & Session Binding)"]:::sec
+        MA["<b>Google Model Armor</b><br/>(Prompt Injection & Traversal Guard)"]:::sec
+        ID["<b>Cryptographic HMAC Identity</b><br/>(Stateless Dual-Role JWT)"]:::sec
     end
 
-    subgraph "Multi-Agent Institutional Network"
-        REG["Agent Registry<br>(Discovery & Catalog)"]
-        TOX["Toxicology Agent<br>(SCCS MoS Calculator)"]
-        INT["Intake Adapter Agent<br>(5-Format Binary Kernel)"]
-        HITL["CSO Approval Gate<br>(Cryptographic Checkpoint)"]
+    subgraph AGENTS ["  🤖 3. Governed Multi-Agent Fleet  "]
+        REG["<b>Agent Catalog & Registry</b><br/>(Discovery & Capability Map)"]:::agent
+        TOX["<b>Gemini Toxicology Agent</b><br/>(SCCS MoS Mathematical Calculator)"]:::agent
+        INT["<b>5-Format Intake Agent</b><br/>(PDF, DOCX, CSV, XLSX, PPTX)"]:::agent
+        HITL["<b>Governance & HitL Agent</b><br/>(CSO Sign-Off Checkpoint Gate)"]:::agent
     end
 
-    subgraph "Deterministic Core & Storage"
-        PDX["PDX Execution Core<br>(Hash-Pinned Transform Engine)"]
-        MEM["Audit Ledger & State Store<br>(UUIDv5 Deduplication)"]
+    subgraph CORE ["  ⚙️ 4. Deterministic Core & Storage  "]
+        PDX["<b>PDX Execution Engine</b><br/>(Hash-Pinned Transforms)"]:::core
+        MEM["<b>Immutable Audit Ledger</b><br/>(UUIDv5 Deduplication)"]:::core
     end
 
-    CR --> GW
+    CR ==> GW
     GW --> MA
     GW --> ID
-    GW --> REG
+    GW ==> REG
     REG --> TOX
     REG --> INT
     REG --> HITL
-    TOX --> PDX
-    INT --> PDX
-    HITL --> MEM
-    SM --> ID
-    MEM --> CL
+    TOX ==> PDX
+    INT ==> PDX
+    HITL ==> MEM
+    SM -.-> ID
+    MEM -.-> CL
 ```
+
+### Multi-Agent Fleet Specialization & Architecture
+In regulated enterprise compliance (such as EU Cosmetic Regulation EC No 1223/2009), unconstrained conversational multi-agent swarms pose unacceptable hallucination and liability risks. FortifiedReg Fleet implements an **Institutional Multi-Agent Architecture (Governed Agent Fleet)** where specialized autonomous agents collaborate across strict boundaries:
+
+1. **Document Intake & Normalization Agent (`IntakePort`)**: Autonomously inspects, parses, and normalizes unstructured supplier technical files across 5 binary formats (PDF, DOCX, CSV, XLSX, PPTX) with OOXML structural validation and SHA-256 fingerprinting.
+2. **SCCS Toxicology Assessment Agent (`ToxicologyPort`)**: Executes deterministic toxicological evaluation under EU SCCS 12th Notes of Guidance, computing Systemic Exposure Dosage ($SED$) and Margin of Safety ($MoS = \frac{NOAEL}{SED} > 100$).
+3. **INCI Regulatory Verification Agent (`InciVerifierPort`)**: Cross-references candidate formulations against CosIng restricted lists (Annex II prohibited substances and Annex V preservative thresholds).
+4. **Governance & HitL Checkpoint Agent (`ApprovalWorkflowService`)**: Manages transactional state machines, lease fencing, and human-in-the-loop checkpoints before immutable Product Information File (PIF) certification.
+5. **Interactive Gemini Regulatory Copilot (`Gemini 3.7 / 3.6 Flash`)**: Provides live multilingual compliance consultation, IFRA standard citations, and formulation optimization recommendations.
 
 ### Track 3 Pillar Alignment
 - **Discovery & Lifecycle (Agent Registry)**: Central versioned catalog (`GET /v1/version`, `GET /v1/verification/manifest`) exposing agent capabilities, store modes, and upstream compatibility hashes.
