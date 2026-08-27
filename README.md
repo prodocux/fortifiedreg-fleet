@@ -4,7 +4,7 @@
 
 ![FortifiedReg Fleet Hero Cover](docs/hero_cover.jpg)
 
-> 💡 **Component-Based Architecture**: FortifiedReg Fleet is engineered as a **modular, plug-and-play component system (Hexagonal Ports & Adapters)**. Rather than forcing enterprises to replace existing Product Lifecycle Management (PLM), LIMS, or ERP systems, its decoupled domain kernels, document intake pipelines, and toxicology engines can be embedded directly as secure sidecars or microservices within an organization's existing software stack. The public web interface serves as an **interactive simulation and demonstration harness** modeling end-to-end multi-persona management workflows and showcasing core engine capabilities.
+> 💡 **Component-Based Architecture**: FortifiedReg Fleet is engineered as a **modular, plug-and-play component system (Hexagonal Ports & Adapters)**. Rather than forcing enterprises to replace existing Product Lifecycle Management (PLM), LIMS, or ERP systems, its decoupled domain kernels, document intake pipelines, and toxicology engines can be embedded directly as secure sidecars or microservices within an organization's existing software stack. The public web interface serves as an **interactive simulation and demonstration harness** modeling end-to-end dual-role (R&D Formulator & Product Manager) management workflows and showcasing core engine capabilities.
 
 - 🏆 **Hackathon Track**: **All Things Agentic Hackathon** — **Track 3: The Fortified Enterprise Fleet**
 - 🌐 **Live Cloud Run Service**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app`](https://fortifiedreg-fleet-251114662133.us-central1.run.app)
@@ -23,7 +23,7 @@
 | **Demo Video** | ✅ **Yes**. Public video under 4 minutes demonstrating autonomous multi-agent pipeline, Model Armor guardrails, HitL approval gate, and live Cloud Run production backend. |
 | **Code Repository Link** | ✅ **Yes**. Public GitHub repository at [`https://github.com/prodocux/fortifiedreg-fleet`](https://github.com/prodocux/fortifiedreg-fleet) under standard **Apache-2.0** license. |
 | **Architecture Diagram & Spin-Up Guide** | ✅ **Yes**. Complete Mermaid architecture diagram and automated deployment (`deploy/cloudrun/deploy.sh`, `deploy/cloudrun/deploy.ps1`) and zero-cost teardown (`destroy.sh`) included in Sections 3 and 6 below. |
-| **Hosted Project URL & Testing Access** | ✅ **Yes**. Publicly accessible on Google Cloud Run at [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/). Zero setup or login required (auto-issued scoped demo JWTs for 4 roles: Formulator, QA Manager, Safety Assessor, CSO). |
+| **Hosted Project URL & Testing Access** | ✅ **Yes**. Publicly accessible on Google Cloud Run at [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/). Zero setup or login required (auto-issued scoped demo JWTs for dual roles: R&D Formulator and Product Manager). |
 | **Google SDK & Start Date** | ✅ **Google GenAI SDK / Agent Development Kit (ADK)** + **Google Cloud Client Libraries**. Project start date: **August 19, 2026**. |
 | **Features & Tech Stack** | ✅ Modular component-based architecture, EU Cosmetics Regulation (EC) No 1223/2009 & SCCS 12th Notes toxicology engine, 5-format binary document parser (PDF, DOCX, CSV, XLSX, PPTX), Google Model Armor prompt/path injection protection, deterministic UUIDv5 audit deduplication. |
 | **Data Sources** | ✅ Official EU SCCS Notes of Guidance (12th Revision), EU CosIng database, and EU Cosmetic Annexes II & V. |
@@ -35,15 +35,15 @@
 
 ## 2. Quick Testing Guide for Hackathon Judges
 
-The public web portal and API endpoints serve as an **interactive verification harness and simulation sandbox**, modeling real-world 4-persona workflows and demonstrating the underlying modular engine capabilities. Judges can test FortifiedReg Fleet through any of three independent channels:
+The public web portal and API endpoints serve as an **interactive verification harness and simulation sandbox**, modeling real-world dual-role (R&D Formulator & Product Manager) governance workflows and demonstrating the underlying modular engine capabilities. Judges can test FortifiedReg Fleet through any of three independent channels:
 
 ### 🌟 Channel 1: Zero-Setup Interactive Web Portal (Recommended)
 Open [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/) in any modern browser:
-1. **Step 0 (Persona Selection)**: Select **🔬 R&D Formulator** to receive an isolated, cryptographically signed session token.
+1. **Step 0 (Role Selection)**: Select **🔬 R&D Formulator** to receive an isolated, cryptographically signed session token.
 2. **Step 1 (Scenario Selection)**: Choose the *Retinol Night Serum* formulation. Review normalized candidate ingredients.
 3. **Step 2 (Supplier Evidence)**: Click **"Register All Documents"** to trigger multi-format binary parsing across 5 formats (PDF, DOCX, CSV, XLSX, PPTX) with SHA-256 integrity verification.
-4. **Step 3 (Multi-Agent Review)**: Click **"Run Multi-Agent Fleet Review"** to conduct mathematical Margin of Safety (MoS) evaluation under EU SCCS 12th Notes of Guidance ($MoS = \frac{NOAEL}{SED} > 100$).
-5. **Step 4 (CSO Sign-Off)**: Switch persona or proceed to the HitL Gate to sign the immutable execution plan and generate a certified regulatory dossier artifact.
+4. **Step 3 (Multi-Agent Review & Proposal)**: Click **"Run Multi-Agent Fleet Review"** to conduct mathematical Margin of Safety (MoS) evaluation under EU SCCS 12th Notes of Guidance ($MoS = \frac{NOAEL}{SED} > 100$) and submit the compliance proposal.
+5. **Step 4 (Manager Approval & PIF Certification)**: Switch to **👔 Product Manager** role to review the proposal, exercise HitL gate decision authority, and finalize the certified regulatory Product Information File (PIF) artifact.
 6. **API Feature Sandboxes (Zone B)**: Test Google Model Armor prompt injection blocking, 5-format document profiling, session security probe, and session-bound audit ledgers.
 
 ### ⚡ Channel 2: Automated Remote Cryptographic Verification CLI (1 Command)
@@ -93,7 +93,7 @@ flowchart TD
         REG["<b>Agent Catalog & Registry</b><br/>(Discovery & Capability Map)"]:::agent
         TOX["<b>Gemini Toxicology Agent</b><br/>(SCCS MoS Mathematical Calculator)"]:::agent
         INT["<b>5-Format Intake Agent</b><br/>(PDF, DOCX, CSV, XLSX, PPTX)"]:::agent
-        HITL["<b>Governance & HitL Agent</b><br/>(CSO Sign-Off Checkpoint Gate)"]:::agent
+        HITL["<b>Governance & HitL Agent</b><br/>(Manager Approval Checkpoint Gate)"]:::agent
     end
 
     subgraph CORE ["  ⚙️ 4. Deterministic Core & Storage  "]
