@@ -2,14 +2,34 @@
 
 *Autonomous Multi-Agent Enterprise Regulatory Compliance Fleet with Human-in-the-Loop Cryptographic Verification*
 
-**All Things Agentic Hackathon** — **Track 3: The Fortified Enterprise Fleet**
-**Live Cloud Run Service**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app`](https://fortifiedreg-fleet-251114662133.us-central1.run.app)
-**Interactive Web Portal & Verification Center**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/)
-**Interactive OpenAPI / Swagger UI**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/docs`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/docs)
+- 🏆 **Hackathon Track**: **All Things Agentic Hackathon** — **Track 3: The Fortified Enterprise Fleet**
+- 🌐 **Live Cloud Run Service**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app`](https://fortifiedreg-fleet-251114662133.us-central1.run.app)
+- 🖥️ **Interactive Web Portal & Verification Center**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/)
+- 📖 **Interactive OpenAPI / Swagger UI**: [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/docs`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/docs)
+- 📜 **License**: **Apache 2.0**
 
 ---
 
-## 1. Quick Testing Guide for Hackathon Judges
+## 1. Hackathon Submission Checklist & Verification Matrix
+
+| Submission Requirement | Status & Implementation Details |
+|---|---|
+| **New Project Built During Submission Period** | ✅ **Yes**. Initiated in August 2026 for the *All Things Agentic Hackathon*. Built with **Gemini 3.5 Flash**, **Google Agent Development Kit (ADK) / GenAI SDK**, **Google Model Armor**, and **Google Cloud Run**. |
+| **Category Selection** | ✅ **Track 3: The Fortified Enterprise Fleet** (Institutional Multi-Agent Governance, Role-Based Access Control, Cryptographic Checkpoints, and Immutable Audit Ledgers). |
+| **Demo Video** | ✅ **Yes**. Public video under 4 minutes demonstrating autonomous multi-agent pipeline, Model Armor guardrails, HitL approval gate, and live Cloud Run production backend. |
+| **Code Repository Link** | ✅ **Yes**. Public GitHub repository at [`https://github.com/prodocux/fortifiedreg-fleet`](https://github.com/prodocux/fortifiedreg-fleet) under standard **Apache-2.0** license. |
+| **Architecture Diagram & Spin-Up Guide** | ✅ **Yes**. Complete Mermaid architecture diagram and automated deployment (`deploy/cloudrun/deploy.sh`, `deploy/cloudrun/deploy.ps1`) and zero-cost teardown (`destroy.sh`) included in Sections 3 and 6 below. |
+| **Hosted Project URL & Testing Access** | ✅ **Yes**. Publicly accessible on Google Cloud Run at [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/). Zero setup or login required (auto-issued scoped demo JWTs for 4 roles: Formulator, QA Manager, Safety Assessor, CSO). |
+| **Google SDK & Start Date** | ✅ **Google GenAI SDK / Agent Development Kit (ADK)** + **Google Cloud Client Libraries**. Project start date: **August 19, 2026**. |
+| **Features & Tech Stack** | ✅ Hexagonal multi-agent architecture, EU Cosmetics Regulation (EC) No 1223/2009 & SCCS 12th Notes toxicology engine, 5-format binary document parser (PDF, DOCX, CSV, XLSX, PPTX), Google Model Armor prompt/path injection protection, deterministic UUIDv5 audit deduplication. |
+| **Data Sources** | ✅ Official EU SCCS Notes of Guidance (12th Revision), EU CosIng database, and EU Cosmetic Annexes II & V. |
+| **What We Learned** | ✅ Decoupling regulatory domain logic via Hexagonal Architecture enables strict fail-closed governance, robust state machine lease fencing, and zero-credential-leak auditability in autonomous agent fleets. |
+| **Pre-existing / 3rd Party Code Disclosure** | ✅ Pure Python standard libraries, FastAPI, Pydantic, PyMuPDF (fitz), python-docx, openpyxl, python-pptx, and PDX Core transform specifications. |
+| **Startup Excellence Prize** | ✅ Incorporated entity details and Model Armor security guardrail integration disclosed. |
+
+---
+
+## 2. Quick Testing Guide for Hackathon Judges
 
 Judges can test FortifiedReg Fleet through any of three independent channels:
 
@@ -35,7 +55,7 @@ Explore and execute live REST requests directly in the Swagger documentation:
 
 ---
 
-## 2. Track 3 Architecture: The Fortified Enterprise Fleet
+## 3. Track 3 Architecture: The Fortified Enterprise Fleet
 
 FortifiedReg Fleet is built on **Hexagonal Architecture (Ports & Adapters)**, decoupling pure regulatory domain logic from concrete Google Cloud infrastructure and external kernels.
 
@@ -88,7 +108,7 @@ graph TD
 
 ---
 
-## 3. Package Structure
+## 4. Package Structure
 
 - `packages/fleet-governance-core`: Domain entities, abstract ports, 3-way cryptographic digest verification, lease fencing, and opaque tenant storage key derivation.
 - `packages/fleet-domain-cosmetics`: Pure toxicology calculators (SED, MoS), INCI restriction verifiers (Annex II/V), and supplier document audits.
@@ -101,7 +121,7 @@ graph TD
 
 ---
 
-## 4. Local Reproduction & Automated Testing (312 Tests)
+## 5. Local Reproduction & Automated Testing (312 Tests)
 
 ```bash
 # 1. Install dependencies
@@ -124,7 +144,7 @@ pytest tests packages apps -q
 
 ---
 
-## 5. Google Cloud Run Deployment & Spin-Up Guide
+## 6. Google Cloud Run Deployment & Spin-Up Guide
 
 FortifiedReg Fleet is packaged for serverless deployment on **Google Cloud Run**, utilizing **Google Artifact Registry**, **Google Cloud Secret Manager**, and **Google Model Armor** guardrails.
 
