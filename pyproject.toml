@@ -5,6 +5,7 @@ description = "FortifiedReg Fleet - Governed dossier production for regulated pr
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "google-genai>=0.1.0",
     "pydantic>=2.7.0",
     "jsonschema>=4.21.0",
     "pytest>=8.0.0",
@@ -24,9 +25,10 @@ members = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-p no:cacheprovider"
+addopts = "-p no:cacheprovider --ignore=tests/support"
 testpaths = ["tests", "packages", "apps"]
 pythonpath = [
+    ".",
     "packages/fleet-governance-core/src",
     "packages/fleet-domain-cosmetics/src",
     "packages/fleet-adapter-pdx/src",

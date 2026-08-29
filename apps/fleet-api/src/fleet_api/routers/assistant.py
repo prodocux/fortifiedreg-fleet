@@ -3,9 +3,19 @@ AI Regulatory Copilot Router (v0.4.0).
 Provides real-time regulatory optimization suggestions, rule citations,
 and Model Armor-compatible input inspection.
 """
+import json
+import os
+import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+try:
+    from google import genai
+    from google.genai import types
+    _HAS_GOOGLE_GENAI_SDK = True
+except ImportError:
+    _HAS_GOOGLE_GENAI_SDK = False
 
 from fleet_api.deps import get_tenant_and_actor
 from fleet_domain_cosmetics.inci_verifier import evaluate_inci_compliance
@@ -213,8 +223,36 @@ async def chat_with_gemini_copilot(
             "Provide concise, professional, citation-backed answers. Use Markdown formatting. If the user asks in Traditional/Simplified Chinese or any other language, reply politely in the matching language while keeping technical regulatory terms precise."
         )
 
-    # 3a. Check for Live Gemini Studio API Key
+    # 3a. Check for Live Gemini Studio API Key via official Google GenAI SDK (google-genai)
     gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if gemini_key and _HAS_GOOGLE_GENAI_SDK:
+        try:
+            client = genai.Client(api_key=gemini_key)
+            active_models = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.5-flash"]
+            for model_name in active_models:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=f"System Context: {system_instruction}\n\nUser Question: {req.message}",
+                        config=types.GenerateContentConfig(
+                            temperature=0.3,
+                            max_output_tokens=4096,
+                        ),
+                    )
+                    if response and response.text:
+                        return ChatResponse(
+                            status="success",
+                            provider=f"Google GenAI SDK ({model_name})",
+                            reply=response.text,
+                            guardrail_status="PASSED",
+                            rule_references=["Regulation (EC) No 1223/2009 (Annex II/III/V)", "SCCS Notes of Guidance (12th Revision)", "IFRA Standards"],
+                        )
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # 3a-fallback. Raw REST endpoint fallback if SDK client is unavailable
     if gemini_key:
         active_models = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.5-flash"]
         for model_name in active_models:

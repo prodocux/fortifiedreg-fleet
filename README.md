@@ -24,7 +24,7 @@
 | **Code Repository Link** | ✅ **Yes**. Public GitHub repository at [`https://github.com/prodocux/fortifiedreg-fleet`](https://github.com/prodocux/fortifiedreg-fleet) under standard **Apache-2.0** license. |
 | **Architecture Diagram & Spin-Up Guide** | ✅ **Yes**. Complete Mermaid architecture diagram and automated deployment (`deploy/cloudrun/deploy.sh`, `deploy/cloudrun/deploy.ps1`) and zero-cost teardown (`destroy.sh`) included in Sections 3 and 6 below. |
 | **Hosted Project URL & Testing Access** | ✅ **Yes**. Publicly accessible on Google Cloud Run at [`https://fortifiedreg-fleet-251114662133.us-central1.run.app/`](https://fortifiedreg-fleet-251114662133.us-central1.run.app/). Zero setup or login required (auto-issued scoped demo JWTs for dual roles: R&D Formulator and Product Manager). |
-| **Google SDK & Start Date** | ✅ **Google GenAI SDK / Agent Development Kit (ADK)** + **Google Cloud Client Libraries**. Project start date: **August 19, 2026**. |
+| **Google SDK & Start Date** | ✅ **Official Google GenAI SDK (`google-genai`) & Agent Development Kit (ADK)** + **Google Cloud Client Libraries** (`google-cloud-secret-manager`, `google-cloud-logging`). Implemented in [`packages/fleet-adapter-google-adk`](packages/fleet-adapter-google-adk) and [`apps/fleet-api/src/fleet_api/routers/assistant.py`](apps/fleet-api/src/fleet_api/routers/assistant.py). Project start date: **August 19, 2026**. |
 | **Features & Tech Stack** | ✅ Modular component-based architecture, EU Cosmetics Regulation (EC) No 1223/2009 & SCCS 12th Notes toxicology engine, 5-format binary document parser (PDF, DOCX, CSV, XLSX, PPTX), Google Model Armor prompt/path injection protection, deterministic UUIDv5 audit deduplication. |
 | **Data Sources** | ✅ Official EU SCCS Notes of Guidance (12th Revision), EU CosIng database, and EU Cosmetic Annexes II & V. |
 | **What We Learned** | ✅ Decoupling regulatory domain logic via Hexagonal Architecture enables strict fail-closed governance, robust state machine lease fencing, and zero-credential-leak auditability in autonomous agent fleets. |
@@ -141,7 +141,7 @@ In regulated enterprise compliance (such as EU Cosmetic Regulation EC No 1223/20
 - `packages/fleet-adapter-prodocux`: Production ProDocuX HTTP Intake Adapter supporting 5 document formats (PDF, DOCX, CSV, XLSX, PPTX) with exact format boundaries and sanitized error mapping.
 - `packages/fleet-adapter-local`: Local file-backed and SQLite ACID persistence adapters with atomic non-overwriting publishing.
 - `packages/fleet-adapter-gcp`: Thread-safe in-memory stores and cloud persistence ports.
-- `packages/fleet-adapter-google-adk`: Google Model Armor security scanner and structured toxicology agent.
+- `packages/fleet-adapter-google-adk`: Official Google GenAI SDK (`google-genai`) & Agent Development Kit (ADK) adapter with Google Model Armor security scanner and structured toxicology agent.
 - `apps/fleet-api`: FastAPI REST backend with fail-closed JWT auth, RBAC, separated `/v1/health` (liveness) and `/v1/ready` (readiness) probes, single-transaction atomic approval decisions, and immutable audit logging.
 
 ---

@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir \
     requests==2.34.2 \
     httpx==0.28.1 \
     google-auth==2.38.0 \
+    google-genai>=0.1.0 \
     pypdf==5.1.0 \
     python-docx==1.1.2 \
     openpyxl==3.1.5 \
